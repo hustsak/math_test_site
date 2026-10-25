@@ -1,0 +1,19 @@
+# Settings for Firebase App Hosting
+kind: AppHostingConfiguration
+schemaVersion: v1
+
+env:
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: "AIzaSyBWyS97m_S6HS8ZxNqwKI3Mi4YcJyI-b5c"
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: "math-test-11cb4.firebaseapp.com"
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: "math-test-11cb4"
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: "1:401327770526:web:51af1068ec2165bbb9e48f"
+  - variable: NEXT_PUBLIC_ADMIN_EMAIL
+    value: "viraksakkoy8@gmail.com"
+  - variable: FIREBASE_PROJECT_ID
+    value: "math-test-11cb4"
+  - variable: FIREBASE_CLIENT_EMAIL
+    value: "firebase-adminsdk-fbsvc@math-test-11cb4.iam.gserviceaccount.com"
