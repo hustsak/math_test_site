@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import MathText from '@/components/MathText';
 import { getFaceRating, formatKhmerCountdown } from '@/lib/parentTracking';
-import type { ParentViewData, ParentExerciseDetail } from '@/lib/types';
+import type { ParentViewData } from '@/lib/types';
 import {
   RotateCw,
   Smartphone,
@@ -12,11 +12,32 @@ import {
   Clock,
   CheckCircle2,
   XCircle,
-  HelpCircle,
   AlertTriangle,
-  Award,
+  Calendar,
   Sparkles,
+  BookOpen,
+  Check,
+  Minus,
 } from 'lucide-react';
+
+function formatKhmerDateTime(timestamp: number | null | undefined): string {
+  if (!timestamp) return 'មិនទាន់មាន';
+  try {
+    const d = new Date(timestamp);
+    const datePart = d.toLocaleDateString('km-KH', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+    const timePart = d.toLocaleTimeString('km-KH', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    return `${datePart} ម៉ោង ${timePart}`;
+  } catch {
+    return new Date(timestamp).toLocaleDateString();
+  }
+}
 
 export default function ParentTrackingView({ token }: { token: string }) {
   const [data, setData] = useState<ParentViewData | null>(null);
@@ -47,15 +68,10 @@ export default function ParentTrackingView({ token }: { token: string }) {
 
       setData(json);
       setIsOffline(false);
-      // Auto expand latest exercise if there is one
-      if (json.exercises?.length > 0 && !expandedExId) {
-        setExpandedExId(json.exercises[0].id);
-      }
       try {
         localStorage.setItem(cacheKey, JSON.stringify(json));
       } catch {}
     } catch (e: any) {
-      // Try to load cached data for offline support
       let loadedFromCache = false;
       try {
         const saved = localStorage.getItem(cacheKey);
@@ -64,9 +80,6 @@ export default function ParentTrackingView({ token }: { token: string }) {
           setData(parsed);
           setIsOffline(true);
           loadedFromCache = true;
-          if (parsed.exercises?.length > 0 && !expandedExId) {
-            setExpandedExId(parsed.exercises[0].id);
-          }
         }
       } catch {}
 
@@ -80,16 +93,12 @@ export default function ParentTrackingView({ token }: { token: string }) {
   }
 
   useEffect(() => {
-    // Initial load: try reading cache first for instant render, then fetch fresh
     try {
       const saved = localStorage.getItem(cacheKey);
       if (saved) {
         const parsed = JSON.parse(saved);
         setData(parsed);
         setLoading(false);
-        if (parsed.exercises?.length > 0) {
-          setExpandedExId(parsed.exercises[0].id);
-        }
       }
     } catch {}
 
@@ -97,44 +106,39 @@ export default function ParentTrackingView({ token }: { token: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  // Progress chart data: last up to 8 exercises (chronological order)
-  const chartItems = useMemo(() => {
-    if (!data?.exercises) return [];
-    const completed = [...data.exercises].filter((e) => e.submitted && typeof e.percentage === 'number');
-    // sort oldest to newest for chronological progress
-    completed.sort((a, b) => (a.submittedAt || 0) - (b.submittedAt || 0));
-    return completed.slice(-8);
-  }, [data]);
-
   if (loading && !data) {
     return (
-      <div style={{ maxWidth: 540, margin: '0 auto', padding: '60px 16px', textAlign: 'center' }}>
-        <div style={{ fontSize: '1.35rem', fontWeight: 700, color: 'var(--muted)' }}>
-          កំពុងផ្ទុកទិន្នន័យ…
+      <div style={{ maxWidth: 560, margin: '0 auto', padding: '70px 16px', textAlign: 'center' }}>
+        <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>⏳</div>
+        <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--theme-navy, #1b2240)' }}>
+          កំពុងផ្ទុកទិន្នន័យតាមដាន…
         </div>
+        <p style={{ color: 'var(--muted, #64748b)', margin: '8px 0 0', fontSize: '1rem' }}>
+          សូមរង់ចាំបន្តិច ប្រព័ន្ធកំពុងរៀបចំរបាយការណ៍ជូនលោកអ្នក
+        </p>
       </div>
     );
   }
 
   if (error && !data) {
     return (
-      <div style={{ maxWidth: 540, margin: '0 auto', padding: '40px 16px' }}>
+      <div style={{ maxWidth: 560, margin: '0 auto', padding: '40px 16px' }}>
         <div
-          className="card"
           style={{
-            padding: '30px 20px',
-            borderRadius: 20,
+            padding: '36px 24px',
+            borderRadius: 24,
             textAlign: 'center',
-            border: '2px solid var(--bad)',
-            backgroundColor: 'var(--bad-bg)',
+            border: '2px solid #fca5a5',
+            backgroundColor: '#fef2f2',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.06)',
           }}
         >
-          <div style={{ fontSize: '3rem', marginBottom: 8 }}>🔒</div>
-          <h1 style={{ fontSize: '1.45rem', fontWeight: 800, color: 'var(--bad)', margin: '0 0 10px' }}>
-            មិនអាចបើកតំណនេះបានទេ
+          <div style={{ fontSize: '3.2rem', marginBottom: 10 }}>🔒</div>
+          <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#dc2626', margin: '0 0 10px' }}>
+            រកមិនឃើញព័ត៌មានតាមដានទេ
           </h1>
-          <p style={{ fontSize: '1.05rem', color: 'var(--ink)', margin: 0, lineHeight: 1.5 }}>
-            តំណតាមដាននេះមិនត្រឹមត្រូវ ផុតកំណត់ ឬត្រូវបានផ្លាស់ប្តូរដោយគ្រូបង្រៀន។
+          <p style={{ fontSize: '1.05rem', color: '#1f2937', margin: 0, lineHeight: 1.6 }}>
+            តំណភ្ជាប់នេះមិនត្រឹមត្រូវ ផុតកំណត់ ឬត្រូវបានផ្លាស់ប្តូរដោយគ្រូបង្រៀន។
             សូមទាក់ទងគ្រូបង្រៀនដើម្បីសុំតំណថ្មី។
           </p>
         </div>
@@ -144,31 +148,45 @@ export default function ParentTrackingView({ token }: { token: string }) {
 
   if (!data) return null;
 
-  const { childName, className, completedCount, totalPublishedCount, latestResult, exercises, notDoneExercises } =
-    data;
+  const {
+    childName,
+    className,
+    completedCount,
+    totalPublishedCount,
+    lastActiveAt,
+    activeDaysCountLast7Days = 0,
+    recentActivityDays = [],
+    averageScorePercent = 0,
+    overallRating,
+    latestResult,
+    exercises = [],
+    notDoneExercises = [],
+  } = data;
+
+  const overallFace = overallRating || getFaceRating(averageScorePercent);
 
   return (
     <div
       style={{
         maxWidth: 580,
         margin: '0 auto',
-        padding: '16px 16px 80px',
-        fontSize: '18px', // Requirement: font size at least 18px
+        padding: '16px 16px 90px',
+        fontSize: '18px',
         lineHeight: 1.5,
         color: 'var(--theme-navy, #1b2240)',
       }}
     >
-      {/* Offline Notice Banner */}
+      {/* Offline Notice */}
       {isOffline && (
         <div
           style={{
             backgroundColor: '#fffbeb',
             border: '1.5px solid #fde68a',
             color: '#b45309',
-            padding: '10px 16px',
-            borderRadius: 14,
+            padding: '12px 16px',
+            borderRadius: 16,
             marginBottom: 16,
-            fontSize: '0.95rem',
+            fontSize: '0.96rem',
             fontWeight: 600,
             display: 'flex',
             alignItems: 'center',
@@ -178,7 +196,7 @@ export default function ParentTrackingView({ token }: { token: string }) {
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <AlertTriangle size={18} />
-            <span>កំពុងបង្ហាញទិន្នន័យដែលបានរក្សាទុក (គ្មានអ៊ីនធឺណិត)</span>
+            <span>កំពុងបង្ហាញទិន្នន័យចាស់ (គ្មានអ៊ីនធឺណិត)</span>
           </div>
           <button
             type="button"
@@ -187,7 +205,7 @@ export default function ParentTrackingView({ token }: { token: string }) {
               background: 'none',
               border: 'none',
               color: '#b45309',
-              fontWeight: 700,
+              fontWeight: 800,
               cursor: 'pointer',
               textDecoration: 'underline',
               padding: 0,
@@ -198,26 +216,26 @@ export default function ParentTrackingView({ token }: { token: string }) {
         </div>
       )}
 
-      {/* Top Bar with Refresh Button */}
+      {/* Top Bar */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          marginBottom: 12,
+          marginBottom: 14,
         }}
       >
         <span
           style={{
-            fontSize: '0.92rem',
-            color: 'var(--muted)',
-            fontWeight: 600,
+            fontSize: '0.98rem',
+            color: 'var(--muted, #64748b)',
+            fontWeight: 700,
             display: 'flex',
             alignItems: 'center',
             gap: 6,
           }}
         >
-          <Sparkles size={16} color="var(--brand)" /> តាមដានលទ្ធផលសិក្សា
+          <Sparkles size={18} color="var(--brand, #4a67d6)" /> ក្តារតាមដានសម្រាប់អាណាព្យាបាល
         </span>
         <button
           type="button"
@@ -227,53 +245,60 @@ export default function ParentTrackingView({ token }: { token: string }) {
             display: 'inline-flex',
             alignItems: 'center',
             gap: 6,
-            padding: '6px 12px',
+            padding: '8px 14px',
             borderRadius: 999,
-            backgroundColor: 'var(--card)',
-            border: '1px solid var(--line)',
-            color: 'var(--theme-navy)',
-            fontSize: '0.88rem',
-            fontWeight: 600,
+            backgroundColor: '#ffffff',
+            border: '1.5px solid var(--line, #e2e8f0)',
+            color: 'var(--theme-navy, #1b2240)',
+            fontSize: '0.92rem',
+            fontWeight: 700,
             cursor: 'pointer',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.04)',
           }}
         >
-          <RotateCw size={14} className={refreshing ? 'spin' : ''} />
+          <RotateCw size={15} className={refreshing ? 'spin' : ''} />
           <span>{refreshing ? 'កំពុងផ្ទុក…' : 'ផ្ទុកទិន្នន័យថ្មី'}</span>
         </button>
       </div>
 
-      {/* 1. Header with Child's Name and Friendly Summary */}
+      {/* 1. Profile Header Card */}
       <header
         style={{
-          backgroundColor: 'var(--card)',
-          borderRadius: 22,
+          backgroundColor: '#ffffff',
+          borderRadius: 24,
           padding: '24px 22px',
-          boxShadow: 'var(--theme-shadow)',
-          border: '1.5px solid var(--line)',
-          marginBottom: 20,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.05)',
+          border: '1.5px solid var(--line, #e2e8f0)',
+          marginBottom: 18,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: '1.75rem', // Very large text
-              fontWeight: 800,
-              color: 'var(--theme-navy)',
-              letterSpacing: '-0.02em',
-            }}
-          >
-            {childName}
-          </h1>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+          <div>
+            <div style={{ fontSize: '0.92rem', color: 'var(--muted, #64748b)', fontWeight: 600 }}>
+              សិស្ស / Student
+            </div>
+            <h1
+              style={{
+                margin: '2px 0 0',
+                fontSize: '1.85rem',
+                fontWeight: 800,
+                color: 'var(--theme-navy, #1b2240)',
+                letterSpacing: '-0.02em',
+              }}
+            >
+              {childName}
+            </h1>
+          </div>
+
           {className && (
             <span
               style={{
-                fontSize: '0.92rem',
-                fontWeight: 700,
-                padding: '4px 12px',
+                fontSize: '0.98rem',
+                fontWeight: 800,
+                padding: '6px 14px',
                 borderRadius: 999,
                 backgroundColor: 'rgba(74, 103, 214, 0.12)',
-                color: 'var(--brand)',
+                color: 'var(--brand, #4a67d6)',
               }}
             >
               ថ្នាក់៖ {className}
@@ -281,36 +306,214 @@ export default function ParentTrackingView({ token }: { token: string }) {
           )}
         </div>
 
-        {/* Big friendly summary sentence */}
-        <p
+        {/* Quick Summary Pill */}
+        <div
           style={{
-            margin: '14px 0 0',
-            fontSize: '1.18rem',
-            fontWeight: 700,
-            color: 'var(--theme-navy)',
-            lineHeight: 1.45,
+            marginTop: 18,
+            padding: '14px 16px',
+            borderRadius: 16,
+            backgroundColor: 'var(--theme-page-bg, #f8fafc)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 12,
           }}
         >
-          កូនរបស់អ្នកបានធ្វើលំហាត់{' '}
-          <span style={{ color: 'var(--brand)', fontSize: '1.35rem', fontWeight: 800 }}>{completedCount}</span>{' '}
-          ក្នុងចំណោម <span style={{ fontSize: '1.35rem', fontWeight: 800 }}>{totalPublishedCount}</span>
-        </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: '2.4rem', lineHeight: 1 }}>{overallFace.emoji}</span>
+            <div>
+              <div style={{ fontSize: '0.86rem', color: 'var(--muted, #64748b)', fontWeight: 600 }}>
+                លទ្ធផលទូទៅ
+              </div>
+              <div style={{ fontSize: '1.2rem', fontWeight: 800, color: overallFace.color }}>
+                {overallFace.labelKh}
+                {completedCount > 0 && (
+                  <span style={{ fontSize: '0.95rem', fontWeight: 700, marginLeft: 6 }}>
+                    ({averageScorePercent}%)
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '0.86rem', color: 'var(--muted, #64748b)', fontWeight: 600 }}>
+              បានធ្វើរួចរាល់
+            </div>
+            <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--theme-navy, #1b2240)' }}>
+              <span style={{ color: 'var(--brand, #4a67d6)' }}>{completedCount}</span> / {totalPublishedCount} លំហាត់
+            </div>
+          </div>
+        </div>
       </header>
 
-      {/* 2. Latest Result: Large Prominent Card */}
+      {/* 2. WHICH DAY STUDENT ACCESSED OR NOT (7-Day Attendance / Activity Tracker) */}
+      <section
+        style={{
+          backgroundColor: '#ffffff',
+          borderRadius: 24,
+          padding: '22px 20px',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.05)',
+          border: '1.5px solid var(--line, #e2e8f0)',
+          marginBottom: 18,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, flexWrap: 'wrap', gap: 8 }}>
+          <h2
+            style={{
+              margin: 0,
+              fontSize: '1.25rem',
+              fontWeight: 800,
+              color: 'var(--theme-navy, #1b2240)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            <Calendar size={22} color="var(--brand, #4a67d6)" />
+            វត្តមានចូលរៀន (៧ ថ្ងៃចុងក្រោយ)
+          </h2>
+
+          <span
+            style={{
+              fontSize: '0.92rem',
+              fontWeight: 800,
+              padding: '4px 12px',
+              borderRadius: 999,
+              backgroundColor: activeDaysCountLast7Days > 0 ? '#ecfdf5' : '#f1f5f9',
+              color: activeDaysCountLast7Days > 0 ? '#059669' : '#64748b',
+            }}
+          >
+            បានចូល {activeDaysCountLast7Days} ថ្ងៃ
+          </span>
+        </div>
+
+        <p style={{ margin: '0 0 16px', fontSize: '0.94rem', color: 'var(--muted, #64748b)' }}>
+          តាមដានថាកូនរបស់អ្នកបានចូលរៀន ឬធ្វើលំហាត់នៅថ្ងៃណាខ្លះ៖
+        </p>
+
+        {/* 7-Day Grid */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(7, 1fr)',
+            gap: 6,
+            marginBottom: 14,
+          }}
+        >
+          {recentActivityDays.map((d) => {
+            const isToday = d.dayLabelKh === 'ថ្ងៃនេះ';
+            return (
+              <div
+                key={d.dateStr}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  padding: '10px 4px',
+                  borderRadius: 14,
+                  backgroundColor: d.hasActivity
+                    ? '#f0fdf4'
+                    : isToday
+                    ? '#f8fafc'
+                    : '#fafafa',
+                  border: d.hasActivity
+                    ? '2px solid #86efac'
+                    : isToday
+                    ? '2px solid #cbd5e1'
+                    : '1px solid #f1f5f9',
+                  textAlign: 'center',
+                  transition: 'transform 0.15s ease',
+                }}
+              >
+                {/* Day label */}
+                <span
+                  style={{
+                    fontSize: '0.82rem',
+                    fontWeight: 700,
+                    color: isToday ? 'var(--brand, #4a67d6)' : 'var(--theme-navy, #1b2240)',
+                    marginBottom: 2,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {d.dayLabelKh}
+                </span>
+
+                {/* Date snippet */}
+                <span style={{ fontSize: '0.72rem', color: '#94a3b8', marginBottom: 6 }}>
+                  {d.formattedDate.split(' ')[0]}
+                </span>
+
+                {/* Status Icon */}
+                <div
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: '50%',
+                    backgroundColor: d.hasActivity ? '#16a34a' : '#e2e8f0',
+                    color: '#ffffff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginBottom: 4,
+                  }}
+                  title={d.hasActivity ? `បានចូលរៀន (${d.exerciseCount} លំហាត់)` : 'មិនបានចូល'}
+                >
+                  {d.hasActivity ? <Check size={18} strokeWidth={3} /> : <Minus size={16} strokeWidth={2.5} color="#94a3b8" />}
+                </div>
+
+                {/* Short text badge */}
+                <span
+                  style={{
+                    fontSize: '0.7rem',
+                    fontWeight: 700,
+                    color: d.hasActivity ? '#15803d' : '#94a3b8',
+                  }}
+                >
+                  {d.hasActivity ? 'បានចូល' : 'អត់'}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Last Active Timestamp note */}
+        <div
+          style={{
+            fontSize: '0.92rem',
+            color: 'var(--muted, #64748b)',
+            paddingTop: 10,
+            borderTop: '1px dashed var(--line, #e2e8f0)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+          }}
+        >
+          <Clock size={16} color="var(--brand, #4a67d6)" />
+          <span>
+            សកម្មភាពចុងក្រោយបង្អស់៖{' '}
+            <strong style={{ color: 'var(--theme-navy, #1b2240)' }}>
+              {formatKhmerDateTime(lastActiveAt)}
+            </strong>
+          </span>
+        </div>
+      </section>
+
+      {/* 3. Latest Result Highlight (Large, Clear, Easy) */}
       {latestResult && (
-        <section style={{ marginBottom: 22 }}>
+        <section style={{ marginBottom: 18 }}>
           <div
             style={{
-              fontSize: '1.05rem',
+              fontSize: '1rem',
               fontWeight: 800,
-              color: 'var(--theme-muted)',
+              color: 'var(--muted, #64748b)',
               marginBottom: 8,
               textTransform: 'uppercase',
               letterSpacing: '0.04em',
             }}
           >
-            លទ្ធផលចុងក្រោយគេបង្អស់ / Latest Result
+            លទ្ធផលលំហាត់ចុងក្រោយគេបង្អស់
           </div>
 
           {(() => {
@@ -320,14 +523,14 @@ export default function ParentTrackingView({ token }: { token: string }) {
                 style={{
                   backgroundColor: evalResult.bgColor,
                   border: `2px solid ${evalResult.borderColor}`,
-                  borderRadius: 22,
+                  borderRadius: 24,
                   padding: '22px 20px',
-                  boxShadow: '0 6px 20px rgba(0,0,0,0.06)',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.05)',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '0.95rem', color: 'var(--muted)', fontWeight: 600 }}>
+                    <div style={{ fontSize: '0.9rem', color: 'var(--muted, #64748b)', fontWeight: 600 }}>
                       {latestResult.submittedAt
                         ? new Date(latestResult.submittedAt).toLocaleDateString('km-KH', {
                             year: 'numeric',
@@ -336,17 +539,25 @@ export default function ParentTrackingView({ token }: { token: string }) {
                           })
                         : ''}
                     </div>
-                    <h2 style={{ margin: '4px 0 0', fontSize: '1.35rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
+                    <h2
+                      style={{
+                        margin: '4px 0 0',
+                        fontSize: '1.35rem',
+                        fontWeight: 800,
+                        color: 'var(--theme-navy, #1b2240)',
+                        lineHeight: 1.3,
+                      }}
+                    >
                       {latestResult.title}
                     </h2>
                   </div>
 
-                  {/* Large Face Icon */}
+                  {/* Face Emoji */}
                   <div
                     style={{
                       fontSize: '3.6rem',
                       lineHeight: 1,
-                      filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.12))',
+                      filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.12))',
                     }}
                     aria-label={evalResult.face}
                   >
@@ -354,23 +565,23 @@ export default function ParentTrackingView({ token }: { token: string }) {
                   </div>
                 </div>
 
-                {/* Score & Evaluation: always text + face + color */}
+                {/* Score & Evaluation */}
                 <div
                   style={{
                     display: 'flex',
-                    alignItems: 'baseline',
+                    alignItems: 'center',
                     justifyContent: 'space-between',
                     flexWrap: 'wrap',
-                    gap: 8,
-                    paddingTop: 10,
+                    gap: 10,
+                    paddingTop: 12,
                     borderTop: `1px solid ${evalResult.borderColor}`,
                   }}
                 >
                   <div>
-                    <span style={{ fontSize: '1rem', color: 'var(--muted)', fontWeight: 600, marginRight: 8 }}>
-                      ពិន្ទុ៖
+                    <span style={{ fontSize: '0.95rem', color: 'var(--muted, #64748b)', fontWeight: 600, marginRight: 8 }}>
+                      ពិន្ទុទទួលបាន៖
                     </span>
-                    <strong style={{ fontSize: '1.75rem', fontWeight: 900, color: evalResult.color }}>
+                    <strong style={{ fontSize: '1.8rem', fontWeight: 900, color: evalResult.color }}>
                       {latestResult.score} / {latestResult.total}
                     </strong>
                     <span style={{ fontSize: '1.15rem', fontWeight: 700, color: evalResult.color, marginLeft: 6 }}>
@@ -378,7 +589,7 @@ export default function ParentTrackingView({ token }: { token: string }) {
                     </span>
                   </div>
 
-                  {/* Written evaluation badge */}
+                  {/* Friendly Khmer Label */}
                   <div
                     style={{
                       display: 'inline-flex',
@@ -394,7 +605,6 @@ export default function ParentTrackingView({ token }: { token: string }) {
                     }}
                   >
                     <span>{evalResult.labelKh}</span>
-                    <span style={{ fontSize: '0.85rem', opacity: 0.8 }}>({evalResult.labelEn})</span>
                   </div>
                 </div>
               </div>
@@ -403,378 +613,339 @@ export default function ParentTrackingView({ token }: { token: string }) {
         </section>
       )}
 
-      {/* 3. Progress Chart of Last up to 8 Exercises (Inline SVG) */}
-      {chartItems.length >= 2 && (
-        <section
-          style={{
-            backgroundColor: 'var(--card)',
-            borderRadius: 22,
-            padding: '20px 18px 16px',
-            boxShadow: 'var(--theme-shadow)',
-            border: '1.5px solid var(--line)',
-            marginBottom: 24,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
-              📊 ការវិវឌ្ឍពិន្ទុ ({chartItems.length} លំហាត់ចុងក្រោយ)
-            </h2>
-            <span style={{ fontSize: '0.88rem', color: 'var(--muted)', fontWeight: 600 }}>ភាគរយ (%)</span>
+      {/* 4. Pending Exercises to Complete ("លំហាត់ត្រូវធ្វើបន្ត") */}
+      {notDoneExercises.length > 0 && (
+        <section style={{ marginBottom: 22 }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              fontSize: '1.2rem',
+              fontWeight: 800,
+              color: '#b45309',
+              marginBottom: 10,
+            }}
+          >
+            <Clock size={20} />
+            <span>លំហាត់ដែលកូនត្រូវធ្វើបន្ត ({notDoneExercises.length})</span>
           </div>
 
-          {/* Responsive SVG Chart */}
-          <div style={{ width: '100%', overflowX: 'auto' }}>
-            <svg
-              viewBox="0 0 500 210"
-              style={{ width: '100%', height: 'auto', display: 'block', minWidth: 320 }}
-            >
-              {/* Reference Grid lines: 0%, 50%, 100% */}
-              <line x1="35" y1="25" x2="480" y2="25" stroke="var(--line)" strokeDasharray="3 3" strokeWidth="1" />
-              <text x="28" y="29" fill="var(--muted)" fontSize="12" fontWeight="600" textAnchor="end">
-                100%
-              </text>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {notDoneExercises.map((nd) => {
+              const countdown = formatKhmerCountdown(nd.deadline);
 
-              <line x1="35" y1="85" x2="480" y2="85" stroke="var(--line)" strokeDasharray="3 3" strokeWidth="1" />
-              <text x="28" y="89" fill="var(--muted)" fontSize="12" fontWeight="600" textAnchor="end">
-                50%
-              </text>
-
-              <line x1="35" y1="145" x2="480" y2="145" stroke="var(--line)" strokeWidth="1.5" />
-              <text x="28" y="149" fill="var(--muted)" fontSize="12" fontWeight="600" textAnchor="end">
-                0%
-              </text>
-
-              {/* Bars for each exercise */}
-              {chartItems.map((item, idx) => {
-                const totalBars = chartItems.length;
-                const slotWidth = (480 - 45) / totalBars;
-                const barWidth = Math.min(36, slotWidth * 0.65);
-                const xCenter = 45 + idx * slotWidth + slotWidth / 2;
-                const x = xCenter - barWidth / 2;
-
-                const percent = Math.max(0, Math.min(100, item.percentage ?? 0));
-                const barHeight = (percent / 100) * 120;
-                const y = 145 - barHeight;
-
-                const evalRes = getFaceRating(percent);
-
-                return (
-                  <g key={item.id}>
-                    {/* Bar rectangle */}
-                    <rect
-                      x={x}
-                      y={y}
-                      width={barWidth}
-                      height={barHeight}
-                      rx="6"
-                      fill={evalRes.color}
-                      opacity="0.9"
-                    />
-
-                    {/* Score label above bar */}
-                    <text
-                      x={xCenter}
-                      y={Math.max(16, y - 6)}
-                      fill={evalRes.color}
-                      fontSize="13"
-                      fontWeight="800"
-                      textAnchor="middle"
+              return (
+                <div
+                  key={nd.id}
+                  style={{
+                    backgroundColor: '#ffffff',
+                    borderRadius: 20,
+                    padding: '16px 18px',
+                    border: '1.5px solid #fde68a',
+                    boxShadow: '0 4px 14px rgba(0,0,0,0.04)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <h3
+                      style={{
+                        margin: 0,
+                        fontSize: '1.15rem',
+                        fontWeight: 800,
+                        color: 'var(--theme-navy, #1b2240)',
+                      }}
                     >
-                      {percent}%
-                    </text>
+                      {nd.title}
+                    </h3>
 
-                    {/* Short exercise label under bar */}
-                    <text
-                      x={xCenter}
-                      y="166"
-                      fill="var(--theme-navy)"
-                      fontSize="12"
-                      fontWeight="700"
-                      textAnchor="middle"
-                    >
-                      ល{idx + 1}
-                    </text>
+                    {nd.deadline && (
+                      <span
+                        style={{
+                          fontSize: '0.85rem',
+                          fontWeight: 700,
+                          padding: '3px 10px',
+                          borderRadius: 999,
+                          backgroundColor: countdown.isClosed ? '#fef2f2' : '#fef3c7',
+                          color: countdown.isClosed ? '#dc2626' : '#b45309',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          flexShrink: 0,
+                        }}
+                      >
+                        <Clock size={13} />
+                        {countdown.textKh}
+                      </span>
+                    )}
+                  </div>
 
-                    {/* Date subtitle */}
-                    <text
-                      x={xCenter}
-                      y="182"
-                      fill="var(--muted)"
-                      fontSize="10"
-                      fontWeight="500"
-                      textAnchor="middle"
-                    >
-                      {item.submittedAt
-                        ? new Date(item.submittedAt).toLocaleDateString('en-US', {
-                            month: 'numeric',
-                            day: 'numeric',
-                          })
-                        : ''}
-                    </text>
-                  </g>
-                );
-              })}
-            </svg>
+                  <p style={{ margin: 0, fontSize: '0.92rem', color: '#b45309', fontWeight: 600 }}>
+                    👉 សូមរំលឹកកូនឱ្យចូលធ្វើលំហាត់នេះឱ្យបានទាន់ពេលវេលា។
+                  </p>
+                </div>
+              );
+            })}
           </div>
         </section>
       )}
 
-      {/* 4. List of All Exercises (Newest First) */}
-      <section style={{ marginBottom: 28 }}>
-        <h2 style={{ margin: '0 0 12px', fontSize: '1.25rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
-          ប្រវត្តិលំហាត់ទាំងអស់ ({exercises.length})
+      {/* 5. ALL COMPLETED RESULTS (Simple Cards for Parents) */}
+      <section style={{ marginBottom: 24 }}>
+        <h2
+          style={{
+            margin: '0 0 12px',
+            fontSize: '1.25rem',
+            fontWeight: 800,
+            color: 'var(--theme-navy, #1b2240)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+          }}
+        >
+          <BookOpen size={22} color="var(--brand, #4a67d6)" />
+          ប្រវត្តិលទ្ធផលដែលបានធ្វើ ({exercises.length})
         </h2>
 
         {exercises.length === 0 ? (
-          <div className="card" style={{ padding: '24px 20px', textAlign: 'center', borderRadius: 16 }}>
-            <p style={{ margin: 0, color: 'var(--muted)' }}>កូនរបស់អ្នកមិនទាន់បានបញ្ជូនលំហាត់ណាមួយនៅឡើយទេ។</p>
+          <div
+            style={{
+              padding: '28px 20px',
+              textAlign: 'center',
+              borderRadius: 20,
+              backgroundColor: '#ffffff',
+              border: '1.5px solid var(--line, #e2e8f0)',
+            }}
+          >
+            <div style={{ fontSize: '2.5rem', marginBottom: 8 }}>📝</div>
+            <p style={{ margin: 0, color: 'var(--muted, #64748b)', fontWeight: 600 }}>
+              កូនរបស់អ្នកមិនទាន់បានបញ្ជូនលំហាត់ណាមួយនៅឡើយទេ។
+            </p>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {exercises.map((ex) => {
               const isExpanded = expandedExId === ex.id;
               const evalRes = getFaceRating(ex.percentage ?? 0);
-              const wrongQuestions = (ex.questions || []).filter((q) => !q.correct);
-              const allCorrect = (ex.questions || []).length > 0 && wrongQuestions.length === 0;
+              const wrongCount = (ex.questions || []).filter((q) => !q.correct).length;
+              const correctCount = (ex.questions || []).filter((q) => q.correct).length;
+              const totalQ = (ex.questions || []).length;
               const showAll = !!showAllQuestionsMap[ex.id];
+              const wrongQuestions = (ex.questions || []).filter((q) => !q.correct);
               const displayedQuestions = showAll ? ex.questions || [] : wrongQuestions;
 
               return (
                 <div
                   key={ex.id}
                   style={{
-                    backgroundColor: 'var(--card)',
-                    borderRadius: 18,
-                    border: '1.5px solid var(--line)',
-                    boxShadow: 'var(--theme-shadow)',
+                    backgroundColor: '#ffffff',
+                    borderRadius: 20,
+                    border: '1.5px solid var(--line, #e2e8f0)',
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.04)',
                     overflow: 'hidden',
                   }}
                 >
-                  {/* Clickable Header Card */}
-                  <button
-                    type="button"
-                    onClick={() => setExpandedExId(isExpanded ? null : ex.id)}
+                  {/* Card Header */}
+                  <div
                     style={{
-                      width: '100%',
                       padding: '16px 18px',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
                       gap: 12,
-                      background: isExpanded ? 'var(--theme-border-subtle, #f8fafc)' : '#ffffff',
-                      border: 'none',
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                      fontFamily: 'inherit',
-                      color: 'inherit',
                     }}
                   >
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: '0.88rem', color: 'var(--muted)', fontWeight: 500, marginBottom: 2 }}>
-                        {ex.submittedAt
-                          ? new Date(ex.submittedAt).toLocaleDateString('km-KH', {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric',
-                            })
-                          : ''}
-                        {ex.late && <span style={{ color: 'var(--bad)', marginLeft: 6 }}>· បញ្ជូនយឺត</span>}
+                      <div style={{ fontSize: '0.86rem', color: 'var(--muted, #64748b)', fontWeight: 600, marginBottom: 2 }}>
+                        {ex.submittedAt ? formatKhmerDateTime(ex.submittedAt) : ''}
+                        {ex.late && <span style={{ color: '#dc2626', marginLeft: 6 }}>· បញ្ជូនយឺត</span>}
                       </div>
+
                       <h3
                         style={{
                           margin: 0,
-                          fontSize: '1.18rem',
+                          fontSize: '1.2rem',
                           fontWeight: 800,
-                          color: 'var(--theme-navy)',
+                          color: 'var(--theme-navy, #1b2240)',
                           lineHeight: 1.3,
                         }}
                       >
                         {ex.title}
                       </h3>
-                      {typeof ex.classAveragePercent === 'number' && (
-                        <div style={{ fontSize: '0.86rem', color: 'var(--muted)', marginTop: 4 }}>
-                          មធ្យមភាគថ្នាក់៖ <strong>{ex.classAveragePercent}%</strong>
-                        </div>
-                      )}
+
+                      {/* Simple summary counts for non-technical parents */}
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 10,
+                          marginTop: 6,
+                          fontSize: '0.88rem',
+                          fontWeight: 700,
+                        }}
+                      >
+                        {totalQ > 0 ? (
+                          <>
+                            <span style={{ color: '#16a34a' }}>✓ ត្រូវ {correctCount}</span>
+                            {wrongCount > 0 ? (
+                              <span style={{ color: '#dc2626' }}>✕ ខុស {wrongCount}</span>
+                            ) : (
+                              <span style={{ color: '#16a34a' }}>🎉 ត្រូវទាំងអស់</span>
+                            )}
+                          </>
+                        ) : null}
+                      </div>
                     </div>
 
-                    {/* Score + Face */}
+                    {/* Face & Score */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
                       <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '1.25rem', fontWeight: 800, color: evalRes.color }}>
+                        <div style={{ fontSize: '1.35rem', fontWeight: 900, color: evalRes.color }}>
                           {ex.score} / {ex.total}
                         </div>
-                        <div style={{ fontSize: '0.88rem', fontWeight: 700, color: evalRes.color }}>
-                          {ex.percentage}%
+                        <div style={{ fontSize: '0.86rem', fontWeight: 800, color: evalRes.color }}>
+                          {evalRes.labelKh}
                         </div>
                       </div>
-                      <span style={{ fontSize: '2.2rem', lineHeight: 1 }} title={evalRes.labelKh}>
+                      <span style={{ fontSize: '2.5rem', lineHeight: 1 }} title={evalRes.labelKh}>
                         {evalRes.emoji}
                       </span>
-                      {isExpanded ? (
-                        <ChevronUp size={22} color="var(--muted)" />
-                      ) : (
-                        <ChevronDown size={22} color="var(--muted)" />
-                      )}
                     </div>
-                  </button>
+                  </div>
 
-                  {/* Expanded Breakdown */}
-                  {isExpanded && (
+                  {/* Expand / View Details Button */}
+                  {totalQ > 0 && (
                     <div
                       style={{
-                        padding: '16px 18px 22px',
-                        borderTop: '1px solid var(--line)',
-                        backgroundColor: 'var(--card)',
+                        padding: '10px 18px',
+                        backgroundColor: '#f8fafc',
+                        borderTop: '1px solid var(--line, #e2e8f0)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
                       }}
                     >
-                      {/* All Correct Message */}
-                      {allCorrect ? (
-                        <div
+                      <button
+                        type="button"
+                        onClick={() => setExpandedExId(isExpanded ? null : ex.id)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--brand, #4a67d6)',
+                          fontSize: '0.92rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          padding: 0,
+                          fontFamily: 'inherit',
+                        }}
+                      >
+                        <span>{isExpanded ? 'បិទមើលចម្លើយ' : 'មើលសំណួរនិងចម្លើយរបស់កូន'}</span>
+                        {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                      </button>
+
+                      {isExpanded && wrongCount > 0 && totalQ > wrongCount && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setShowAllQuestionsMap((prev) => ({
+                              ...prev,
+                              [ex.id]: !prev[ex.id],
+                            }))
+                          }
                           style={{
-                            padding: '16px',
-                            backgroundColor: '#ecfdf5',
-                            border: '1.5px solid #a7f3d0',
-                            borderRadius: 14,
-                            textAlign: 'center',
-                            color: '#065f46',
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--muted, #64748b)',
+                            fontSize: '0.85rem',
                             fontWeight: 700,
-                            fontSize: '1.15rem',
+                            cursor: 'pointer',
+                            textDecoration: 'underline',
+                            padding: 0,
                           }}
                         >
-                          🎉 ឆ្លើយត្រូវទាំងអស់! (All correct!)
-                        </div>
-                      ) : (
-                        <div>
+                          {showAll ? 'បង្ហាញតែសំណួរខុស' : `បង្ហាញទាំងអស់ (${totalQ})`}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Expanded Questions Breakdown */}
+                  {isExpanded && totalQ > 0 && (
+                    <div
+                      style={{
+                        padding: '16px 18px',
+                        borderTop: '1px solid var(--line, #e2e8f0)',
+                        backgroundColor: '#ffffff',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 12,
+                      }}
+                    >
+                      {displayedQuestions.map((q, idx) => (
+                        <div
+                          key={q.id || idx}
+                          style={{
+                            backgroundColor: q.correct ? '#f0fdf4' : '#fef2f2',
+                            border: q.correct ? '1.5px solid #bbf7d0' : '1.5px solid #fecaca',
+                            borderRadius: 14,
+                            padding: '12px 14px',
+                          }}
+                        >
                           <div
                             style={{
+                              fontSize: '1.05rem',
+                              fontWeight: 700,
+                              color: 'var(--theme-navy, #1b2240)',
+                              marginBottom: 8,
                               display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              marginBottom: 12,
-                              flexWrap: 'wrap',
+                              alignItems: 'flex-start',
                               gap: 8,
                             }}
                           >
-                            <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--bad)' }}>
-                              សំណួរដែលឆ្លើយខុស ({wrongQuestions.length})
-                            </span>
-                            {(ex.questions || []).length > wrongQuestions.length && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setShowAllQuestionsMap((prev) => ({
-                                    ...prev,
-                                    [ex.id]: !prev[ex.id],
-                                  }))
-                                }
-                                style={{
-                                  background: 'none',
-                                  border: 'none',
-                                  color: 'var(--brand)',
-                                  fontSize: '0.88rem',
-                                  fontWeight: 700,
-                                  cursor: 'pointer',
-                                  textDecoration: 'underline',
-                                }}
-                              >
-                                {showAll ? 'លាក់សំណួរដែលត្រូវ' : `មើលសំណួរទាំងអស់ (${ex.questions?.length})`}
-                              </button>
+                            {q.correct ? (
+                              <CheckCircle2 size={18} color="#16a34a" style={{ flexShrink: 0, marginTop: 3 }} />
+                            ) : (
+                              <XCircle size={18} color="#dc2626" style={{ flexShrink: 0, marginTop: 3 }} />
+                            )}
+                            <div style={{ flex: 1 }}>
+                              <MathText text={q.prompt} />
+                            </div>
+                          </div>
+
+                          <div
+                            style={{
+                              fontSize: '0.94rem',
+                              padding: '8px 10px',
+                              backgroundColor: '#ffffff',
+                              borderRadius: 10,
+                              border: '1px solid #e2e8f0',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 4,
+                            }}
+                          >
+                            <div>
+                              <span style={{ color: 'var(--muted, #64748b)', fontWeight: 600 }}>ចម្លើយរបស់កូន៖ </span>
+                              <strong style={{ color: q.correct ? '#16a34a' : '#dc2626' }}>
+                                {q.childAnswer ? <MathText text={q.childAnswer} /> : '(មិនឆ្លើយ)'}
+                              </strong>
+                            </div>
+                            {!q.correct && q.correctAnswer && (
+                              <div>
+                                <span style={{ color: 'var(--muted, #64748b)', fontWeight: 600 }}>ចម្លើយត្រឹមត្រូវ៖ </span>
+                                <strong style={{ color: '#16a34a' }}>
+                                  <MathText text={q.correctAnswer} />
+                                </strong>
+                              </div>
                             )}
                           </div>
-
-                          {/* Questions List */}
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                            {displayedQuestions.map((q, qIndex) => {
-                              return (
-                                <div
-                                  key={q.id || qIndex}
-                                  style={{
-                                    backgroundColor: q.correct ? '#fafffc' : '#fff8f8',
-                                    border: q.correct ? '1.5px solid #a7f3d0' : '1.5px solid #fecaca',
-                                    borderRadius: 14,
-                                    padding: '14px 16px',
-                                  }}
-                                >
-                                  {/* Question Prompt */}
-                                  <div
-                                    style={{
-                                      fontSize: '1.1rem',
-                                      fontWeight: 700,
-                                      color: 'var(--theme-navy)',
-                                      marginBottom: 10,
-                                      display: 'flex',
-                                      alignItems: 'flex-start',
-                                      gap: 8,
-                                    }}
-                                  >
-                                    {q.correct ? (
-                                      <CheckCircle2 size={20} color="#059669" style={{ flexShrink: 0, marginTop: 2 }} />
-                                    ) : (
-                                      <XCircle size={20} color="#dc2626" style={{ flexShrink: 0, marginTop: 2 }} />
-                                    )}
-                                    <div style={{ flex: 1 }}>
-                                      <MathText text={q.prompt} />
-                                    </div>
-                                  </div>
-
-                                  {/* Answers Comparison */}
-                                  <div
-                                    style={{
-                                      display: 'flex',
-                                      flexDirection: 'column',
-                                      gap: 6,
-                                      fontSize: '0.98rem',
-                                      marginBottom: q.explanation ? 10 : 0,
-                                      padding: '8px 12px',
-                                      backgroundColor: '#ffffff',
-                                      borderRadius: 10,
-                                      border: '1px solid var(--line)',
-                                    }}
-                                  >
-                                    <div>
-                                      <span style={{ color: 'var(--muted)', fontWeight: 600 }}>ចម្លើយរបស់កូន៖ </span>
-                                      <strong style={{ color: q.correct ? '#059669' : '#dc2626' }}>
-                                        {q.childAnswer ? (
-                                          <MathText text={q.childAnswer} />
-                                        ) : (
-                                          <span style={{ fontStyle: 'italic', color: 'var(--muted)' }}>(មិនឆ្លើយ)</span>
-                                        )}
-                                      </strong>
-                                    </div>
-
-                                    {!q.correct && (
-                                      <div>
-                                        <span style={{ color: 'var(--muted)', fontWeight: 600 }}>ចម្លើយត្រឹមត្រូវ៖ </span>
-                                        <strong style={{ color: '#059669' }}>
-                                          <MathText text={q.correctAnswer} />
-                                        </strong>
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  {/* Explanation */}
-                                  {q.explanation && (
-                                    <div
-                                      style={{
-                                        backgroundColor: '#fffbeb',
-                                        borderLeft: '4px solid #f59e0b',
-                                        borderRadius: '0 8px 8px 0',
-                                        padding: '10px 12px',
-                                        fontSize: '0.94rem',
-                                        color: '#78350f',
-                                      }}
-                                    >
-                                      <strong style={{ display: 'block', marginBottom: 4 }}>💡 ការពន្យល់៖</strong>
-                                      <MathText text={q.explanation} />
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
                         </div>
-                      )}
+                      ))}
                     </div>
                   )}
                 </div>
@@ -784,89 +955,14 @@ export default function ParentTrackingView({ token }: { token: string }) {
         )}
       </section>
 
-      {/* 5. "Not Done Yet" Section for Published Exercises */}
-      {notDoneExercises.length > 0 && (
-        <section style={{ marginBottom: 28 }}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              fontSize: '1.25rem',
-              fontWeight: 800,
-              color: 'var(--theme-navy)',
-              marginBottom: 12,
-            }}
-          >
-            <span>⏳ លំហាត់មិនទាន់បានធ្វើ ({notDoneExercises.length})</span>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {notDoneExercises.map((nd) => {
-              const countdown = formatKhmerCountdown(nd.deadline);
-
-              return (
-                <div
-                  key={nd.id}
-                  style={{
-                    backgroundColor: 'var(--card)',
-                    borderRadius: 18,
-                    padding: '18px 20px',
-                    border: '1.5px solid #fde68a',
-                    boxShadow: 'var(--theme-shadow)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 8,
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                    <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
-                      {nd.title}
-                    </h3>
-                    {nd.deadline && (
-                      <span
-                        style={{
-                          fontSize: '0.88rem',
-                          fontWeight: 700,
-                          padding: '4px 12px',
-                          borderRadius: 999,
-                          backgroundColor: countdown.isClosed ? 'var(--bad-bg)' : '#fef3c7',
-                          color: countdown.isClosed ? 'var(--bad)' : '#b45309',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 4,
-                          flexShrink: 0,
-                        }}
-                      >
-                        <Clock size={14} />
-                        {countdown.textKh}
-                      </span>
-                    )}
-                  </div>
-
-                  <div style={{ fontSize: '0.92rem', color: 'var(--muted)' }}>
-                    <span>{nd.questionCount} សំណួរ</span>
-                    {nd.timeLimitMinutes > 0 && <span> · កំណត់ពេល {nd.timeLimitMinutes} នាទី</span>}
-                  </div>
-
-                  <p style={{ margin: '4px 0 0', fontSize: '0.95rem', color: '#92400e', fontWeight: 500 }}>
-                    សូមរំលឹកកូនរបស់អ្នកឱ្យចូលធ្វើលំហាត់នេះឱ្យបានទាន់ពេលវេលា។
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* 6. "Add to Home Screen" Tip Box (Android + iPhone) */}
+      {/* 6. Easy Add-to-Home-Screen Shortcut Box */}
       <section
         style={{
-          backgroundColor: 'var(--card)',
+          backgroundColor: '#ffffff',
           borderRadius: 20,
-          border: '1.5px solid var(--line)',
+          border: '1.5px solid var(--line, #e2e8f0)',
           padding: '16px 18px',
-          boxShadow: 'var(--theme-shadow)',
+          boxShadow: '0 4px 14px rgba(0,0,0,0.04)',
         }}
       >
         <button
@@ -886,8 +982,8 @@ export default function ParentTrackingView({ token }: { token: string }) {
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Smartphone size={22} color="var(--brand)" />
-            <span style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--theme-navy)' }}>
+            <Smartphone size={22} color="var(--brand, #4a67d6)" />
+            <span style={{ fontSize: '1.02rem', fontWeight: 800, color: 'var(--theme-navy, #1b2240)' }}>
               របៀបរក្សាទុកនៅលើអេក្រង់ទូរស័ព្ទ (Add to Home screen)
             </span>
           </div>
@@ -899,34 +995,30 @@ export default function ParentTrackingView({ token }: { token: string }) {
             style={{
               marginTop: 14,
               paddingTop: 14,
-              borderTop: '1px solid var(--line)',
-              fontSize: '0.98rem',
-              color: 'var(--theme-navy)',
+              borderTop: '1px solid var(--line, #e2e8f0)',
+              fontSize: '0.96rem',
+              color: 'var(--theme-navy, #1b2240)',
               display: 'flex',
               flexDirection: 'column',
-              gap: 14,
+              gap: 12,
             }}
           >
-            {/* Android Chrome */}
-            <div style={{ backgroundColor: 'var(--theme-page-bg)', padding: '12px 14px', borderRadius: 12 }}>
-              <strong style={{ color: 'var(--brand)', display: 'block', marginBottom: 6 }}>
+            <div style={{ backgroundColor: 'var(--theme-page-bg, #f8fafc)', padding: '12px 14px', borderRadius: 12 }}>
+              <strong style={{ color: 'var(--brand, #4a67d6)', display: 'block', marginBottom: 4 }}>
                 📱 សម្រាប់ទូរស័ព្ទ Android (Chrome)៖
               </strong>
-              <ol style={{ margin: 0, paddingLeft: 22, lineHeight: 1.6 }}>
-                <li>ចុចលើសញ្ញាចុចបី <strong>(⋮)</strong> នៅជ្រុងខាងស្តាំលើនៃកម្មវិធី Chrome</li>
-                <li>ជ្រើសរើស <strong>«បន្ថែមទៅអេក្រង់ដើម» (Add to Home screen)</strong> រួចចុច <strong>បន្ថែម</strong></li>
-              </ol>
+              <p style={{ margin: 0, lineHeight: 1.6 }}>
+                ចុចសញ្ញាចុចបី <strong>(⋮)</strong> នៅជ្រុងខាងស្តាំលើនៃ Chrome រួចជ្រើសរើស <strong>«បន្ថែមទៅអេក្រង់ដើម» (Add to Home screen)</strong>។
+              </p>
             </div>
 
-            {/* iPhone Safari */}
-            <div style={{ backgroundColor: 'var(--theme-page-bg)', padding: '12px 14px', borderRadius: 12 }}>
-              <strong style={{ color: 'var(--brand)', display: 'block', marginBottom: 6 }}>
+            <div style={{ backgroundColor: 'var(--theme-page-bg, #f8fafc)', padding: '12px 14px', borderRadius: 12 }}>
+              <strong style={{ color: 'var(--brand, #4a67d6)', display: 'block', marginBottom: 4 }}>
                 🍏 សម្រាប់ទូរស័ព្ទ iPhone (Safari)៖
               </strong>
-              <ol style={{ margin: 0, paddingLeft: 22, lineHeight: 1.6 }}>
-                <li>ចុចលើប៊ូតុងចែករំលែក <strong>(⎋ Share)</strong> នៅខាងក្រោមអេក្រង់ Safari</li>
-                <li>អូសចុះក្រោម រួចជ្រើសរើស <strong>«Add to Home Screen»</strong> (បន្ថែមទៅអេក្រង់ដើម)</li>
-              </ol>
+              <p style={{ margin: 0, lineHeight: 1.6 }}>
+                ចុចប៊ូតុងចែករំលែក <strong>(⎋ Share)</strong> នៅខាងក្រោមអេក្រង់ Safari រួចជ្រើសរើស <strong>«Add to Home Screen»</strong> (បន្ថែមទៅអេក្រង់ដើម)។
+              </p>
             </div>
           </div>
         )}

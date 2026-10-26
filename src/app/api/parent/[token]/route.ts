@@ -221,11 +221,24 @@ export async function GET(
       }
     }
 
+    // Calculate student's latest active timestamp
+    let lastActiveAt: number | null = null;
+    if (profile.lastActivityAt) lastActiveAt = profile.lastActivityAt;
+    for (const sub of submissionsForChild) {
+      if (sub.submittedAt && (!lastActiveAt || sub.submittedAt > lastActiveAt)) {
+        lastActiveAt = sub.submittedAt;
+      }
+      if (sub.startedAt && (!lastActiveAt || sub.startedAt > lastActiveAt)) {
+        lastActiveAt = sub.startedAt;
+      }
+    }
+
     // 6. Build sanitized parent view data
     const parentData = buildParentViewData({
       childName: profile.name,
       className: profile.className || undefined,
       studentGrade,
+      lastActiveAt,
       publishedExercises,
       submissionsForStudent: submissionsForChild,
       classAverageMap,

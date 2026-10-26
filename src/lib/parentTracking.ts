@@ -1,6 +1,7 @@
 import type {
   FaceEvaluation,
   FaceRating,
+  ParentActivityDay,
   ParentExerciseDetail,
   ParentNotDoneExercise,
   ParentQuestionDetail,
@@ -8,6 +9,109 @@ import type {
   Exercise,
   Submission,
 } from './types';
+
+const KH_WEEKDAYS = ['អាទិត្យ', 'ច័ន្ទ', 'អង្គារ', 'ពុធ', 'ព្រហស្បតិ៍', 'សុក្រ', 'សៅរ៍'];
+const KH_MONTHS = [
+  'មករា', 'កុម្ភៈ', 'មីនា', 'មេសា', 'ឧសភា', 'មិថុនា',
+  'កក្កដា', 'សីហា', 'កញ្ញា', 'តុលា', 'វិច្ឆិកា', 'ធ្នូ',
+];
+
+export function computeParentActivityDays(
+  submissions: Submission[],
+  lastActiveAt?: number | null,
+  nowMs = Date.now()
+): { recentActivityDays: ParentActivityDay[]; activeDaysCountLast7Days: number } {
+  const activityCountByDateStr = new Map<string, number>();
+
+  const toDateStr = (timestamp: number) => {
+    try {
+      return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Phnom_Penh' }).format(new Date(timestamp));
+    } catch {
+      const d = new Date(timestamp + 7 * 3600000);
+      return d.toISOString().slice(0, 10);
+    }
+  };
+
+  for (const s of submissions) {
+    if (s.submittedAt) {
+      const dStr = toDateStr(s.submittedAt);
+      activityCountByDateStr.set(dStr, (activityCountByDateStr.get(dStr) || 0) + 1);
+    }
+    if (s.startedAt && s.startedAt !== s.submittedAt) {
+      const dStr = toDateStr(s.startedAt);
+      activityCountByDateStr.set(dStr, activityCountByDateStr.get(dStr) || 1);
+    }
+  }
+
+  if (lastActiveAt) {
+    const dStr = toDateStr(lastActiveAt);
+    activityCountByDateStr.set(dStr, activityCountByDateStr.get(dStr) || 1);
+  }
+
+  const todayStr = toDateStr(nowMs);
+  const yesterdayStr = toDateStr(nowMs - 86400000);
+
+  const days: ParentActivityDay[] = [];
+  let activeCount = 0;
+
+  // Last 7 days: from 6 days ago up to today
+  for (let i = 6; i >= 0; i--) {
+    const dayMs = nowMs - i * 86400000;
+    const dStr = toDateStr(dayMs);
+    const dateObj = new Date(dayMs);
+
+    let dayLabelKh: string;
+    let dayLabelEn: string;
+
+    if (dStr === todayStr) {
+      dayLabelKh = 'ថ្ងៃនេះ';
+      dayLabelEn = 'Today';
+    } else if (dStr === yesterdayStr) {
+      dayLabelKh = 'ម្សិលមិញ';
+      dayLabelEn = 'Yesterday';
+    } else {
+      const dayOfWeek = dateObj.getDay();
+      dayLabelKh = KH_WEEKDAYS[dayOfWeek] || '';
+      dayLabelEn = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dayOfWeek] || '';
+    }
+
+    const count = activityCountByDateStr.get(dStr) || 0;
+    const hasActivity = count > 0;
+    if (hasActivity) {
+      activeCount++;
+    }
+
+    const dayNum = dateObj.getDate();
+    const monthNum = dateObj.getMonth();
+    const formattedDate = `${dayNum} ${KH_MONTHS[monthNum] || ''}`;
+
+    days.push({
+      dateStr: dStr,
+      dayLabelKh,
+      dayLabelEn,
+      formattedDate,
+      hasActivity,
+      exerciseCount: count,
+    });
+  }
+
+  return {
+    recentActivityDays: days,
+    activeDaysCountLast7Days: activeCount,
+  };
+}
+
+export interface BuildParentDataInput {
+  childName: string;
+  className?: string;
+  studentId?: string;
+  studentGrade?: number;
+  lastActiveAt?: number | null;
+  publishedExercises: Array<{ id: string; data: Exercise }>;
+  submissionsForStudent: Submission[];
+  classAverageMap?: Record<string, number>;
+  showClassAverage?: boolean;
+}
 
 /**
  * Returns face, color, emoji, and Khmer/English labels based on score percentage.
@@ -254,11 +358,27 @@ export function buildParentViewData(input: BuildParentDataInput): ParentViewData
       ).length
     : trulyPublished.length;
 
+  const { recentActivityDays, activeDaysCountLast7Days } = computeParentActivityDays(
+    submissionsForStudent,
+    input.lastActiveAt
+  );
+
+  const averageScorePercent =
+    exercises.length > 0
+      ? Math.round(exercises.reduce((acc, curr) => acc + (curr.percentage || 0), 0) / exercises.length)
+      : 0;
+  const overallRating = getFaceRating(averageScorePercent);
+
   return {
     childName,
     className,
     completedCount: exercises.length,
     totalPublishedCount: Math.max(relevantTotalCount, exercises.length),
+    lastActiveAt: input.lastActiveAt || null,
+    activeDaysCountLast7Days,
+    recentActivityDays,
+    averageScorePercent,
+    overallRating,
     latestResult,
     exercises,
     notDoneExercises,

@@ -197,11 +197,25 @@ export interface ParentNotDoneExercise {
   isClosed: boolean;
 }
 
+export interface ParentActivityDay {
+  dateStr: string; // YYYY-MM-DD
+  dayLabelKh: string; // e.g. "ថ្ងៃនេះ", "ម្សិលមិញ", "ច័ន្ទ", "អង្គារ"...
+  dayLabelEn: string;
+  formattedDate: string; // e.g. "26 តុលា"
+  hasActivity: boolean;
+  exerciseCount: number;
+}
+
 export interface ParentViewData {
   childName: string;
   className?: string;
   completedCount: number;
   totalPublishedCount: number;
+  lastActiveAt?: number | null;
+  activeDaysCountLast7Days?: number;
+  recentActivityDays?: ParentActivityDay[];
+  averageScorePercent?: number;
+  overallRating?: FaceEvaluation;
   latestResult?: {
     exerciseId: string;
     title: string;
