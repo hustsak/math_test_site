@@ -42,6 +42,13 @@ function toLocalInput(iso: string | null) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+// Converts Khmer digits ០-៩ and fullwidth digits to ASCII 0-9
+function toAsciiDigits(str: string): string {
+  return str
+    .replace(/[០-៩]/g, (ch) => String(ch.charCodeAt(0) - 0x17e0))
+    .replace(/[０-９]/g, (ch) => String(ch.charCodeAt(0) - 0xff10));
+}
+
 export default function EditExercise() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -53,7 +60,7 @@ export default function EditExercise() {
   // Paste-import panel
   const [pasteText, setPasteText] = useState('');
   const [pasteMsg, setPasteMsg] = useState('');
-  const [pasteTime, setPasteTime] = useState<number | ''>('');
+  const [pasteTime, setPasteTime] = useState<string>('');
   const [viewMode, setViewMode] = useState<'published' | 'edit'>('published');
 
   useEffect(() => {
@@ -86,6 +93,22 @@ export default function EditExercise() {
     [qs[i], qs[j]] = [qs[j], qs[i]];
     set({ questions: qs });
   };
+
+  function handleTimeChange(raw: string) {
+    const ascii = toAsciiDigits(raw);
+    const cleaned = ascii.replace(/[^\d]/g, '');
+    set({ timeLimitMinutes: cleaned as any });
+  }
+
+  function handleTimeBlur() {
+    if (!ex) return;
+    const str = String(ex.timeLimitMinutes ?? '').trim();
+    if (str === '') {
+      set({ timeLimitMinutes: 0 });
+    } else {
+      set({ timeLimitMinutes: Math.max(0, parseInt(str, 10) || 0) });
+    }
+  }
 
   function changeKind(i: number, kind: Question['kind']) {
     if (kind === 'choice') {
@@ -135,8 +158,9 @@ export default function EditExercise() {
     if (parsed.description && (!ex!.description || onlyBlank)) {
       patch.description = parsed.description;
     }
-    if (pasteTime !== '' && Number(pasteTime) >= 0) {
-      patch.timeLimitMinutes = Number(pasteTime);
+    const parsedTime = pasteTime.trim() !== '' ? parseInt(toAsciiDigits(pasteTime), 10) : undefined;
+    if (parsedTime !== undefined && !isNaN(parsedTime) && parsedTime >= 0) {
+      patch.timeLimitMinutes = parsedTime;
     } else if (parsed.timeLimitMinutes !== undefined && parsed.timeLimitMinutes > 0) {
       patch.timeLimitMinutes = parsed.timeLimitMinutes;
     }
@@ -226,17 +250,71 @@ export default function EditExercise() {
         </div>
         <div className="row">
           <div className="grow">
-            <label>Time limit (minutes, 0 = none)</label>
-            <input
-              type="number"
-              min={0}
-              placeholder="0"
-              value={ex.timeLimitMinutes === 0 ? '' : ex.timeLimitMinutes}
-              onChange={(e) => {
-                const val = e.target.value;
-                set({ timeLimitMinutes: val === '' ? 0 : Math.max(0, parseInt(val, 10) || 0) });
-              }}
-            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <label style={{ margin: 0, fontWeight: 600 }}>Time limit</label>
+              {Number(ex.timeLimitMinutes) > 0 ? (
+                <span style={{ fontSize: '0.82rem', color: 'var(--brand)', fontWeight: 600 }}>
+                  ⏱️ {ex.timeLimitMinutes} minutes
+                </span>
+              ) : (
+                <span style={{ fontSize: '0.82rem', color: '#6b7280', fontWeight: 500 }}>
+                  ♾️ No time limit
+                </span>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder="0"
+                value={ex.timeLimitMinutes === undefined ? '0' : String(ex.timeLimitMinutes)}
+                onChange={(e) => handleTimeChange(e.target.value)}
+                onBlur={handleTimeBlur}
+                style={{
+                  maxWidth: 160,
+                  fontWeight: 600,
+                  fontSize: '1.05rem',
+                }}
+              />
+              <span style={{ fontSize: '0.9rem', color: '#6b7280', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                minutes (0 = none)
+              </span>
+            </div>
+            {/* Quick preset buttons for instant 1-click selection */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+              {[
+                { label: 'No limit (0)', val: 0 },
+                { label: '10 min', val: 10 },
+                { label: '15 min', val: 15 },
+                { label: '20 min', val: 20 },
+                { label: '30 min', val: 30 },
+                { label: '45 min', val: 45 },
+                { label: '60 min', val: 60 },
+              ].map((preset) => {
+                const active = Number(ex.timeLimitMinutes) === preset.val;
+                return (
+                  <button
+                    key={preset.val}
+                    type="button"
+                    onClick={() => set({ timeLimitMinutes: preset.val })}
+                    style={{
+                      padding: '4px 10px',
+                      fontSize: '0.8rem',
+                      fontWeight: active ? 700 : 500,
+                      borderRadius: 6,
+                      border: active ? '1.5px solid var(--brand)' : '1px solid #d1d5db',
+                      background: active ? 'rgba(79, 70, 229, 0.12)' : '#f9fafb',
+                      color: active ? 'var(--brand)' : '#374151',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    {preset.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
           <div className="grow">
             <label>Deadline (optional)</label>
@@ -274,16 +352,17 @@ export default function EditExercise() {
           placeholder={'Paste Google Apps Script, JSON, or plain text here...\n\nExample Apps Script:\nfunction createQuiz() {\n  var form = FormApp.create("Math Quiz");\n  form.setTimeLimit(30);\n  var item = form.addMultipleChoiceItem();\n  item.setTitle("[-7 + 12] * (-3) = ?")\n      .setChoices([item.createChoice("15"), item.createChoice("-15", true)]);\n}'}
         />
         <div className="row" style={{ gap: 12, alignItems: 'flex-end' }}>
-          <div style={{ width: 180 }}>
+          <div style={{ width: 190 }}>
             <label style={{ fontSize: '0.85rem' }}>⏱️ Time limit (minutes)</label>
             <input
-              type="number"
-              min={0}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
               placeholder="e.g. 30 (0 = none)"
               value={pasteTime}
               onChange={(e) => {
-                const val = e.target.value;
-                setPasteTime(val === '' ? '' : Math.max(0, parseInt(val, 10) || 0));
+                const ascii = toAsciiDigits(e.target.value).replace(/[^\d]/g, '');
+                setPasteTime(ascii);
               }}
             />
           </div>
@@ -452,10 +531,18 @@ export default function EditExercise() {
                 <div style={{ width: 90 }}>
                   <label>Points</label>
                   <input
-                    type="number"
-                    min={0}
-                    value={q.points}
-                    onChange={(e) => setQ(i, { points: Number(e.target.value) })}
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={q.points === undefined ? '1' : String(q.points)}
+                    onChange={(e) => {
+                      const ascii = toAsciiDigits(e.target.value).replace(/[^\d]/g, '');
+                      setQ(i, { points: ascii as any });
+                    }}
+                    onBlur={() => {
+                      const pts = Math.max(0, parseInt(String(q.points || '0'), 10) || 0);
+                      setQ(i, { points: pts });
+                    }}
                   />
                 </div>
               </div>
