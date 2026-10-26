@@ -42,7 +42,9 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
         points: q.points,
       })),
     };
-    return NextResponse.json({ exercise: pub, closed, serverNow: now });
+    const response = NextResponse.json({ exercise: pub, closed, serverNow: now });
+    response.headers.set('Cache-Control', 'public, s-maxage=10, stale-while-revalidate=60');
+    return response;
   } catch (e) {
     console.error(e);
     return NextResponse.json({ error: 'Server error' }, { status: 500 });

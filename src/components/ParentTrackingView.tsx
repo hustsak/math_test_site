@@ -39,9 +39,15 @@ function formatKhmerDateTime(timestamp: number | null | undefined): string {
   }
 }
 
-export default function ParentTrackingView({ token }: { token: string }) {
-  const [data, setData] = useState<ParentViewData | null>(null);
-  const [loading, setLoading] = useState(true);
+export default function ParentTrackingView({
+  token,
+  initialData,
+}: {
+  token: string;
+  initialData?: ParentViewData | null;
+}) {
+  const [data, setData] = useState<ParentViewData | null>(initialData || null);
+  const [loading, setLoading] = useState(!initialData);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [isOffline, setIsOffline] = useState(false);
@@ -93,18 +99,19 @@ export default function ParentTrackingView({ token }: { token: string }) {
   }
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(cacheKey);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setData(parsed);
-        setLoading(false);
-      }
-    } catch {}
-
-    fetchData(false);
+    if (!initialData) {
+      try {
+        const saved = localStorage.getItem(cacheKey);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          setData(parsed);
+          setLoading(false);
+        }
+      } catch {}
+      fetchData(false);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+  }, [token, initialData]);
 
   if (loading && !data) {
     return (
