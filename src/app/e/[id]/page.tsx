@@ -528,9 +528,14 @@ export default function StudentPage() {
                   }}
                   value={attempt?.answers[q.id] ?? ''}
                   onChange={(e) => setAnswer(q.id, e.target.value)}
-                  placeholder={q.kind === 'number' ? 'ចម្លើយរបស់អ្នក (ឧ. -5 ឬ 3/4)' : 'ចម្លើយរបស់អ្នក'}
+                  placeholder={q.kind === 'number' ? 'ចម្លើយរបស់អ្នក (ឧ. -5 ឬ 3/4)' : 'ចម្លើយរបស់អ្នក (ប្រើ * សម្រាប់ ×, ^ សម្រាប់ស្វ័យគុណ)'}
                   autoComplete="off"
                 />
+                {(attempt?.answers[q.id] ?? '').trim() && (
+                  <div className="preview" style={{ marginTop: 6, minHeight: 36 }}>
+                    <MathText text={attempt!.answers[q.id]} />
+                  </div>
+                )}
                 <div className="row" style={{ marginTop: 8, gap: 6 }}>
                   {SYMBOLS.map((s) => (
                     <button key={s} type="button" className="sym" onClick={() => insertSymbol(q.id, s)}>

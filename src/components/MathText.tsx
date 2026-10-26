@@ -1,12 +1,16 @@
 import katex from 'katex';
+import { splitAutoMath, toLatex } from '@/lib/autoMath';
 
 function render(tex: string, displayMode: boolean) {
   return katex.renderToString(tex, { throwOnError: false, displayMode, strict: 'ignore' });
 }
 
 /**
- * Renders text containing LaTeX: $inline$ and $$display$$.
- * Everything outside the dollar signs is plain text (Khmer works fine).
+ * Renders text containing math.
+ *  - $inline$ and $$display$$ are treated as LaTeX.
+ *  - Everything else is plain text, except simple typed math such as 3*4, x^2, 3/4,
+ *    sqrt(49), x>=2, which is detected and rendered automatically.
+ * Khmer and other text outside math is left untouched.
  */
 export default function MathText({ text }: { text: string }) {
   const parts = (text || '').split(/(\$\$[^$]+\$\$|\$[^$]+\$)/g);
@@ -19,7 +23,17 @@ export default function MathText({ text }: { text: string }) {
         if (p.startsWith('$') && p.endsWith('$') && p.length > 2) {
           return <span key={i} dangerouslySetInnerHTML={{ __html: render(p.slice(1, -1), false) }} />;
         }
-        return <span key={i}>{p}</span>;
+        return (
+          <span key={i}>
+            {splitAutoMath(p).map((piece, j) =>
+              piece.type === 'math' ? (
+                <span key={j} dangerouslySetInnerHTML={{ __html: render(toLatex(piece.value), false) }} />
+              ) : (
+                <span key={j}>{piece.value}</span>
+              ),
+            )}
+          </span>
+        );
       })}
     </div>
   );

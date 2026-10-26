@@ -526,6 +526,11 @@ export default function EditExercise() {
                   <div className="grow">
                     <label>Correct answer</label>
                     <input value={q.answer} onChange={(e) => setQ(i, { answer: e.target.value })} />
+                    {q.answer && (
+                      <div className="preview" style={{ marginTop: 6, minHeight: 32 }}>
+                        <MathText text={q.answer} />
+                      </div>
+                    )}
                   </div>
                 )}
                 <div style={{ width: 90 }}>
@@ -575,8 +580,8 @@ export default function EditExercise() {
                           ×
                         </button>
                       </div>
-                      {c.includes('$') && (
-                        <div className="preview" style={{ marginTop: 0 }}>
+                      {c.trim() && (
+                        <div className="preview" style={{ marginTop: 4, minHeight: 30 }}>
                           <MathText text={c} />
                         </div>
                       )}

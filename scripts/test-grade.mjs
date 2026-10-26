@@ -16,6 +16,8 @@ writeFileSync(
   join(tmp, 'gradeExercise.ts'),
   readFileSync(new URL('gradeExercise.ts', lib), 'utf8').replace("from './grade'", "from './grade.ts'").replace("from './types'", "from './types.ts'"),
 );
+cpSync(new URL('autoMath.ts', lib), join(tmp, 'autoMath.ts'));
+const { toLatex, splitAutoMath } = await import(pathToFileURL(join(tmp, 'autoMath.ts')).href);
 const { isCorrect, parseNumber, normalize } = await import(pathToFileURL(join(tmp, 'grade.ts')).href);
 const { gradeQuestions } = await import(pathToFileURL(join(tmp, 'gradeExercise.ts')).href);
 
@@ -70,5 +72,41 @@ assert.equal(parseNumber('3/4'), 0.75);
 assert.equal(parseNumber('x'), null);
 assert.equal(normalize(' A − B '), 'a-b');
 
+// Auto-math: typed * and ^ and / become LaTeX
+const latexCases = [
+  ['3*4', '3\\times 4'],
+  ['x^2+2x+1', 'x^{2}+2x+1'],
+  ['3/4', '\\frac{3}{4}'],
+  ['1/2+3/4', '\\frac{1}{2}+\\frac{3}{4}'],
+  ['sqrt(49)', '\\sqrt{49}'],
+  ['x>=2', 'x\\geq 2'],
+  ['(x+1)^2', '(x+1)^{2}'],
+  ['2^(n+1)', '2^{n+1}'],
+  ['x^-2', 'x^{-2}'],
+  ['(a+b)/c', '\\frac{a+b}{c}'],
+  ['sqrt(2)/3', '\\frac{\\sqrt{2}}{3}'],
+];
+for (const [input, expected] of latexCases) {
+  const got = toLatex(input);
+  if (got !== expected) {
+    failed++;
+    console.error(`FAIL toLatex(${input}) expected ${expected} got ${got}`);
+  }
+}
+const splitCases = [
+  ['Compute 3*4 now', [['text', 'Compute '], ['math', '3*4'], ['text', ' now']]],
+  ['គណនា 2x+3=11', [['text', 'គណនា '], ['math', '2x+3=11']]],
+  ['I have 3 apples', [['text', 'I have 3 apples']]],
+  ['1) 3*4', [['text', '1) '], ['math', '3*4']]],
+  ['Solve x^2 = 9 (cm)', [['text', 'Solve '], ['math', 'x^2 = 9'], ['text', ' (cm)']]],
+];
+for (const [input, expected] of splitCases) {
+  const got = splitAutoMath(input).map((p) => [p.type, p.value]);
+  if (JSON.stringify(got) !== JSON.stringify(expected)) {
+    failed++;
+    console.error(`FAIL split(${input}) expected ${JSON.stringify(expected)} got ${JSON.stringify(got)}`);
+  }
+}
+
 if (failed) process.exit(1);
-console.log(`All ${cases.length} grading checks passed.`);
+console.log(`All grading and auto-math checks passed.`);

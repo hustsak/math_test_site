@@ -49,7 +49,8 @@ Push the folder to GitHub, import it in Vercel, and add the same variables from 
 
 ## Writing questions
 
-- Math uses LaTeX between dollar signs: `$\frac{3}{4}+\frac{1}{2}$`, `$x^2+2x+1$`, `$\sqrt{49}$`, `$(-5)+8$`, `$2x+3=11$`, `$x^2\geq 0$`. Use `$$...$$` for a centered display equation.
+- **Just type math naturally:** `3*4` → 3 × 4, `x^2` → x², `3/4` → a fraction, `sqrt(49)` → √49, `x>=2` → x ≥ 2, `2^(n+1)`, `(a+b)/c`. No dollar signs needed, and it also works in students' typed answers (they see a live preview). Dates like `10/12/2026` would be read as a fraction; wrap them in text or avoid them.
+- For more advanced math, use LaTeX between dollar signs: `$\frac{3}{4}+\frac{1}{2}$`, `$x^2+2x+1$`, `$\sqrt{49}$`, `$(-5)+8$`, `$2x+3=11$`, `$x^2\geq 0$`. Use `$$...$$` for a centered display equation.
 - **Number or fraction**: `3/4`, `0.75` and `6/8` all count as equal; a typographic minus `−5` is accepted; `1,5` is read as 1.5.
 - **Text / expression**: compared ignoring spaces and capitals, with symbols normalised (`x²` = `x^2`, `≥` = `>=`, `√49` = `sqrt49`). Give several accepted forms separated by `|`, for example `x>=2|x≥2`.
 - **Multiple choice**: 2 to 6 choices; select the correct one with the radio button.
