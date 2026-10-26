@@ -552,21 +552,12 @@ export default function AdminHome() {
         >
           {/* Top Header with Theme Switcher */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div
-                style={{
-                  width: 42,
-                  height: 42,
-                  borderRadius: 12,
-                  background: 'linear-gradient(135deg, #4a67d6 0%, #3d56a6 100%)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fff',
-                }}
-              >
-                <BookOpen size={22} />
-              </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <img
+                src="/logo.png"
+                alt="MathTest Logo"
+                style={{ height: 46, width: 'auto', objectFit: 'contain' }}
+              />
               <div>
                 <h2 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
                   MathTest
@@ -921,20 +912,11 @@ export default function AdminHome() {
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div
-                  style={{
-                    width: 38,
-                    height: 38,
-                    borderRadius: 12,
-                    background: 'linear-gradient(135deg, #4a67d6 0%, #3d56a6 100%)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#ffffff',
-                  }}
-                >
-                  <BookOpen size={20} />
-                </div>
+                <img
+                  src="/logo.png"
+                  alt="MathTest Logo"
+                  style={{ height: 38, width: 'auto', objectFit: 'contain' }}
+                />
                 <div>
                   <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
                     MathTest
@@ -1207,18 +1189,24 @@ export default function AdminHome() {
           {/* Logo Icon */}
           <div
             style={{
-              width: 44,
-              height: 44,
+              width: 48,
+              height: 48,
               borderRadius: 14,
-              backgroundColor: 'rgba(255, 255, 255, 0.22)',
+              backgroundColor: '#ffffff',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#ffffff',
+              padding: 4,
               marginBottom: 10,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.18)',
+              overflow: 'hidden',
             }}
           >
-            <BookOpen size={24} />
+            <img
+              src="/logo.png"
+              alt="MathTest Logo"
+              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+            />
           </div>
 
           {/* Quick rail action icons */}
@@ -1384,13 +1372,36 @@ export default function AdminHome() {
           className="hide-on-mobile"
         >
           {/* Logo Title + Collapse Button */}
-          <div style={{ marginBottom: 36, paddingRight: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <h2 style={{ color: '#ffffff', margin: 0, fontSize: '1.4rem', fontWeight: 800, letterSpacing: '-0.02em' }}>
-                MathTest
-              </h2>
-              <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: '0.8rem', fontWeight: 500 }}>
-                Teacher Workspace
+          <div style={{ marginBottom: 32, paddingRight: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div
+                style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 10,
+                  backgroundColor: '#ffffff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: 3,
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.18)',
+                  flexShrink: 0,
+                  overflow: 'hidden',
+                }}
+              >
+                <img
+                  src="/logo.png"
+                  alt="MathTest Logo"
+                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                />
+              </div>
+              <div>
+                <h2 style={{ color: '#ffffff', margin: 0, fontSize: '1.3rem', fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1.1 }}>
+                  MathTest
+                </h2>
+                <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.75rem', fontWeight: 500 }}>
+                  Teacher Workspace
+                </div>
               </div>
             </div>
             <button
@@ -1661,20 +1672,11 @@ export default function AdminHome() {
               </button>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 10,
-                    background: 'linear-gradient(135deg, #4a67d6 0%, #3d56a6 100%)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#ffffff',
-                  }}
-                >
-                  <BookOpen size={17} />
-                </div>
+                <img
+                  src="/logo.png"
+                  alt="MathTest Logo"
+                  style={{ height: 32, width: 'auto', objectFit: 'contain' }}
+                />
                 <span style={{ fontWeight: 800, fontSize: '1.05rem', color: 'var(--theme-navy)' }}>
                   MathTest
                 </span>

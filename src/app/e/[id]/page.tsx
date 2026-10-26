@@ -229,9 +229,16 @@ export default function StudentPage() {
     return (
       <div className="wrap" style={{ maxWidth: 520 }}>
         <form className="card stack" onSubmit={start}>
-          <h1>{ex.title}</h1>
+          <div style={{ textAlign: 'center', marginBottom: 4 }}>
+            <img
+              src="/logo.png"
+              alt="Math Exercises"
+              style={{ height: 68, width: 'auto', objectFit: 'contain', margin: '0 auto' }}
+            />
+          </div>
+          <h1 style={{ textAlign: 'center', marginTop: 0 }}>{ex.title}</h1>
           {ex.description && <MathText text={ex.description} />}
-          <div className="muted">
+          <div className="muted" style={{ textAlign: 'center' }}>
             {ex.questions.length} សំណួរ
             {ex.timeLimitMinutes ? ` · រយៈពេល ${ex.timeLimitMinutes} នាទី (នាឡិកានឹងចាប់ផ្ដើមពេលចុច ចាប់ផ្ដើម)` : ''}
           </div>
@@ -266,12 +273,19 @@ export default function StudentPage() {
         {/* Score summary card */}
         <div className="card" style={{ padding: '16px 14px', borderRadius: 12 }}>
           <div className="row spread" style={{ alignItems: 'center', marginBottom: 10 }}>
-            <div>
-              <h1 style={{ margin: 0, fontSize: '1.2rem', lineHeight: 1.3 }}>
-                លទ្ធផល{attempt?.name ? `: ${attempt.name}` : ''}
-              </h1>
-              <div className="muted" style={{ fontSize: '0.85rem' }}>
-                បានបញ្ចប់ការធ្វើតេស្ត
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <img
+                src="/logo.png"
+                alt="Math Logo"
+                style={{ height: 42, width: 'auto', objectFit: 'contain' }}
+              />
+              <div>
+                <h1 style={{ margin: 0, fontSize: '1.2rem', lineHeight: 1.3 }}>
+                  លទ្ធផល{attempt?.name ? `: ${attempt.name}` : ''}
+                </h1>
+                <div className="muted" style={{ fontSize: '0.85rem' }}>
+                  បានបញ្ចប់ការធ្វើតេស្ត
+                </div>
               </div>
             </div>
             <div style={{ textAlign: 'right' }}>

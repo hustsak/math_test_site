@@ -5,6 +5,11 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'Math Exercises',
   description: 'Teacher-managed math exercises',
+  icons: {
+    icon: '/icon.png',
+    shortcut: '/favicon.ico',
+    apple: '/icon-192.png',
+  },
 };
 
 export const viewport: Viewport = {

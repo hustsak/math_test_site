@@ -210,8 +210,11 @@ export default function EditExercise() {
 
   return (
     <div className="wrap stack">
-      <div className="row spread">
-        <Link href="/admin">← All exercises</Link>
+      <div className="row spread" style={{ alignItems: 'center' }}>
+        <div className="row" style={{ gap: 10, alignItems: 'center' }}>
+          <img src="/logo.png" alt="Math Logo" style={{ height: 28, width: 'auto', objectFit: 'contain' }} />
+          <Link href="/admin">← All exercises</Link>
+        </div>
         <span className={`badge ${ex.published ? 'live' : 'warn'}`}>{ex.published ? 'Published' : 'Draft'}</span>
       </div>
 

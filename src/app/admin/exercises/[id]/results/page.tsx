@@ -144,7 +144,8 @@ export default function Results() {
     <div className="wrap stack">
       {/* Top Header & Breadcrumbs */}
       <div className="row spread" style={{ borderBottom: '1px solid var(--line)', paddingBottom: 16 }}>
-        <div className="row" style={{ gap: 12 }}>
+        <div className="row" style={{ gap: 12, alignItems: 'center' }}>
+          <img src="/logo.png" alt="Math Logo" style={{ height: 28, width: 'auto', objectFit: 'contain' }} />
           <Link href="/admin" className="btn small secondary">← All exercises</Link>
           <Link href={`/admin/exercises/${id}`} className="btn small secondary">✏️ Edit Exercise</Link>
         </div>
