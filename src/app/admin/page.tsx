@@ -16,6 +16,7 @@ import {
   getDocs,
   orderBy,
   query,
+  updateDoc,
 } from 'firebase/firestore';
 import { QRCodeSVG } from 'qrcode.react';
 import {
@@ -51,6 +52,10 @@ import {
   Menu,
   ChevronLeft,
   ChevronRight,
+  Folder,
+  FolderOpen,
+  FolderSymlink,
+  Layers,
 } from 'lucide-react';
 import { getAuthClient, getDb } from '@/lib/firebaseClient';
 import { useAdmin } from '@/lib/useAdmin';
@@ -96,6 +101,7 @@ export default function AdminHome() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'published' | 'scheduled' | 'draft'>('all');
   const [gradeFilter, setGradeFilter] = useState<string>('all');
+  const [selectedChapter, setSelectedChapter] = useState<string>('all');
 
   // Modals & Popups
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
@@ -104,6 +110,9 @@ export default function AdminHome() {
   const [unsubmittedModalEx, setUnsubmittedModalEx] = useState<Row | null>(null);
   const [showAddTeacherModal, setShowAddTeacherModal] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [moveModalEx, setMoveModalEx] = useState<Row | null>(null);
+  const [moveGrades, setMoveGrades] = useState<number[]>([]);
+  const [moveBusy, setMoveBusy] = useState(false);
 
   // Register another teacher form states
   const [newTeacherEmail, setNewTeacherEmail] = useState('');
@@ -394,6 +403,28 @@ export default function AdminHome() {
     }
   }
 
+  async function handleMoveExercise(r: Row, newGrades: number[]) {
+    if (!newGrades.length) {
+      alert(lang === 'KH' ? 'សូមជ្រើសរើសកម្រិតថ្នាក់យ៉ាងហោចណាស់មួយ។' : 'Please select at least one grade.');
+      return;
+    }
+    setMoveBusy(true);
+    try {
+      const docRef = doc(getDb(), 'exercises', r.id);
+      await updateDoc(docRef, {
+        gradeLevels: newGrades.sort((a, b) => a - b),
+        updatedAt: Date.now(),
+      });
+      showToast(lang === 'KH' ? `បានប្តូរទៅថ្នាក់ទី ${newGrades.join(', ')} ដោយជោគជ័យ!` : `Moved to Grade ${newGrades.join(', ')}!`);
+      setMoveModalEx(null);
+      loadData();
+    } catch (e: any) {
+      alert(e?.message || 'Failed to move exercise.');
+    } finally {
+      setMoveBusy(false);
+    }
+  }
+
   async function copyStudentLink(id: string) {
     const url = `${window.location.origin}/e/${id}`;
     await navigator.clipboard.writeText(url);
@@ -463,6 +494,31 @@ export default function AdminHome() {
       });
   }, [exercises]);
 
+  // 6 Permanent Grade Folders definition
+  const GRADE_FOLDERS = [
+    { grade: 7, labelKh: 'ថ្នាក់ទី ៧', labelEn: 'Grade 7', color: '#2563eb', bg: 'rgba(37, 99, 235, 0.08)' },
+    { grade: 8, labelKh: 'ថ្នាក់ទី ៨', labelEn: 'Grade 8', color: '#7c3aed', bg: 'rgba(124, 58, 237, 0.08)' },
+    { grade: 9, labelKh: 'ថ្នាក់ទី ៩', labelEn: 'Grade 9', color: '#db2777', bg: 'rgba(219, 39, 119, 0.08)' },
+    { grade: 10, labelKh: 'ថ្នាក់ទី ១០', labelEn: 'Grade 10', color: '#059669', bg: 'rgba(5, 150, 105, 0.08)' },
+    { grade: 11, labelKh: 'ថ្នាក់ទី ១១', labelEn: 'Grade 11', color: '#d97706', bg: 'rgba(217, 119, 6, 0.08)' },
+    { grade: 12, labelKh: 'ថ្នាក់ទី ១២', labelEn: 'Grade 12', color: '#dc2626', bg: 'rgba(220, 38, 38, 0.08)' },
+  ];
+
+  // Chapter list for current grade filter
+  const availableChapters = useMemo(() => {
+    const list: string[] = [];
+    (exercises || []).forEach((e) => {
+      if (gradeFilter !== 'all') {
+        const gNum = Number(gradeFilter);
+        if (e.gradeLevels && e.gradeLevels.length > 0 && !e.gradeLevels.includes(gNum)) return;
+      }
+      if (e.chapter && e.chapter.trim() && !list.includes(e.chapter.trim())) {
+        list.push(e.chapter.trim());
+      }
+    });
+    return list;
+  }, [exercises, gradeFilter]);
+
   // Filtered exercises list
   const filteredExercises = useMemo(() => {
     const now = Date.now();
@@ -486,16 +542,23 @@ export default function AdminHome() {
         }
       }
 
+      // Chapter filter
+      if (selectedChapter !== 'all') {
+        if ((r.chapter || '') !== selectedChapter) return false;
+      }
+
       // Search query
       if (search.trim()) {
         const q = search.toLowerCase();
         const matchTitle = (r.title || '').toLowerCase().includes(q);
         const matchDesc = (r.description || '').toLowerCase().includes(q);
-        return matchTitle || matchDesc;
+        const matchChapter = (r.chapter || '').toLowerCase().includes(q);
+        const matchTopic = (r.topic || '').toLowerCase().includes(q);
+        return matchTitle || matchDesc || matchChapter || matchTopic;
       }
       return true;
     });
-  }, [exercises, filter, gradeFilter, search]);
+  }, [exercises, filter, gradeFilter, selectedChapter, search]);
 
   const teacherName = useMemo(() => {
     if (!user?.email) return 'Teacher';
@@ -2243,10 +2306,175 @@ export default function AdminHome() {
                   gap: 16,
                 }}
               >
+                {/* 6 Permanent Grade Folders */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Folder size={22} color="var(--theme-primary)" />
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
+                          {lang === 'KH' ? 'ថតលំហាត់តាមកម្រិតថ្នាក់ (Grade Folder Library)' : 'Grade Folder Exercise Library'}
+                        </h4>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--theme-muted)' }}>
+                          {lang === 'KH' ? 'ជ្រើសរើសថតកម្រិតថ្នាក់ដើម្បីមើល ចាត់ចែង ឬបង្កើតលំហាត់' : 'Select a grade folder to view, manage, or create exercises'}
+                        </span>
+                      </div>
+                    </div>
+                    {gradeFilter !== 'all' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setGradeFilter('all');
+                          setSelectedChapter('all');
+                        }}
+                        className="btn small secondary"
+                        style={{ fontSize: '0.82rem', borderRadius: 10, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                      >
+                        ← {lang === 'KH' ? 'មើលគ្រប់ថតទាំងអស់' : 'View All Folders'}
+                      </button>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+                    {GRADE_FOLDERS.map((gf) => {
+                      const isOpen = gradeFilter === String(gf.grade);
+                      const gradeExs = (exercises || []).filter(
+                        (e) => !e.gradeLevels || e.gradeLevels.length === 0 || e.gradeLevels.includes(gf.grade)
+                      );
+                      const totalCount = gradeExs.length;
+                      const pubCount = gradeExs.filter(
+                        (e) => e.published && e.publicationMode !== 'draft' && (!e.scheduledPublishAt || new Date(e.scheduledPublishAt).getTime() <= Date.now())
+                      ).length;
+                      const draftCount = gradeExs.filter((e) => !e.published || e.publicationMode === 'draft').length;
+
+                      return (
+                        <div
+                          key={gf.grade}
+                          onClick={() => {
+                            if (isOpen) {
+                              setGradeFilter('all');
+                              setSelectedChapter('all');
+                            } else {
+                              setGradeFilter(String(gf.grade));
+                              setSelectedChapter('all');
+                            }
+                          }}
+                          style={{
+                            padding: '14px 14px',
+                            borderRadius: 14,
+                            backgroundColor: isOpen ? gf.bg : 'var(--theme-page-bg)',
+                            border: isOpen ? `2px solid ${gf.color}` : '1.5px solid var(--theme-border)',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 8,
+                            boxShadow: isOpen ? `0 4px 14px ${gf.color}25` : 'none',
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              {isOpen ? (
+                                <FolderOpen size={24} color={gf.color} />
+                              ) : (
+                                <Folder size={24} color={gf.color} />
+                              )}
+                              <span style={{ fontWeight: 800, fontSize: '0.98rem', color: 'var(--theme-navy)' }}>
+                                {lang === 'KH' ? gf.labelKh : gf.labelEn}
+                              </span>
+                            </div>
+                            {isOpen && (
+                              <span style={{ fontSize: '0.7rem', fontWeight: 800, color: gf.color, backgroundColor: 'rgba(255,255,255,0.85)', padding: '2px 6px', borderRadius: 6 }}>
+                                កំពុងបើក
+                              </span>
+                            )}
+                          </div>
+
+                          <div style={{ fontSize: '0.78rem', color: 'var(--theme-muted)', display: 'flex', justifyContent: 'space-between' }}>
+                            <span>{totalCount} {lang === 'KH' ? 'លំហាត់' : 'tests'}</span>
+                            <span>{pubCount} ផ្សាយ · {draftCount} ព្រាង</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Active Folder Breadcrumb Bar */}
+                {gradeFilter !== 'all' && (
+                  <div
+                    style={{
+                      padding: '12px 16px',
+                      borderRadius: 14,
+                      backgroundColor: 'rgba(59, 130, 246, 0.08)',
+                      border: '1px solid rgba(59, 130, 246, 0.25)',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: 10,
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.92rem', fontWeight: 700, color: 'var(--theme-navy)' }}>
+                      <span>📁 {lang === 'KH' ? 'បណ្ណាល័យលំហាត់' : 'Exercise Library'}</span>
+                      <ChevronRight size={16} color="var(--theme-muted)" />
+                      <span style={{ color: 'var(--theme-primary)' }}>
+                        📂 ថ្នាក់ទី {gradeFilter} (Grade {gradeFilter})
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      {availableChapters.length > 0 && (
+                        <select
+                          value={selectedChapter}
+                          onChange={(e) => setSelectedChapter(e.target.value)}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: 10,
+                            fontSize: '0.82rem',
+                            fontWeight: 600,
+                            backgroundColor: 'var(--theme-card-bg)',
+                            color: 'var(--theme-navy)',
+                            border: '1px solid var(--theme-border)',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <option value="all">គ្រប់ជំពូក (All Chapters)</option>
+                          {availableChapters.map((ch) => (
+                            <option key={ch} value={ch}>📚 {ch}</option>
+                          ))}
+                        </select>
+                      )}
+
+                      <Link
+                        href={`/admin/exercises/new?grade=${gradeFilter}`}
+                        className="btn small"
+                        style={{
+                          backgroundColor: 'var(--theme-primary)',
+                          color: '#fff',
+                          borderRadius: 10,
+                          fontSize: '0.84rem',
+                          fontWeight: 700,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          textDecoration: 'none',
+                          boxShadow: '0 2px 8px rgba(37,99,235,0.25)',
+                        }}
+                      >
+                        <Plus size={16} />
+                        <span>+ {lang === 'KH' ? `បង្កើតលំហាត់ថ្នាក់ទី ${gradeFilter}` : `New Grade ${gradeFilter} Exercise`}</span>
+                      </Link>
+                    </div>
+                  </div>
+                )}
+
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
                   <div>
                     <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
-                      My Exercises
+                      {gradeFilter === 'all'
+                        ? (lang === 'KH' ? 'លំហាត់ទាំងអស់ (All Exercises)' : 'My Exercises')
+                        : (lang === 'KH' ? `លំហាត់ថ្នាក់ទី ${gradeFilter}` : `Grade ${gradeFilter} Exercises`)}
                     </h3>
                     <span style={{ fontSize: '0.82rem', color: 'var(--theme-muted)' }}>
                       Manage tests, view live submissions, copy links, or print QR codes
@@ -2257,7 +2485,10 @@ export default function AdminHome() {
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                     <select
                       value={gradeFilter}
-                      onChange={(e) => setGradeFilter(e.target.value)}
+                      onChange={(e) => {
+                        setGradeFilter(e.target.value);
+                        setSelectedChapter('all');
+                      }}
                       style={{
                         padding: '6px 10px',
                         borderRadius: 10,
@@ -2398,6 +2629,38 @@ export default function AdminHome() {
                                   ? `ថ្នាក់ទី ${r.gradeLevels.join(', ')}`
                                   : 'ថ្នាក់ទី ៧–១២'}
                               </span>
+
+                              {/* Chapter & Topic Badges */}
+                              {r.chapter && (
+                                <span
+                                  style={{
+                                    fontSize: '0.72rem',
+                                    fontWeight: 700,
+                                    padding: '2px 8px',
+                                    borderRadius: 6,
+                                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                    color: 'var(--theme-primary)',
+                                    border: '1px solid rgba(59, 130, 246, 0.2)',
+                                  }}
+                                >
+                                  📚 {r.chapter}
+                                </span>
+                              )}
+                              {r.topic && (
+                                <span
+                                  style={{
+                                    fontSize: '0.72rem',
+                                    fontWeight: 600,
+                                    padding: '2px 8px',
+                                    borderRadius: 6,
+                                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                                    color: '#059669',
+                                    border: '1px solid rgba(16, 185, 129, 0.2)',
+                                  }}
+                                >
+                                  🔖 {r.topic}
+                                </span>
+                              )}
 
                               {/* Publication Status Pill */}
                               {(() => {
@@ -2668,6 +2931,32 @@ export default function AdminHome() {
                                   >
                                     <CopyPlus size={14} />
                                     <span>Duplicate</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setMoveModalEx(r);
+                                      setMoveGrades(r.gradeLevels && r.gradeLevels.length > 0 ? [...r.gradeLevels] : [7, 8, 9, 10, 11, 12]);
+                                      setActiveMenuId(null);
+                                    }}
+                                    style={{
+                                      width: '100%',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: 10,
+                                      padding: '8px 14px',
+                                      border: 'none',
+                                      background: 'none',
+                                      color: 'var(--theme-navy)',
+                                      fontSize: '0.84rem',
+                                      fontWeight: 600,
+                                      cursor: 'pointer',
+                                      textAlign: 'left',
+                                    }}
+                                  >
+                                    <FolderSymlink size={14} color="var(--theme-primary)" />
+                                    <span>{lang === 'KH' ? 'ប្តូរកម្រិតថ្នាក់ (Move)' : 'Move to Grade'}</span>
                                   </button>
 
                                   {rosterStudents.length > 0 && (
@@ -3467,6 +3756,128 @@ export default function AdminHome() {
           </div>
         );
       })()}
+
+      {/* =========================================================
+          MODAL: Move Exercise to Grade Folder Modal
+         ========================================================= */}
+      {moveModalEx && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.6)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: 16,
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setMoveModalEx(null);
+          }}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: 440,
+              backgroundColor: 'var(--theme-card-bg)',
+              borderRadius: 20,
+              padding: 24,
+              boxShadow: '0 20px 40px rgba(0,0,0,0.25)',
+              border: '1px solid var(--theme-border)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <FolderSymlink size={22} color="var(--theme-primary)" />
+                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
+                  {lang === 'KH' ? 'ផ្លាស់ប្តូរកម្រិតថ្នាក់ (Move to Grade)' : 'Move to Grade Folder'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMoveModalEx(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-muted)' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <p style={{ margin: '0 0 14px 0', fontSize: '0.88rem', color: 'var(--theme-muted)' }}>
+              {lang === 'KH' ? 'ជ្រើសរើសកម្រិតថ្នាក់ដែលត្រូវចាត់ចែងលំហាត់ ៖' : 'Assign exercise to one or more grade folders:'}
+              <br />
+              <strong style={{ color: 'var(--theme-navy)' }}>{moveModalEx.title}</strong>
+            </p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 20 }}>
+              {[7, 8, 9, 10, 11, 12].map((g) => {
+                const isChecked = moveGrades.includes(g);
+                return (
+                  <label
+                    key={g}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '10px 12px',
+                      borderRadius: 10,
+                      backgroundColor: isChecked ? 'rgba(59, 130, 246, 0.1)' : 'var(--theme-page-bg)',
+                      border: isChecked ? '1.5px solid var(--theme-primary)' : '1px solid var(--theme-border)',
+                      cursor: 'pointer',
+                      fontSize: '0.88rem',
+                      fontWeight: isChecked ? 700 : 500,
+                      color: isChecked ? 'var(--theme-primary)' : 'var(--theme-navy)',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setMoveGrades((prev) => [...prev, g].sort((a, b) => a - b));
+                        } else {
+                          setMoveGrades((prev) => prev.filter((item) => item !== g));
+                        }
+                      }}
+                      style={{ accentColor: 'var(--theme-primary)' }}
+                    />
+                    <span>ថ្នាក់ទី {g} (Grade {g})</span>
+                  </label>
+                );
+              })}
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={() => setMoveModalEx(null)}
+                style={{ borderRadius: 10, padding: '8px 16px' }}
+              >
+                {lang === 'KH' ? 'បោះបង់' : 'Cancel'}
+              </button>
+              <button
+                type="button"
+                className="btn"
+                disabled={moveBusy || moveGrades.length === 0}
+                onClick={() => handleMoveExercise(moveModalEx, moveGrades)}
+                style={{
+                  borderRadius: 10,
+                  padding: '8px 20px',
+                  backgroundColor: 'var(--theme-primary)',
+                  color: '#fff',
+                  fontWeight: 700,
+                  border: 'none',
+                  cursor: moveBusy || moveGrades.length === 0 ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {moveBusy ? 'កំពុងផ្លាស់ប្តូរ…' : (lang === 'KH' ? 'រក្សាទុក (Move)' : 'Save / Move')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Mobile Sticky Bottom Navigation Dock */}
       <nav className="mobile-bottom-nav show-on-mobile-only" aria-label="Mobile Bottom Navigation">

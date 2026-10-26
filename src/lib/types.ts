@@ -22,6 +22,10 @@ export interface Question {
 export interface Exercise {
   title: string;
   description: string;
+  /** Optional Chapter: e.g. "ជំពូកទី ១ ៖ ចំនួនគត់" */
+  chapter?: string;
+  /** Optional Topic: e.g. "មេរៀនទី ២ ៖ ប្រភាគ" */
+  topic?: string;
   /** 0 = no time limit */
   timeLimitMinutes: number;
   /** ISO string, or null for no deadline */
@@ -50,6 +54,8 @@ export interface PublicExercise {
   id: string;
   title: string;
   description: string;
+  chapter?: string;
+  topic?: string;
   timeLimitMinutes: number;
   deadline: string | null;
   shuffleQuestions?: boolean;

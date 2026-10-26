@@ -34,6 +34,8 @@ interface PortalData {
     id: string;
     title: string;
     description: string;
+    chapter?: string | null;
+    topic?: string | null;
     timeLimitMinutes: number;
     deadline: string | null;
     gradeLevels: number[];
@@ -44,6 +46,8 @@ interface PortalData {
     id: string;
     title: string;
     description: string;
+    chapter?: string | null;
+    topic?: string | null;
     scheduledPublishAt: string | number | null;
     timeLimitMinutes: number;
     deadline: string | null;
@@ -552,6 +556,20 @@ export default function StudentPortalPage() {
                         <h4 style={{ margin: '0 0 6px 0', fontSize: '1.15rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
                           {ex.title}
                         </h4>
+                        {(ex.chapter || ex.topic) && (
+                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+                            {ex.chapter && (
+                              <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '2px 8px', borderRadius: 6, backgroundColor: 'rgba(59, 130, 246, 0.12)', color: 'var(--theme-primary)' }}>
+                                📚 {ex.chapter}
+                              </span>
+                            )}
+                            {ex.topic && (
+                              <span style={{ fontSize: '0.75rem', fontWeight: 600, padding: '2px 8px', borderRadius: 6, backgroundColor: 'rgba(16, 185, 129, 0.12)', color: '#059669' }}>
+                                🔖 {ex.topic}
+                              </span>
+                            )}
+                          </div>
+                        )}
                         {ex.description && (
                           <p style={{ margin: '0 0 10px 0', fontSize: '0.85rem', color: 'var(--theme-muted)', lineHeight: 1.4 }}>
                             {ex.description}
@@ -638,6 +656,21 @@ export default function StudentPortalPage() {
                           គ្រោងទុក
                         </span>
                       </div>
+
+                      {(ex.chapter || ex.topic) && (
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
+                          {ex.chapter && (
+                            <span style={{ fontSize: '0.72rem', fontWeight: 700, padding: '2px 7px', borderRadius: 6, backgroundColor: 'rgba(139, 92, 246, 0.12)', color: '#8b5cf6' }}>
+                              📚 {ex.chapter}
+                            </span>
+                          )}
+                          {ex.topic && (
+                            <span style={{ fontSize: '0.72rem', fontWeight: 600, padding: '2px 7px', borderRadius: 6, backgroundColor: 'rgba(16, 185, 129, 0.12)', color: '#059669' }}>
+                              🔖 {ex.topic}
+                            </span>
+                          )}
+                        </div>
+                      )}
 
                       <div style={{ fontSize: '0.82rem', color: '#8b5cf6', fontWeight: 700, marginBottom: 6 }}>
                         📅 នឹងបើកនៅ ៖{' '}

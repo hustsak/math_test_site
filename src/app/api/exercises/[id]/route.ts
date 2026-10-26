@@ -10,16 +10,30 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     const snap = await adminDb().collection('exercises').doc(params.id).get();
     if (!snap.exists) return NextResponse.json({ error: 'Exercise not found' }, { status: 404 });
     const ex = snap.data() as Exercise;
-    if (!ex.published) return NextResponse.json({ error: 'Exercise not found' }, { status: 404 });
+    if (!ex.published || ex.publicationMode === 'draft') {
+      return NextResponse.json({ error: 'Exercise not found' }, { status: 404 });
+    }
 
-    const closed = !!ex.deadline && Date.now() > new Date(ex.deadline).getTime();
+    const now = Date.now();
+    if (ex.publicationMode === 'scheduled' && ex.scheduledPublishAt) {
+      const pubMs = typeof ex.scheduledPublishAt === 'number' ? ex.scheduledPublishAt : new Date(ex.scheduledPublishAt).getTime();
+      if (now < pubMs) {
+        return NextResponse.json({ error: 'Exercise is scheduled for a future release.' }, { status: 403 });
+      }
+    }
+
+    const closed = !!ex.deadline && now > new Date(ex.deadline).getTime();
     const pub: PublicExercise = {
       id: snap.id,
       title: ex.title,
       description: ex.description,
+      chapter: ex.chapter,
+      topic: ex.topic,
       timeLimitMinutes: ex.timeLimitMinutes || 0,
       deadline: ex.deadline,
       shuffleQuestions: !!ex.shuffleQuestions,
+      gradeLevels: ex.gradeLevels,
+      scheduledPublishAt: ex.scheduledPublishAt,
       questions: ex.questions.map((q) => ({
         id: q.id,
         prompt: q.prompt,
@@ -28,7 +42,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
         points: q.points,
       })),
     };
-    return NextResponse.json({ exercise: pub, closed, serverNow: Date.now() });
+    return NextResponse.json({ exercise: pub, closed, serverNow: now });
   } catch (e) {
     console.error(e);
     return NextResponse.json({ error: 'Server error' }, { status: 500 });

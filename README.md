@@ -8,9 +8,21 @@ A teacher-managed math exercise website with private student portals and zero-fr
 
 ## Features
 
-### 1. Teacher Dashboard (`/admin`)
+### 1. Teacher Dashboard & Grade Folder Library (`/admin`)
 - **Single private teacher login** via Firebase Auth.
-- Create, edit, duplicate, publish/unpublish, and delete exercises.
+- **Six Permanent Grade Folders:** Grade 7, Grade 8, Grade 9, Grade 10, Grade 11, and Grade 12.
+- **Folder Navigation & Operations:**
+  - Open any grade folder to view assigned exercises, published status, and drafts.
+  - Create exercises directly in a folder (pre-populates the target grade).
+  - **Move exercises:** Easily reassign exercises to one or more grade folders via the "Move to Grade" modal.
+  - **Duplicate, Edit, and Delete:** Full lifecycle management preserving historical submissions.
+  - **Organize by Chapter & Topic:** Group or filter exercises by Chapter (e.g. "ជំពូកទី ១") and Topic (e.g. "មេរៀនទី ២").
+  - **Save Unlimited Drafts:** Work on exercises privately without student visibility.
+- **Automatic Scheduling (`Asia/Phnom_Penh`, UTC+7):**
+  - Instant, Scheduled, and Draft publication modes.
+  - Scheduled exercises automatically become active when their publication timestamp arrives via server-side time comparison (no background cron job needed).
+  - Drafts and future scheduled exercises are strictly blocked on the server from public assignment and question leakage.
+  - Optional deadlines and time limits with automatic countdown in Cambodia time.
 - **Question types:** number/fraction, text/expression, multiple choice.
 - **Live KaTeX preview** for formulas, choices, and explanations. Khmer text supported everywhere.
 - Per-question points, Khmer explanations, time limits, deadlines, one attempt per name, and question order shuffling.

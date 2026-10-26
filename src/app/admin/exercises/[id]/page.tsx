@@ -25,6 +25,8 @@ const blankQuestion = (): Question => ({
 const blankExercise = (): Exercise => ({
   title: '',
   description: '',
+  chapter: '',
+  topic: '',
   timeLimitMinutes: 0,
   deadline: null,
   published: false,
@@ -89,7 +91,30 @@ export default function EditExercise() {
   };
 
   useEffect(() => {
-    if (!isAdmin || id === 'new') return;
+    if (!isAdmin) return;
+    if (id === 'new') {
+      if (typeof window !== 'undefined') {
+        const p = new URLSearchParams(window.location.search);
+        const gParam = p.get('grade');
+        const chParam = p.get('chapter');
+        const tpParam = p.get('topic');
+        setEx((prev) => {
+          if (!prev) return prev;
+          let gradeLevels = prev.gradeLevels;
+          if (gParam) {
+            const gNum = Number(gParam);
+            if (gNum >= 7 && gNum <= 12) gradeLevels = [gNum];
+          }
+          return {
+            ...prev,
+            gradeLevels,
+            chapter: chParam || prev.chapter || '',
+            topic: tpParam || prev.topic || '',
+          };
+        });
+      }
+      return;
+    }
     getDoc(doc(getDb(), 'exercises', id))
       .then((s) => (s.exists() ? setEx(s.data() as Exercise) : setError('Exercise not found.')))
       .catch((e) => setError(e.message));
@@ -306,6 +331,26 @@ export default function EditExercise() {
             placeholder="ការណែនាំដល់សិស្សមុនពេលចាប់ផ្ដើម..."
             rows={2}
           />
+        </div>
+
+        {/* Chapter & Topic */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+          <div>
+            <label>ជំពូក (Chapter - Optional)</label>
+            <input
+              value={ex.chapter || ''}
+              onChange={(e) => set({ chapter: e.target.value })}
+              placeholder="e.g. ជំពូកទី ១ ៖ ចំនួនគត់ ឬពិជគណិត"
+            />
+          </div>
+          <div>
+            <label>មេរៀន / ប្រធានបទ (Topic - Optional)</label>
+            <input
+              value={ex.topic || ''}
+              onChange={(e) => set({ topic: e.target.value })}
+              placeholder="e.g. មេរៀនទី ២ ៖ ប្រភាគ ឬសមីការដឺក្រេទី១"
+            />
+          </div>
         </div>
 
         {/* Target Grades (7-12) */}
