@@ -94,6 +94,7 @@ export interface BuildParentDataInput {
   childName: string;
   className?: string;
   studentId?: string;
+  studentGrade?: number;
   publishedExercises: Array<{ id: string; data: Exercise }>;
   submissionsForStudent: Submission[];
   classAverageMap?: Record<string, number>;
@@ -111,6 +112,7 @@ export function buildParentViewData(input: BuildParentDataInput): ParentViewData
   const {
     childName,
     className,
+    studentGrade,
     publishedExercises,
     submissionsForStudent,
     classAverageMap = {},
@@ -130,6 +132,7 @@ export function buildParentViewData(input: BuildParentDataInput): ParentViewData
 
   const exercises: ParentExerciseDetail[] = [];
   const notDoneExercises: ParentNotDoneExercise[] = [];
+  const processedExIds = new Set<string>();
 
   for (const { id: exId, data: ex } of publishedExercises) {
     const sub = submissionByExId.get(exId);
@@ -137,6 +140,7 @@ export function buildParentViewData(input: BuildParentDataInput): ParentViewData
     const isClosed = !!(ex.deadline && now > new Date(ex.deadline).getTime());
 
     if (sub) {
+      processedExIds.add(exId);
       const total = sub.total ?? 0;
       const score = sub.score ?? 0;
       const percentage = total > 0 ? Math.round((score / total) * 100) : 0;
@@ -156,7 +160,7 @@ export function buildParentViewData(input: BuildParentDataInput): ParentViewData
 
       exercises.push({
         id: exId,
-        title: ex.title,
+        title: ex.title || sub.exerciseTitle || 'Math Exercise',
         description: ex.description,
         submitted: true,
         submittedAt: sub.submittedAt,
@@ -170,7 +174,16 @@ export function buildParentViewData(input: BuildParentDataInput): ParentViewData
       });
     } else {
       // Exercise not submitted by this child.
-      // NEVER leak question prompts, answers, or explanations!
+      // Never show unpublished or draft exercises in not-done list
+      if (ex.published === false) {
+        continue;
+      }
+      // If studentGrade is specified and exercise specifies gradeLevels, only show matching grade
+      if (studentGrade && Array.isArray(ex.gradeLevels) && ex.gradeLevels.length > 0) {
+        if (!ex.gradeLevels.includes(studentGrade)) {
+          continue;
+        }
+      }
       notDoneExercises.push({
         id: exId,
         title: ex.title,
@@ -178,6 +191,42 @@ export function buildParentViewData(input: BuildParentDataInput): ParentViewData
         timeLimitMinutes: ex.timeLimitMinutes || 0,
         questionCount: ex.questions.length,
         isClosed,
+      });
+    }
+  }
+
+  // Also include any historical submissions for exercises that are no longer published or were archived
+  for (const [exId, sub] of submissionByExId.entries()) {
+    if (!processedExIds.has(exId)) {
+      const total = sub.total ?? 0;
+      const score = sub.score ?? 0;
+      const percentage = total > 0 ? Math.round((score / total) * 100) : 0;
+      const { face } = getFaceRating(percentage);
+
+      const questions: ParentQuestionDetail[] = (sub.details || []).map((d) => ({
+        id: d.id,
+        prompt: '',
+        points: d.points,
+        correct: !!d.correct,
+        earned: d.earned,
+        childAnswer: d.given ?? '',
+        correctAnswer: d.correctAnswer ?? '',
+        explanation: d.explanation ?? '',
+      }));
+
+      exercises.push({
+        id: exId,
+        title: sub.exerciseTitle || 'Math Exercise',
+        description: '',
+        submitted: true,
+        submittedAt: sub.submittedAt,
+        late: !!sub.late,
+        score,
+        total,
+        percentage,
+        face,
+        classAveragePercent: showClassAverage ? (classAverageMap[exId] ?? null) : null,
+        questions,
       });
     }
   }
@@ -198,11 +247,18 @@ export function buildParentViewData(input: BuildParentDataInput): ParentViewData
         }
       : null;
 
+  const trulyPublished = publishedExercises.filter((e) => e.data.published !== false);
+  const relevantTotalCount = studentGrade
+    ? trulyPublished.filter(
+        (e) => !e.data.gradeLevels || e.data.gradeLevels.length === 0 || e.data.gradeLevels.includes(studentGrade)
+      ).length
+    : trulyPublished.length;
+
   return {
     childName,
     className,
     completedCount: exercises.length,
-    totalPublishedCount: publishedExercises.length,
+    totalPublishedCount: Math.max(relevantTotalCount, exercises.length),
     latestResult,
     exercises,
     notDoneExercises,

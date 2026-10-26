@@ -39,6 +39,25 @@ export async function POST(req: Request) {
       updatedAt: Date.now(),
     });
 
+    // Also sync to matching profile if exists
+    try {
+      const studentName = currentData?.name;
+      if (studentName) {
+        const { getProfileKey, getProfileId } = await import('@/lib/profiles');
+        const pKey = getProfileKey(studentName, currentData?.className);
+        const pId = getProfileId(pKey);
+        await db.collection('profiles').doc(pId).set(
+          {
+            parentToken: newParentToken,
+            updatedAt: Date.now(),
+          },
+          { merge: true }
+        );
+      }
+    } catch (err) {
+      console.warn('Could not sync regenerated parentToken to profile:', err);
+    }
+
     return NextResponse.json({
       success: true,
       studentId,

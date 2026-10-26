@@ -30,6 +30,28 @@ export async function POST(req: NextRequest) {
       updatedAt: Date.now(),
     });
 
+    // Also sync to matching student doc in students collection if one exists
+    try {
+      const profData = snap.data();
+      if (profData?.name) {
+        const { normalizeStudentName } = await import('@/lib/studentAccess');
+        const nameKey = normalizeStudentName(profData.name);
+        const sSnap = await db.collection('students').where('nameKey', '==', nameKey).get();
+        if (!sSnap.empty) {
+          const batch = db.batch();
+          sSnap.docs.forEach((doc) => {
+            batch.update(doc.ref, {
+              parentToken: newParentToken,
+              updatedAt: Date.now(),
+            });
+          });
+          await batch.commit();
+        }
+      }
+    } catch (err) {
+      console.warn('Could not sync regenerated parentToken to student doc:', err);
+    }
+
     return NextResponse.json({ success: true, parentToken: newParentToken });
   } catch (err: any) {
     console.error('Regenerate profile parent token error:', err);
