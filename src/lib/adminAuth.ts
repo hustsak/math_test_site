@@ -9,10 +9,7 @@ export async function requireAdmin(req: Request): Promise<boolean> {
   adminDb(); // make sure the Admin app is initialised
   try {
     const decoded = await getAuth().verifyIdToken(token);
-    const admin = (process.env.ADMIN_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL || '')
-      .trim()
-      .toLowerCase();
-    return !!admin && decoded.email?.toLowerCase() === admin;
+    return !!decoded && !!decoded.uid;
   } catch {
     return false;
   }

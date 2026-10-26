@@ -6,17 +6,16 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function isAdmin() {
-      return request.auth != null
-        && request.auth.token.email == 'viraksakkoy8@gmail.com'; // <-- CHANGE THIS
+    function isTeacher() {
+      return request.auth != null;
     }
 
     match /exercises/{id} {
-      allow read, write: if isAdmin();
+      allow read, write: if isTeacher();
     }
 
     match /submissions/{id} {
-      allow read, delete: if isAdmin();
+      allow read, delete: if isTeacher();
       allow create, update: if false;
     }
   }

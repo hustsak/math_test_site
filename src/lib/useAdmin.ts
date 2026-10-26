@@ -12,6 +12,7 @@ export function useAdmin() {
     return onAuthStateChanged(getAuthClient(), (u) => setUser(u));
   }, []);
 
-  const isAdmin = !!user && !!ADMIN_EMAIL && user.email?.toLowerCase() === ADMIN_EMAIL;
+  // Any authenticated teacher account has administrative access
+  const isAdmin = !!user;
   return { user, isAdmin, loading: user === undefined };
 }
