@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import MathText from '@/components/MathText';
+import ScreenGuard, { withGuardPaused } from '@/components/ScreenGuard';
 import type { PublicExercise, PublicQuestion, QuestionResult } from '@/lib/types';
 
 type Phase = 'loading' | 'error' | 'closed' | 'name' | 'taking' | 'done';
@@ -461,6 +462,7 @@ export default function StudentPage() {
   const answered = questions.filter((q) => (attempt?.answers[q.id] ?? '').trim()).length;
   return (
     <>
+      <ScreenGuard studentName={attempt?.name ?? ''} />
       <div className="timer row spread">
         <div>
           <strong>{ex.title}</strong>
@@ -537,7 +539,11 @@ export default function StudentPage() {
             onClick={() => {
               if (!attempt) return;
               const blanks = questions.length - answered;
-              if (blanks > 0 && !confirm(`នៅសល់ ${blanks} សំណួរមិនទាន់ឆ្លើយ។ តើអ្នកពិតជាចង់បញ្ជូនចម្លើយមែនទេ?`)) return;
+              if (
+                blanks > 0 &&
+                !withGuardPaused(() => confirm(`នៅសល់ ${blanks} សំណួរមិនទាន់ឆ្លើយ។ តើអ្នកពិតជាចង់បញ្ជូនចម្លើយមែនទេ?`))
+              )
+                return;
               submit(attempt);
             }}
           >
