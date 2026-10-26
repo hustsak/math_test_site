@@ -47,6 +47,9 @@ import {
   TrendingUp,
   X,
   LogIn,
+  Menu,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { getAuthClient, getDb } from '@/lib/firebaseClient';
 import { useAdmin } from '@/lib/useAdmin';
@@ -100,6 +103,23 @@ export default function AdminHome() {
 
   // Toast feedback
   const [toastMsg, setToastMsg] = useState('');
+
+  // Mobile & Laptop Responsive States
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<'dashboard' | 'exercises' | 'performance' | 'accuracy' | 'live'>('dashboard');
+
+  function scrollToSection(sectionId: string, sectionKey?: typeof activeSection) {
+    if (sectionKey) setActiveSection(sectionKey);
+    setMobileMenuOpen(false);
+    const el = document.getElementById(sectionId);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth' });
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }
 
   // Close menus on outside click
   useEffect(() => {
@@ -500,7 +520,7 @@ export default function AdminHome() {
   if (authLoading) {
     return (
       <div className="app-shell" style={{ alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ width: '100%', maxWidth: 460, padding: 32 }} className="card skeleton">
+        <div style={{ width: '100%', maxWidth: 460, padding: '32px 24px', margin: '0 14px' }} className="card skeleton">
           <div style={{ height: 28, width: '40%', marginBottom: 16 }} className="skeleton" />
           <div style={{ height: 16, width: '70%', marginBottom: 32 }} className="skeleton" />
           <div style={{ height: 48, marginBottom: 16 }} className="skeleton" />
@@ -516,17 +536,18 @@ export default function AdminHome() {
   // =========================================================================
   if (!user) {
     return (
-      <div className="app-shell" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="app-shell" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '16px 12px' }}>
         <div
           style={{
             width: '100%',
             maxWidth: 480,
             backgroundColor: 'var(--theme-card-bg)',
             borderRadius: 24,
-            padding: '36px 32px',
+            padding: '30px 22px',
             boxShadow: 'var(--theme-shadow-hover)',
             border: '1px solid var(--theme-border)',
             position: 'relative',
+            margin: 'auto',
           }}
         >
           {/* Top Header with Theme Switcher */}
@@ -884,6 +905,286 @@ export default function AdminHome() {
         </div>
       )}
 
+      {/* Mobile Drawer (Accessible on mobile/tablet) */}
+      {mobileMenuOpen && (
+        <>
+          <div className="mobile-drawer-backdrop" onClick={() => setMobileMenuOpen(false)} />
+          <div className="mobile-drawer custom-scrollbar">
+            {/* Drawer Header */}
+            <div
+              style={{
+                padding: '20px 20px 16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderBottom: '1px solid var(--theme-border)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div
+                  style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 12,
+                    background: 'linear-gradient(135deg, #4a67d6 0%, #3d56a6 100%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#ffffff',
+                  }}
+                >
+                  <BookOpen size={20} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
+                    MathTest
+                  </h3>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--theme-muted)' }}>Teacher Workspace</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen(false)}
+                style={{
+                  border: 'none',
+                  background: 'none',
+                  color: 'var(--theme-muted)',
+                  padding: 6,
+                  cursor: 'pointer',
+                  borderRadius: 8,
+                }}
+                aria-label="Close menu"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Teacher Profile Card */}
+            <div
+              style={{
+                padding: '14px 16px',
+                margin: '14px 16px 10px',
+                backgroundColor: 'var(--theme-page-bg)',
+                borderRadius: 16,
+                border: '1px solid var(--theme-border)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+              }}
+            >
+              <div
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 12,
+                  background: 'linear-gradient(135deg, #4a67d6 0%, #3d56a6 100%)',
+                  color: '#ffffff',
+                  fontWeight: 800,
+                  fontSize: '1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                {teacherName.charAt(0)}
+              </div>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--theme-navy)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {teacherName}
+                </div>
+                <div style={{ fontSize: '0.74rem', color: 'var(--theme-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {user.email}
+                </div>
+              </div>
+            </div>
+
+            {/* Drawer Navigation Links */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '8px 12px', flex: 1 }}>
+              <button
+                type="button"
+                onClick={() => scrollToSection('dashboard-top', 'dashboard')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '12px 14px',
+                  borderRadius: 12,
+                  border: 'none',
+                  backgroundColor: activeSection === 'dashboard' ? 'rgba(74, 103, 214, 0.12)' : 'transparent',
+                  color: activeSection === 'dashboard' ? 'var(--theme-primary)' : 'var(--theme-navy)',
+                  fontWeight: activeSection === 'dashboard' ? 700 : 600,
+                  fontSize: '0.92rem',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
+              >
+                <LayoutDashboard size={18} />
+                <span>Dashboard Overview</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => scrollToSection('my-exercises-section', 'exercises')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '12px 14px',
+                  borderRadius: 12,
+                  border: 'none',
+                  backgroundColor: activeSection === 'exercises' ? 'rgba(74, 103, 214, 0.12)' : 'transparent',
+                  color: activeSection === 'exercises' ? 'var(--theme-primary)' : 'var(--theme-navy)',
+                  fontWeight: activeSection === 'exercises' ? 700 : 600,
+                  fontSize: '0.92rem',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
+              >
+                <BookOpen size={18} />
+                <span>My Exercises ({exercises?.length ?? 0})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => scrollToSection('performance-section', 'performance')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '12px 14px',
+                  borderRadius: 12,
+                  border: 'none',
+                  backgroundColor: activeSection === 'performance' ? 'rgba(74, 103, 214, 0.12)' : 'transparent',
+                  color: activeSection === 'performance' ? 'var(--theme-primary)' : 'var(--theme-navy)',
+                  fontWeight: activeSection === 'performance' ? 700 : 600,
+                  fontSize: '0.92rem',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
+              >
+                <BarChart3 size={18} />
+                <span>Performance & Results</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => scrollToSection('accuracy-section', 'accuracy')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '12px 14px',
+                  borderRadius: 12,
+                  border: 'none',
+                  backgroundColor: activeSection === 'accuracy' ? 'rgba(74, 103, 214, 0.12)' : 'transparent',
+                  color: activeSection === 'accuracy' ? 'var(--theme-primary)' : 'var(--theme-navy)',
+                  fontWeight: activeSection === 'accuracy' ? 700 : 600,
+                  fontSize: '0.92rem',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
+              >
+                <Database size={18} />
+                <span>Per-Question Accuracy</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => scrollToSection('live-now-section', 'live')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '12px 14px',
+                  borderRadius: 12,
+                  border: 'none',
+                  backgroundColor: activeSection === 'live' ? 'rgba(74, 103, 214, 0.12)' : 'transparent',
+                  color: activeSection === 'live' ? 'var(--theme-primary)' : 'var(--theme-navy)',
+                  fontWeight: activeSection === 'live' ? 700 : 600,
+                  fontSize: '0.92rem',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
+              >
+                <Users size={18} />
+                <span>Live Student Submissions</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  setShowAddTeacherModal(true);
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '12px 14px',
+                  borderRadius: 12,
+                  border: 'none',
+                  backgroundColor: 'transparent',
+                  color: 'var(--theme-navy)',
+                  fontWeight: 600,
+                  fontSize: '0.92rem',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
+              >
+                <UserPlus size={18} />
+                <span>+ Register Another Teacher</span>
+              </button>
+            </div>
+
+            {/* Drawer Footer Preferences & Logout */}
+            <div style={{ padding: '16px 20px', borderTop: '1px solid var(--theme-border)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setLang((p) => (p === 'EN' ? 'KH' : 'EN'))}
+                  className="btn small secondary grow"
+                  style={{ borderRadius: 10, padding: '8px 10px', fontSize: '0.82rem', fontWeight: 700 }}
+                >
+                  {lang === 'EN' ? '🇬🇧 English' : '🇰🇭 ភាសាខ្មែរ'}
+                </button>
+                <button
+                  type="button"
+                  onClick={toggleTheme}
+                  className="btn small secondary"
+                  style={{ borderRadius: 10, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.82rem' }}
+                >
+                  {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
+                  <span>{theme === 'light' ? 'Dark' : 'Light'}</span>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => signOut(getAuthClient())}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  padding: '11px 16px',
+                  borderRadius: 12,
+                  backgroundColor: 'rgba(217, 68, 60, 0.1)',
+                  color: 'var(--theme-danger)',
+                  border: '1px solid rgba(217, 68, 60, 0.2)',
+                  fontWeight: 700,
+                  fontSize: '0.88rem',
+                  cursor: 'pointer',
+                }}
+              >
+                <LogOut size={16} />
+                <span>{lang === 'KH' ? 'ចាកចេញពីគណនី' : 'Sign Out'}</span>
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* Main App Container Shell */}
       <div className="shell-container">
         {/* =========================================================
@@ -899,6 +1200,7 @@ export default function AdminHome() {
             padding: '24px 0',
             gap: 20,
             flexShrink: 0,
+            transition: 'all 0.2s ease',
           }}
           className="hide-on-mobile"
         >
@@ -923,35 +1225,33 @@ export default function AdminHome() {
           <button
             type="button"
             className="rail-icon-btn active"
+            onClick={() => scrollToSection('dashboard-top', 'dashboard')}
             style={{
               width: 44,
               height: 44,
               borderRadius: 14,
-              backgroundColor: '#ffffff',
-              color: 'var(--theme-primary)',
+              backgroundColor: activeSection === 'dashboard' ? '#ffffff' : 'transparent',
+              color: activeSection === 'dashboard' ? 'var(--theme-primary)' : 'rgba(255, 255, 255, 0.8)',
               border: 'none',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
             }}
-            title="Dashboard"
+            title="Dashboard Overview"
           >
             <LayoutDashboard size={20} />
           </button>
 
           <button
             type="button"
-            onClick={() => {
-              const el = document.getElementById('my-exercises-section');
-              el?.scrollIntoView({ behavior: 'smooth' });
-            }}
+            onClick={() => scrollToSection('my-exercises-section', 'exercises')}
             style={{
               width: 44,
               height: 44,
               borderRadius: 14,
-              backgroundColor: 'transparent',
-              color: 'rgba(255, 255, 255, 0.8)',
+              backgroundColor: activeSection === 'exercises' ? '#ffffff' : 'transparent',
+              color: activeSection === 'exercises' ? 'var(--theme-primary)' : 'rgba(255, 255, 255, 0.8)',
               border: 'none',
               cursor: 'pointer',
               display: 'flex',
@@ -965,16 +1265,13 @@ export default function AdminHome() {
 
           <button
             type="button"
-            onClick={() => {
-              const el = document.getElementById('performance-section');
-              el?.scrollIntoView({ behavior: 'smooth' });
-            }}
+            onClick={() => scrollToSection('performance-section', 'performance')}
             style={{
               width: 44,
               height: 44,
               borderRadius: 14,
-              backgroundColor: 'transparent',
-              color: 'rgba(255, 255, 255, 0.8)',
+              backgroundColor: activeSection === 'performance' ? '#ffffff' : 'transparent',
+              color: activeSection === 'performance' ? 'var(--theme-primary)' : 'rgba(255, 255, 255, 0.8)',
               border: 'none',
               cursor: 'pointer',
               display: 'flex',
@@ -1004,6 +1301,28 @@ export default function AdminHome() {
             title="Register Another Teacher"
           >
             <Users size={20} />
+          </button>
+
+          {/* Laptop Toggle button to expand/collapse the 210px panel */}
+          <button
+            type="button"
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 12,
+              backgroundColor: 'rgba(255, 255, 255, 0.16)',
+              color: '#ffffff',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginTop: 4,
+            }}
+            title={sidebarCollapsed ? 'Expand Sidebar Panel' : 'Collapse Sidebar for Wider View'}
+          >
+            {sidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
           </button>
 
           <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center' }}>
@@ -1050,41 +1369,69 @@ export default function AdminHome() {
 
         {/* =========================================================
             LEFT COLUMN 2: Wider Blue Sidebar Panel (210px)
+            (Can be collapsed on laptops to maximize screen width)
            ========================================================= */}
         <nav
           style={{
             width: 210,
             backgroundColor: 'var(--theme-sidebar-panel)',
-            display: 'flex',
+            display: sidebarCollapsed ? 'none' : 'flex',
             flexDirection: 'column',
             padding: '28px 0 24px 20px',
             flexShrink: 0,
+            transition: 'all 0.2s ease',
           }}
           className="hide-on-mobile"
         >
-          {/* Logo Title */}
-          <div style={{ marginBottom: 36, paddingRight: 20 }}>
-            <h2 style={{ color: '#ffffff', margin: 0, fontSize: '1.4rem', fontWeight: 800, letterSpacing: '-0.02em' }}>
-              MathTest
-            </h2>
-            <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: '0.8rem', fontWeight: 500 }}>
-              Teacher Workspace
+          {/* Logo Title + Collapse Button */}
+          <div style={{ marginBottom: 36, paddingRight: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <h2 style={{ color: '#ffffff', margin: 0, fontSize: '1.4rem', fontWeight: 800, letterSpacing: '-0.02em' }}>
+                MathTest
+              </h2>
+              <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: '0.8rem', fontWeight: 500 }}>
+                Teacher Workspace
+              </div>
             </div>
+            <button
+              type="button"
+              onClick={() => setSidebarCollapsed(true)}
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 8,
+                backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                color: '#ffffff',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              title="Collapse sidebar"
+            >
+              <ChevronLeft size={16} />
+            </button>
           </div>
 
-          {/* Navigation Items (active item merges with white content via rounded corner tab) */}
+          {/* Navigation Items */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
             <button
               type="button"
-              className="sidebar-tab-active"
+              className={activeSection === 'dashboard' ? 'sidebar-tab-active' : ''}
+              onClick={() => scrollToSection('dashboard-top', 'dashboard')}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: 12,
                 padding: '13px 18px',
                 border: 'none',
+                background: activeSection === 'dashboard' ? 'var(--theme-page-bg)' : 'transparent',
+                color: activeSection === 'dashboard' ? 'var(--theme-primary)' : 'rgba(255, 255, 255, 0.85)',
+                borderRadius: activeSection === 'dashboard' ? '18px 0 0 18px' : '16px 0 0 16px',
                 cursor: 'pointer',
                 fontSize: '0.94rem',
+                fontWeight: activeSection === 'dashboard' ? 700 : 600,
                 textAlign: 'left',
               }}
             >
@@ -1094,22 +1441,20 @@ export default function AdminHome() {
 
             <button
               type="button"
-              onClick={() => {
-                const el = document.getElementById('my-exercises-section');
-                el?.scrollIntoView({ behavior: 'smooth' });
-              }}
+              className={activeSection === 'exercises' ? 'sidebar-tab-active' : ''}
+              onClick={() => scrollToSection('my-exercises-section', 'exercises')}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: 12,
                 padding: '13px 18px',
                 border: 'none',
-                background: 'transparent',
-                color: 'rgba(255, 255, 255, 0.85)',
-                borderRadius: '16px 0 0 16px',
+                background: activeSection === 'exercises' ? 'var(--theme-page-bg)' : 'transparent',
+                color: activeSection === 'exercises' ? 'var(--theme-primary)' : 'rgba(255, 255, 255, 0.85)',
+                borderRadius: activeSection === 'exercises' ? '18px 0 0 18px' : '16px 0 0 16px',
                 cursor: 'pointer',
                 fontSize: '0.94rem',
-                fontWeight: 600,
+                fontWeight: activeSection === 'exercises' ? 700 : 600,
                 textAlign: 'left',
                 transition: 'all 0.15s ease',
               }}
@@ -1120,22 +1465,20 @@ export default function AdminHome() {
 
             <button
               type="button"
-              onClick={() => {
-                const el = document.getElementById('performance-section');
-                el?.scrollIntoView({ behavior: 'smooth' });
-              }}
+              className={activeSection === 'performance' ? 'sidebar-tab-active' : ''}
+              onClick={() => scrollToSection('performance-section', 'performance')}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: 12,
                 padding: '13px 18px',
                 border: 'none',
-                background: 'transparent',
-                color: 'rgba(255, 255, 255, 0.85)',
-                borderRadius: '16px 0 0 16px',
+                background: activeSection === 'performance' ? 'var(--theme-page-bg)' : 'transparent',
+                color: activeSection === 'performance' ? 'var(--theme-primary)' : 'rgba(255, 255, 255, 0.85)',
+                borderRadius: activeSection === 'performance' ? '18px 0 0 18px' : '16px 0 0 16px',
                 cursor: 'pointer',
                 fontSize: '0.94rem',
-                fontWeight: 600,
+                fontWeight: activeSection === 'performance' ? 700 : 600,
                 textAlign: 'left',
                 transition: 'all 0.15s ease',
               }}
@@ -1146,22 +1489,20 @@ export default function AdminHome() {
 
             <button
               type="button"
-              onClick={() => {
-                const el = document.getElementById('accuracy-section');
-                el?.scrollIntoView({ behavior: 'smooth' });
-              }}
+              className={activeSection === 'accuracy' ? 'sidebar-tab-active' : ''}
+              onClick={() => scrollToSection('accuracy-section', 'accuracy')}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: 12,
                 padding: '13px 18px',
                 border: 'none',
-                background: 'transparent',
-                color: 'rgba(255, 255, 255, 0.85)',
-                borderRadius: '16px 0 0 16px',
+                background: activeSection === 'accuracy' ? 'var(--theme-page-bg)' : 'transparent',
+                color: activeSection === 'accuracy' ? 'var(--theme-primary)' : 'rgba(255, 255, 255, 0.85)',
+                borderRadius: activeSection === 'accuracy' ? '18px 0 0 18px' : '16px 0 0 16px',
                 cursor: 'pointer',
                 fontSize: '0.94rem',
-                fontWeight: 600,
+                fontWeight: activeSection === 'accuracy' ? 700 : 600,
                 textAlign: 'left',
                 transition: 'all 0.15s ease',
               }}
@@ -1172,22 +1513,20 @@ export default function AdminHome() {
 
             <button
               type="button"
-              onClick={() => {
-                const el = document.getElementById('live-now-section');
-                el?.scrollIntoView({ behavior: 'smooth' });
-              }}
+              className={activeSection === 'live' ? 'sidebar-tab-active' : ''}
+              onClick={() => scrollToSection('live-now-section', 'live')}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: 12,
                 padding: '13px 18px',
                 border: 'none',
-                background: 'transparent',
-                color: 'rgba(255, 255, 255, 0.85)',
-                borderRadius: '16px 0 0 16px',
+                background: activeSection === 'live' ? 'var(--theme-page-bg)' : 'transparent',
+                color: activeSection === 'live' ? 'var(--theme-primary)' : 'rgba(255, 255, 255, 0.85)',
+                borderRadius: activeSection === 'live' ? '18px 0 0 18px' : '16px 0 0 16px',
                 cursor: 'pointer',
                 fontSize: '0.94rem',
-                fontWeight: 600,
+                fontWeight: activeSection === 'live' ? 700 : 600,
                 textAlign: 'left',
                 transition: 'all 0.15s ease',
               }}
@@ -1280,12 +1619,212 @@ export default function AdminHome() {
             gap: 24,
             minWidth: 0,
           }}
-          className="custom-scrollbar"
+          className="dashboard-main-content custom-scrollbar"
         >
-          {/* Top Bar */}
-          <header
+          {/* =======================================================
+              MOBILE TOP APP BAR (Visible on screens <= 1024px)
+             ======================================================= */}
+          <div
+            className="show-on-mobile-only"
             style={{
+              padding: '10px 14px',
+              backgroundColor: 'var(--theme-card-bg)',
+              borderRadius: 16,
+              border: '1px solid var(--theme-border)',
               display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 8,
+              boxShadow: '0 2px 10px rgba(0,0,0,0.03)',
+            }}
+          >
+            {/* Left: Hamburger Button + Logo */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen(true)}
+                style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 10,
+                  backgroundColor: 'var(--theme-page-bg)',
+                  border: '1px solid var(--theme-border)',
+                  color: 'var(--theme-navy)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                }}
+                aria-label="Open navigation menu"
+              >
+                <Menu size={20} />
+              </button>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 10,
+                    background: 'linear-gradient(135deg, #4a67d6 0%, #3d56a6 100%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#ffffff',
+                  }}
+                >
+                  <BookOpen size={17} />
+                </div>
+                <span style={{ fontWeight: 800, fontSize: '1.05rem', color: 'var(--theme-navy)' }}>
+                  MathTest
+                </span>
+              </div>
+            </div>
+
+            {/* Right: Search Toggle, Notifications, Create */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {/* Search Toggle */}
+              <button
+                type="button"
+                onClick={() => setMobileSearchOpen((p) => !p)}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 10,
+                  backgroundColor: mobileSearchOpen ? 'var(--theme-primary)' : 'var(--theme-page-bg)',
+                  color: mobileSearchOpen ? '#ffffff' : 'var(--theme-navy)',
+                  border: '1px solid var(--theme-border)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                }}
+                aria-label="Search exercises"
+              >
+                <Search size={16} />
+              </button>
+
+              {/* Theme toggle on mobile */}
+              <button
+                type="button"
+                onClick={toggleTheme}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 10,
+                  backgroundColor: 'var(--theme-page-bg)',
+                  border: '1px solid var(--theme-border)',
+                  color: 'var(--theme-navy)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                aria-label="Toggle theme"
+              >
+                {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
+              </button>
+
+              {/* Notification bell on mobile */}
+              <div className="notif-container" style={{ position: 'relative' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowNotifications((p) => !p)}
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    backgroundColor: 'var(--theme-page-bg)',
+                    border: '1px solid var(--theme-border)',
+                    color: 'var(--theme-navy)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    position: 'relative',
+                  }}
+                  aria-label="Notifications"
+                >
+                  <Bell size={16} />
+                  {submissionsToday.length > 0 && (
+                    <span
+                      style={{
+                        position: 'absolute',
+                        top: 6,
+                        right: 6,
+                        width: 7,
+                        height: 7,
+                        borderRadius: '50%',
+                        backgroundColor: 'var(--theme-danger)',
+                      }}
+                    />
+                  )}
+                </button>
+              </div>
+
+              {/* Create Exercise CTA button */}
+              <Link
+                href="/admin/exercises/new"
+                className="btn small"
+                style={{
+                  backgroundColor: 'var(--theme-primary)',
+                  borderColor: 'var(--theme-primary)',
+                  borderRadius: 10,
+                  padding: '7px 12px',
+                  fontWeight: 700,
+                  fontSize: '0.82rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  boxShadow: '0 2px 8px rgba(74, 103, 214, 0.25)',
+                }}
+              >
+                <Plus size={15} />
+                <span>{lang === 'KH' ? 'ថ្មី' : 'New'}</span>
+              </Link>
+            </div>
+          </div>
+
+          {/* Expandable Mobile Search Input */}
+          {mobileSearchOpen && (
+            <div className="show-on-mobile-only" style={{ width: '100%' }}>
+              <div style={{ position: 'relative', width: '100%' }}>
+                <Search
+                  size={16}
+                  style={{
+                    position: 'absolute',
+                    left: 14,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: 'var(--theme-muted)',
+                  }}
+                />
+                <input
+                  type="text"
+                  autoFocus
+                  placeholder={lang === 'KH' ? 'ស្វែងរកលំហាត់...' : 'Search exercises by title...'}
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px 10px 40px',
+                    backgroundColor: 'var(--theme-card-bg)',
+                    borderColor: 'var(--theme-border)',
+                    borderRadius: 12,
+                    fontSize: '0.9rem',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* =======================================================
+              DESKTOP / LAPTOP TOP BAR (Visible on screens > 1024px)
+             ======================================================= */}
+          <header
+            className="show-on-desktop-only"
+            style={{
               alignItems: 'center',
               justifyContent: 'space-between',
               gap: 16,
@@ -1554,6 +2093,7 @@ export default function AdminHome() {
             >
               {/* 1. Greeting Card with Flat Math Illustration */}
               <div
+                id="dashboard-top"
                 style={{
                   backgroundColor: 'var(--theme-card-bg)',
                   borderRadius: 20,
@@ -1566,6 +2106,7 @@ export default function AdminHome() {
                   gap: 20,
                   overflow: 'hidden',
                   position: 'relative',
+                  flexWrap: 'wrap',
                 }}
               >
                 <div style={{ maxWidth: 440, zIndex: 1 }}>
@@ -1622,7 +2163,7 @@ export default function AdminHome() {
                 </div>
 
                 {/* Flat Math Illustration (Pure Inline SVG) */}
-                <div style={{ width: 150, height: 120, flexShrink: 0 }}>
+                <div className="greeting-illustration" style={{ width: 140, height: 115, flexShrink: 0 }}>
                   <svg viewBox="0 0 180 140" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: '100%', height: '100%' }}>
                     <circle cx="90" cy="70" r="58" fill="#4a67d6" fillOpacity="0.08" />
                     <rect x="35" y="45" width="80" height="52" rx="8" fill="#4a67d6" />
@@ -1644,9 +2185,10 @@ export default function AdminHome() {
 
               {/* Stat Cards (Row of 4 Cards) */}
               <div
+                className="stat-cards-grid"
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
                   gap: 16,
                 }}
               >
@@ -1812,14 +2354,16 @@ export default function AdminHome() {
 
                   {/* Two-tone Bar Chart of 6 Recent Exercises */}
                   <div
+                    className="chart-container-mobile chart-bars-wrap"
                     style={{
                       display: 'flex',
                       alignItems: 'flex-end',
-                      gap: 16,
+                      gap: 12,
                       height: 140,
                       flex: 1,
                       justifyContent: 'flex-end',
-                      minWidth: 260,
+                      minWidth: 180,
+                      maxWidth: 440,
                     }}
                   >
                     {recentExercisesForChart.length === 0 ? (
@@ -1830,12 +2374,15 @@ export default function AdminHome() {
                         return (
                           <div
                             key={item.id}
+                            className="chart-bar-item"
                             style={{
                               display: 'flex',
                               flexDirection: 'column',
                               alignItems: 'center',
                               gap: 6,
-                              width: 38,
+                              flex: 1,
+                              maxWidth: 38,
+                              minWidth: 18,
                             }}
                           >
                             <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--theme-muted)' }}>
@@ -2025,7 +2572,7 @@ export default function AdminHome() {
                   </div>
 
                   {/* Filter Pills */}
-                  <div style={{ display: 'flex', gap: 6 }}>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     <button
                       type="button"
                       className={`btn small ${filter === 'all' ? '' : 'secondary'}`}
@@ -2101,6 +2648,7 @@ export default function AdminHome() {
                       return (
                         <div
                           key={r.id}
+                          className="exercise-row-container"
                           style={{
                             display: 'flex',
                             alignItems: 'center',
@@ -2114,7 +2662,7 @@ export default function AdminHome() {
                         >
                           {/* Title + Meta */}
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4, flexWrap: 'wrap' }}>
                               <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700, color: 'var(--theme-navy)' }}>
                                 {r.title || 'Untitled'}
                               </h4>
@@ -2132,7 +2680,7 @@ export default function AdminHome() {
                               </span>
                             </div>
 
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: '0.8rem', color: 'var(--theme-muted)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: '0.8rem', color: 'var(--theme-muted)', flexWrap: 'wrap' }}>
                               <span>{r.questions?.length ?? 0} Qs</span>
                               <span>•</span>
                               <span>{r.timeLimitMinutes ? `${r.timeLimitMinutes}m limit` : 'No time limit'}</span>
@@ -2162,7 +2710,7 @@ export default function AdminHome() {
                           </div>
 
                           {/* Action Buttons */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                          <div className="exercise-row-actions" style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                             {/* QR Code Button */}
                             <button
                               type="button"
@@ -2633,9 +3181,11 @@ export default function AdminHome() {
             style={{
               backgroundColor: 'var(--theme-card-bg)',
               borderRadius: 24,
-              padding: '28px 32px',
+              padding: '28px 24px',
               maxWidth: 400,
-              width: '100%',
+              width: 'calc(100% - 24px)',
+              maxHeight: '90vh',
+              overflowY: 'auto',
               boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
               textAlign: 'center',
               display: 'flex',
@@ -2674,11 +3224,14 @@ export default function AdminHome() {
                 borderRadius: 16,
                 boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
                 border: '1px solid #e2e8f0',
+                maxWidth: '100%',
+                display: 'flex',
+                justifyContent: 'center',
               }}
             >
               <QRCodeSVG
                 value={`${typeof window !== 'undefined' ? window.location.origin : ''}/e/${qrModalEx.id}`}
-                size={200}
+                size={180}
                 level="M"
               />
             </div>
@@ -2737,9 +3290,11 @@ export default function AdminHome() {
             style={{
               backgroundColor: 'var(--theme-card-bg)',
               borderRadius: 24,
-              padding: '28px 30px',
+              padding: '28px 24px',
               maxWidth: 420,
-              width: '100%',
+              width: 'calc(100% - 24px)',
+              maxHeight: '90vh',
+              overflowY: 'auto',
               boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
               textAlign: 'center',
               display: 'flex',
@@ -2822,9 +3377,11 @@ export default function AdminHome() {
             style={{
               backgroundColor: 'var(--theme-card-bg)',
               borderRadius: 24,
-              padding: '28px 32px',
+              padding: '28px 24px',
               maxWidth: 460,
-              width: '100%',
+              width: 'calc(100% - 24px)',
+              maxHeight: '90vh',
+              overflowY: 'auto',
               boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
               display: 'flex',
               flexDirection: 'column',
@@ -2960,8 +3517,66 @@ export default function AdminHome() {
         </div>
       )}
 
-      {/* Responsive mobile overrides */}
+      {/* Mobile Sticky Bottom Navigation Dock */}
+      <nav className="mobile-bottom-nav show-on-mobile-only" aria-label="Mobile Bottom Navigation">
+        <button
+          type="button"
+          className={`mobile-nav-btn ${activeSection === 'dashboard' ? 'active' : ''}`}
+          onClick={() => scrollToSection('dashboard-top', 'dashboard')}
+        >
+          <LayoutDashboard size={20} />
+          <span>Home</span>
+        </button>
+        <button
+          type="button"
+          className={`mobile-nav-btn ${activeSection === 'exercises' ? 'active' : ''}`}
+          onClick={() => scrollToSection('my-exercises-section', 'exercises')}
+        >
+          <BookOpen size={20} />
+          <span>Tests</span>
+        </button>
+        <button
+          type="button"
+          className={`mobile-nav-btn ${activeSection === 'performance' ? 'active' : ''}`}
+          onClick={() => scrollToSection('performance-section', 'performance')}
+        >
+          <BarChart3 size={20} />
+          <span>Stats</span>
+        </button>
+        <button
+          type="button"
+          className={`mobile-nav-btn ${activeSection === 'live' ? 'active' : ''}`}
+          onClick={() => scrollToSection('live-now-section', 'live')}
+        >
+          <Users size={20} />
+          <span>Live</span>
+        </button>
+        <button
+          type="button"
+          className="mobile-nav-btn"
+          onClick={() => setMobileMenuOpen(true)}
+        >
+          <Menu size={20} />
+          <span>Menu</span>
+        </button>
+      </nav>
+
+      {/* Responsive mobile & laptop style overrides */}
       <style jsx>{`
+        /* Laptop optimizations (1024px - 1280px) */
+        @media (min-width: 1024px) and (max-width: 1280px) {
+          .center-column-span {
+            grid-column: span 7 !important;
+          }
+          .right-column-span {
+            grid-column: span 5 !important;
+          }
+          .dashboard-main-content {
+            padding: 20px 20px 48px !important;
+          }
+        }
+
+        /* Tablet & Mobile (<= 1024px) */
         @media (max-width: 1024px) {
           .hide-on-mobile {
             display: none !important;
@@ -2975,10 +3590,55 @@ export default function AdminHome() {
           .accuracy-grid {
             grid-template-columns: repeat(2, 1fr) !important;
           }
+          .dashboard-main-content {
+            padding: 14px 12px 90px !important;
+          }
+          .dashboard-toast {
+            bottom: 76px !important;
+            right: 14px !important;
+            left: 14px !important;
+            justify-content: center !important;
+          }
         }
+
+        /* Small Phones (<= 640px) */
         @media (max-width: 640px) {
+          .stat-cards-grid {
+            grid-template-columns: repeat(2, 1fr) !important;
+            gap: 10px !important;
+          }
+          .greeting-illustration {
+            width: 85px !important;
+            height: 70px !important;
+          }
+          .exercise-row-container {
+            flex-direction: column !important;
+            align-items: stretch !important;
+            gap: 12px !important;
+            padding: 14px 14px !important;
+          }
+          .exercise-row-actions {
+            width: 100% !important;
+            justify-content: flex-end !important;
+            border-top: 1px solid var(--theme-border-subtle);
+            padding-top: 10px;
+          }
           .accuracy-grid {
             grid-template-columns: 1fr !important;
+          }
+          .chart-container-mobile {
+            width: 100% !important;
+            min-width: 0 !important;
+            justify-content: space-between !important;
+          }
+          .chart-bars-wrap {
+            gap: 6px !important;
+          }
+          .chart-bar-item {
+            width: auto !important;
+            flex: 1 !important;
+            max-width: 34px !important;
+            min-width: 16px !important;
           }
         }
       `}</style>
