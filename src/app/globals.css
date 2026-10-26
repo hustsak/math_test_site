@@ -4,23 +4,61 @@
   --ink: #1d2433;
   --muted: #667085;
   --line: #e3e6eb;
-  --brand: #2f5bea;
+  --brand: #4a67d6;
   --brand-ink: #ffffff;
-  --good: #0f9d58;
-  --good-bg: #e7f6ee;
-  --bad: #d93025;
+  --good: #1faa6b;
+  --good-bg: #e8f7f0;
+  --bad: #d9443c;
   --bad-bg: #fdeceb;
-  --warn-bg: #fff4e0;
+  --warn-bg: #fff6e5;
+
+  /* Reference Design Theme Tokens */
+  --theme-page-bg: #eef0f4;
+  --theme-card-bg: #ffffff;
+  --theme-primary: #4a67d6;
+  --theme-primary-hover: #3d56c4;
+  --theme-sidebar-rail: #5b7bdc;
+  --theme-sidebar-panel: #3d56a6;
+  --theme-navy: #1b2240;
+  --theme-muted: #6d758f;
+  --theme-border: #e2e6ee;
+  --theme-border-subtle: #f0f2f6;
+  --theme-success: #1faa6b;
+  --theme-warning: #e0a000;
+  --theme-danger: #d9443c;
+  --theme-shadow: 0 4px 20px rgba(30, 40, 90, 0.06);
+  --theme-shadow-hover: 0 8px 30px rgba(30, 40, 90, 0.12);
+}
+
+[data-theme="dark"] {
+  --bg: #0f1422;
+  --card: #171f33;
+  --ink: #f1f5f9;
+  --muted: #94a3b8;
+  --line: #232d47;
+  --theme-page-bg: #0c101c;
+  --theme-card-bg: #161e33;
+  --theme-primary: #5c79e6;
+  --theme-primary-hover: #4e6cd6;
+  --theme-sidebar-rail: #3a5099;
+  --theme-sidebar-panel: #243468;
+  --theme-navy: #f8fafc;
+  --theme-muted: #94a3b8;
+  --theme-border: #232e49;
+  --theme-border-subtle: #1c253d;
+  --theme-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  --theme-shadow-hover: 0 8px 30px rgba(0, 0, 0, 0.45);
 }
 
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--ink);
-  font-family: 'Khmer OS Siemreap', 'Siemreap', 'Noto Sans Khmer', 'Inter', system-ui, -apple-system, sans-serif;
+  background: var(--theme-page-bg, var(--bg));
+  color: var(--theme-navy, var(--ink));
+  font-family: 'Inter', 'Kantumruy Pro', 'Noto Sans Khmer', 'Siemreap', system-ui, -apple-system, sans-serif;
   line-height: 1.55;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 a { color: var(--brand); }
@@ -330,3 +368,149 @@ body.screen-guard textarea {
     font-size: 20px;
   }
 }
+
+/* =========================================================
+   Redesigned Admin Dashboard Styles (Reference Theme)
+   ========================================================= */
+
+.app-shell {
+  min-height: 100vh;
+  background-color: var(--theme-page-bg);
+  padding: 16px;
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+}
+
+@media (min-width: 1024px) {
+  .app-shell {
+    padding: 24px;
+  }
+}
+
+.shell-container {
+  width: 100%;
+  max-width: 1600px;
+  background-color: var(--theme-card-bg);
+  border-radius: 24px;
+  box-shadow: 0 10px 40px rgba(25, 35, 75, 0.07);
+  display: flex;
+  overflow: hidden;
+  position: relative;
+  border: 1px solid var(--theme-border-subtle);
+}
+
+/* Sidebar curved active pill tab */
+.sidebar-tab-active {
+  position: relative;
+  background-color: var(--theme-page-bg) !important;
+  color: var(--theme-primary) !important;
+  border-radius: 18px 0 0 18px !important;
+  font-weight: 700 !important;
+}
+
+.sidebar-tab-active::before {
+  content: '';
+  position: absolute;
+  top: -18px;
+  right: 0;
+  width: 18px;
+  height: 18px;
+  background: transparent;
+  border-bottom-right-radius: 18px;
+  box-shadow: 6px 6px 0 6px var(--theme-page-bg);
+  pointer-events: none;
+}
+
+.sidebar-tab-active::after {
+  content: '';
+  position: absolute;
+  bottom: -18px;
+  right: 0;
+  width: 18px;
+  height: 18px;
+  background: transparent;
+  border-top-right-radius: 18px;
+  box-shadow: 6px -6px 0 6px var(--theme-page-bg);
+  pointer-events: none;
+}
+
+/* Shimmer Skeleton Loader */
+@keyframes skeleton-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(226, 232, 240, 0.6) 25%,
+    rgba(241, 245, 249, 0.9) 37%,
+    rgba(226, 232, 240, 0.6) 63%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease infinite;
+  border-radius: 8px;
+}
+
+[data-theme="dark"] .skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(36, 47, 77, 0.6) 25%,
+    rgba(49, 64, 102, 0.9) 37%,
+    rgba(36, 47, 77, 0.6) 63%
+  );
+  background-size: 200% 100%;
+}
+
+/* Floating Toast */
+.dashboard-toast {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  background: #1b2240;
+  color: #ffffff;
+  padding: 12px 20px;
+  border-radius: 12px;
+  font-size: 0.92rem;
+  font-weight: 600;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 9999;
+  animation: toast-in 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-theme="dark"] .dashboard-toast {
+  background: #3d56a6;
+  color: #ffffff;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Custom sleek scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.2);
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.4);
+}
+

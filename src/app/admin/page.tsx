@@ -1,20 +1,70 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { addDoc, collection, deleteDoc, doc, getDocs, orderBy, query } from 'firebase/firestore';
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+} from 'firebase/auth';
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  getDocs,
+  orderBy,
+  query,
+} from 'firebase/firestore';
+import { QRCodeSVG } from 'qrcode.react';
+import {
+  LayoutDashboard,
+  BookOpen,
+  BarChart3,
+  Database,
+  Users,
+  Settings,
+  LogOut,
+  Search,
+  Bell,
+  Sun,
+  Moon,
+  QrCode,
+  MoreVertical,
+  Copy,
+  Edit3,
+  CopyPlus,
+  Trash2,
+  Plus,
+  CheckCircle2,
+  Clock,
+  AlertTriangle,
+  FileText,
+  UserPlus,
+  Check,
+  Radio,
+  ArrowRight,
+  TrendingUp,
+  X,
+  LogIn,
+} from 'lucide-react';
 import { getAuthClient, getDb } from '@/lib/firebaseClient';
 import { useAdmin } from '@/lib/useAdmin';
 import { adminPost } from '@/lib/authFetch';
-import type { Exercise } from '@/lib/types';
+import type { Exercise, Submission } from '@/lib/types';
 
 type Row = { id: string } & Exercise;
+type SubRow = { id: string } & Submission;
 
 export default function AdminHome() {
-  const { user, isAdmin, loading } = useAdmin();
+  const { user, isAdmin, loading: authLoading } = useAdmin();
 
-  // Auth form states (for signed-out users)
+  // Theme state
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  // Language state: 'EN' | 'KH'
+  const [lang, setLang] = useState<'EN' | 'KH'>('EN');
+
+  // Auth form states (when unauthenticated)
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -22,15 +72,25 @@ export default function AdminHome() {
   const [authError, setAuthError] = useState('');
   const [authBusy, setAuthBusy] = useState(false);
 
-  // Exercise list states
-  const [rows, setRows] = useState<Row[] | null>(null);
-  const [copied, setCopied] = useState('');
+  // Data states
+  const [exercises, setExercises] = useState<Row[] | null>(null);
+  const [submissions, setSubmissions] = useState<SubRow[] | null>(null);
+  const [loadingData, setLoadingData] = useState(true);
+  const [dataError, setDataError] = useState('');
+
+  // UI Filter / Search
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'published' | 'draft'>('all');
-  const [error, setError] = useState('');
+  const [selectedMonth, setSelectedMonth] = useState('All');
 
-  // "Register another teacher" modal state (when already signed in)
+  // Modals & Popups
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+  const [qrModalEx, setQrModalEx] = useState<Row | null>(null);
+  const [deleteConfirmEx, setDeleteConfirmEx] = useState<Row | null>(null);
   const [showAddTeacherModal, setShowAddTeacherModal] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  // Register another teacher form states
   const [newTeacherEmail, setNewTeacherEmail] = useState('');
   const [newTeacherPassword, setNewTeacherPassword] = useState('');
   const [newTeacherConfirm, setNewTeacherConfirm] = useState('');
@@ -38,19 +98,77 @@ export default function AdminHome() {
   const [addTeacherSuccess, setAddTeacherSuccess] = useState('');
   const [addTeacherBusy, setAddTeacherBusy] = useState(false);
 
-  async function load() {
+  // Toast feedback
+  const [toastMsg, setToastMsg] = useState('');
+
+  // Close menus on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (!(e.target as HTMLElement).closest('.action-menu-container')) {
+        setActiveMenuId(null);
+      }
+      if (!(e.target as HTMLElement).closest('.notif-container')) {
+        setShowNotifications(false);
+      }
+    }
+    window.addEventListener('click', handleClickOutside);
+    return () => window.removeEventListener('click', handleClickOutside);
+  }, []);
+
+  // Theme initialization
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('mathtest_theme') as 'light' | 'dark' | null;
+    if (savedTheme) {
+      setTheme(savedTheme);
+      document.documentElement.setAttribute('data-theme', savedTheme);
+    } else {
+      document.documentElement.setAttribute('data-theme', 'light');
+    }
+  }, []);
+
+  function toggleTheme() {
+    const next = theme === 'light' ? 'dark' : 'light';
+    setTheme(next);
+    localStorage.setItem('mathtest_theme', next);
+    document.documentElement.setAttribute('data-theme', next);
+  }
+
+  function showToast(msg: string) {
+    setToastMsg(msg);
+    setTimeout(() => {
+      setToastMsg((prev) => (prev === msg ? '' : prev));
+    }, 2800);
+  }
+
+  // Load Firestore data
+  async function loadData() {
+    setLoadingData(true);
+    setDataError('');
     try {
-      const snap = await getDocs(query(collection(getDb(), 'exercises'), orderBy('updatedAt', 'desc')));
-      setRows(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Exercise) })));
-    } catch (e: any) {
-      setError(e?.message || 'Could not load exercises.');
+      const [exSnap, subSnap] = await Promise.all([
+        getDocs(query(collection(getDb(), 'exercises'), orderBy('updatedAt', 'desc'))),
+        getDocs(collection(getDb(), 'submissions')),
+      ]);
+
+      const exList = exSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Exercise) }));
+      const subList = subSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Submission) }));
+
+      setExercises(exList);
+      setSubmissions(subList);
+    } catch (err: any) {
+      setDataError(err?.message || 'Could not load data.');
+    } finally {
+      setLoadingData(false);
     }
   }
 
   useEffect(() => {
-    if (isAdmin) load();
+    if (isAdmin) {
+      loadData();
+    }
   }, [isAdmin]);
 
+  // Auth Form Handlers (Sign In & Register)
   async function handleSignIn(e: React.FormEvent) {
     e.preventDefault();
     setAuthError('');
@@ -59,10 +177,14 @@ export default function AdminHome() {
       await signInWithEmailAndPassword(getAuthClient(), email.trim(), password);
     } catch (err: any) {
       const code = err?.code;
-      if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
-        setAuthError('Incorrect email or password.');
+      if (
+        code === 'auth/invalid-credential' ||
+        code === 'auth/wrong-password' ||
+        code === 'auth/user-not-found'
+      ) {
+        setAuthError(lang === 'KH' ? 'អ៊ីមែល ឬ ពាក្យសម្ងាត់មិនត្រឹមត្រូវទេ។' : 'Incorrect email or password.');
       } else if (code === 'auth/invalid-email') {
-        setAuthError('Please enter a valid email address.');
+        setAuthError(lang === 'KH' ? 'សូមបញ្ចូលអ៊ីមែលដែលត្រឹមត្រូវ។' : 'Please enter a valid email address.');
       } else {
         setAuthError(err?.message || 'Sign in failed.');
       }
@@ -75,11 +197,11 @@ export default function AdminHome() {
     e.preventDefault();
     setAuthError('');
     if (password !== confirmPassword) {
-      setAuthError('Passwords do not match.');
+      setAuthError(lang === 'KH' ? 'ពាក្យសម្ងាត់ផ្ទៀងផ្ទាត់មិនត្រូវគ្នាទេ។' : 'Passwords do not match.');
       return;
     }
     if (password.length < 6) {
-      setAuthError('Password must be at least 6 characters long.');
+      setAuthError(lang === 'KH' ? 'ពាក្យសម្ងាត់ត្រូវមានយ៉ាងហោចណាស់ ៦ តួអក្សរ។' : 'Password must be at least 6 characters.');
       return;
     }
     setAuthBusy(true);
@@ -88,11 +210,15 @@ export default function AdminHome() {
     } catch (err: any) {
       const code = err?.code;
       if (code === 'auth/email-already-in-use') {
-        setAuthError('An account with this email already exists. Please sign in instead.');
+        setAuthError(
+          lang === 'KH'
+            ? 'គណនីជាមួយអ៊ីមែលនេះមានរួចហើយ។ សូមចូលប្រើប្រាស់។'
+            : 'An account with this email already exists. Please sign in.'
+        );
       } else if (code === 'auth/invalid-email') {
-        setAuthError('Please enter a valid email address.');
+        setAuthError(lang === 'KH' ? 'សូមបញ្ចូលអ៊ីមែលដែលត្រឹមត្រូវ។' : 'Please enter a valid email address.');
       } else if (code === 'auth/weak-password') {
-        setAuthError('Password is too weak. Please use at least 6 characters.');
+        setAuthError(lang === 'KH' ? 'ពាក្យសម្ងាត់ខ្សោយពេក។' : 'Password is too weak. Please use at least 6 characters.');
       } else {
         setAuthError(err?.message || 'Registration failed.');
       }
@@ -101,6 +227,7 @@ export default function AdminHome() {
     }
   }
 
+  // Register another teacher from modal
   async function handleRegisterAnotherTeacher(e: React.FormEvent) {
     e.preventDefault();
     setAddTeacherError('');
@@ -126,7 +253,8 @@ export default function AdminHome() {
       if (res.error) {
         setAddTeacherError(res.error);
       } else {
-        setAddTeacherSuccess(`Account created for ${newTeacherEmail.trim()}! They can now sign in at /admin.`);
+        setAddTeacherSuccess(`Teacher account created for ${newTeacherEmail.trim()}!`);
+        new Audio('/sounds/success.mp3')?.play?.().catch(() => {});
         setNewTeacherEmail('');
         setNewTeacherPassword('');
         setNewTeacherConfirm('');
@@ -138,213 +266,602 @@ export default function AdminHome() {
     }
   }
 
-  async function remove(id: string) {
-    if (!confirm('Delete this exercise? Student submissions are kept in the database.')) return;
-    await deleteDoc(doc(getDb(), 'exercises', id));
-    load();
+  // Exercise Actions
+  async function handleDeleteExercise(id: string) {
+    try {
+      await deleteDoc(doc(getDb(), 'exercises', id));
+      setDeleteConfirmEx(null);
+      showToast('Exercise deleted successfully');
+      loadData();
+    } catch (e: any) {
+      alert(e?.message || 'Failed to delete exercise.');
+    }
   }
 
-  async function duplicate(r: Row) {
+  async function handleDuplicateExercise(r: Row) {
     const { id: _id, ...rest } = r;
     const now = Date.now();
-    await addDoc(collection(getDb(), 'exercises'), {
-      ...rest,
-      title: `${r.title || 'Untitled'} (copy)`,
-      published: false,
-      createdAt: now,
-      updatedAt: now,
-    });
-    load();
+    try {
+      await addDoc(collection(getDb(), 'exercises'), {
+        ...rest,
+        title: `${r.title || 'Untitled'} (Copy)`,
+        published: false,
+        createdAt: now,
+        updatedAt: now,
+      });
+      showToast('Exercise duplicated');
+      loadData();
+    } catch (e: any) {
+      alert(e?.message || 'Failed to duplicate exercise.');
+    }
   }
 
-  async function copyLink(id: string) {
+  async function copyStudentLink(id: string) {
     const url = `${window.location.origin}/e/${id}`;
     await navigator.clipboard.writeText(url);
-    setCopied(id);
-    setTimeout(() => setCopied(''), 1500);
+    showToast('Link copied to clipboard!');
   }
 
-  if (loading) return <div className="wrap muted">Loading…</div>;
+  // Analytics & Derived Data Calculations
+  const submittedList = useMemo(() => {
+    return (submissions || []).filter((s) => s.status === 'submitted');
+  }, [submissions]);
 
-  // Sign in / Registration View for unauthenticated users
+  // Submissions today
+  const submissionsToday = useMemo(() => {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const ts = startOfToday.getTime();
+    return (submissions || []).filter((s) => (s.submittedAt ?? 0) >= ts);
+  }, [submissions]);
+
+  // Overall average score
+  const overallAvgScore = useMemo(() => {
+    if (!submittedList.length) return 0;
+    const totalPct = submittedList.reduce((acc, s) => {
+      const pct = ((s.score ?? 0) / Math.max(1, s.total ?? 1)) * 100;
+      return acc + pct;
+    }, 0);
+    return (totalPct / submittedList.length).toFixed(1);
+  }, [submittedList]);
+
+  // Exercise Submissions Map & Avg Map
+  const exStats = useMemo(() => {
+    const map = new Map<string, { count: number; avg: number; submissions: SubRow[] }>();
+    for (const ex of exercises || []) {
+      const subs = (submissions || []).filter((s) => s.exerciseId === ex.id);
+      const done = subs.filter((s) => s.status === 'submitted');
+      const avg = done.length
+        ? done.reduce((a, s) => a + ((s.score ?? 0) / Math.max(1, s.total ?? 1)) * 100, 0) / done.length
+        : 0;
+      map.set(ex.id, { count: subs.length, avg, submissions: subs });
+    }
+    return map;
+  }, [exercises, submissions]);
+
+  // 6 Most Recent Exercises for Bar Chart
+  const recentExercisesForChart = useMemo(() => {
+    return (exercises || []).slice(0, 6).map((ex) => {
+      const stats = exStats.get(ex.id);
+      return {
+        id: ex.id,
+        title: ex.title || 'Untitled',
+        avg: stats ? Math.round(stats.avg) : 0,
+        submissions: stats ? stats.count : 0,
+      };
+    });
+  }, [exercises, exStats]);
+
+  // Per-Question Accuracy Rings (up to 6 questions from recent active exercises)
+  const accuracyRings = useMemo(() => {
+    const questions: { id: string; label: string; pct: number }[] = [];
+    if (!exercises || !exercises.length) return questions;
+
+    // Pick questions from the most recent exercise with submissions, or across exercises
+    for (const ex of exercises) {
+      const subs = (submissions || []).filter((s) => s.exerciseId === ex.id && s.status === 'submitted');
+      if (subs.length > 0 && ex.questions && ex.questions.length > 0) {
+        for (let i = 0; i < ex.questions.length && questions.length < 6; i++) {
+          const q = ex.questions[i];
+          const answers = subs.map((s) => s.details?.find((d) => d.id === q.id)).filter(Boolean);
+          const right = answers.filter((d) => d!.correct).length;
+          const pct = answers.length ? Math.round((right / answers.length) * 100) : 0;
+          questions.push({
+            id: `${ex.id}-${q.id}`,
+            label: `Q${i + 1}: ${(ex.title || 'Math').slice(0, 12)}`,
+            pct,
+          });
+        }
+      }
+      if (questions.length >= 6) break;
+    }
+
+    // Fallback placeholders if not enough submission details yet
+    if (questions.length === 0 && exercises.length > 0) {
+      exercises.slice(0, 6).forEach((ex, i) => {
+        const stats = exStats.get(ex.id);
+        questions.push({
+          id: ex.id,
+          label: (ex.title || `Ex ${i + 1}`).slice(0, 12),
+          pct: stats ? Math.round(stats.avg) : 0,
+        });
+      });
+    }
+
+    return questions;
+  }, [exercises, submissions, exStats]);
+
+  // Live Now Timeline (Students started within time limit + recent submissions)
+  const liveNowList = useMemo(() => {
+    const now = Date.now();
+    const items: {
+      id: string;
+      studentName: string;
+      exerciseTitle: string;
+      scoreText: string;
+      timeAgo: string;
+      isLive: boolean;
+    }[] = [];
+
+    // Find started students
+    const started = (submissions || []).filter((s) => {
+      if (s.status === 'submitted') return false;
+      const ex = exercises?.find((e) => e.id === s.exerciseId);
+      const limitMs = (ex?.timeLimitMinutes || 60) * 60 * 1000;
+      return now - s.startedAt < limitMs;
+    });
+
+    for (const s of started) {
+      const ex = exercises?.find((e) => e.id === s.exerciseId);
+      const mins = Math.max(1, Math.round((now - s.startedAt) / 60000));
+      items.push({
+        id: s.id,
+        studentName: s.studentName,
+        exerciseTitle: ex?.title || 'Exercise',
+        scoreText: 'Taking test…',
+        timeAgo: `${mins}m ago`,
+        isLive: true,
+      });
+    }
+
+    // Add recent completed submissions
+    const recent = [...(submittedList || [])]
+      .sort((a, b) => (b.submittedAt ?? 0) - (a.submittedAt ?? 0))
+      .slice(0, 6 - items.length);
+
+    for (const s of recent) {
+      const ex = exercises?.find((e) => e.id === s.exerciseId);
+      const diffMs = now - (s.submittedAt ?? s.startedAt);
+      const mins = Math.max(1, Math.round(diffMs / 60000));
+      const hours = Math.floor(mins / 60);
+      const timeAgo = hours > 0 ? `${hours}h ago` : `${mins}m ago`;
+
+      items.push({
+        id: s.id,
+        studentName: s.studentName,
+        exerciseTitle: ex?.title || 'Exercise',
+        scoreText: `${s.score} / ${s.total}`,
+        timeAgo,
+        isLive: false,
+      });
+    }
+
+    return items;
+  }, [submissions, exercises, submittedList]);
+
+  // Upcoming Deadlines
+  const upcomingDeadlines = useMemo(() => {
+    const now = Date.now();
+    return (exercises || [])
+      .filter((e) => e.deadline && new Date(e.deadline).getTime() > now)
+      .sort((a, b) => new Date(a.deadline!).getTime() - new Date(b.deadline!).getTime())
+      .slice(0, 5)
+      .map((e) => {
+        const dueTime = new Date(e.deadline!).getTime();
+        const diffMs = dueTime - now;
+        const diffHours = Math.round(diffMs / (1000 * 60 * 60));
+        const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        const isUrgent = diffHours < 24;
+        const countdownText = isUrgent
+          ? diffHours <= 1
+            ? 'Closes in under 1 hour'
+            : `Closes in ${diffHours} hours`
+          : `Closes in ${diffDays} days`;
+        return {
+          ...e,
+          countdownText,
+          isUrgent,
+        };
+      });
+  }, [exercises]);
+
+  // Filtered exercises list
+  const filteredExercises = useMemo(() => {
+    return (exercises || []).filter((r) => {
+      if (filter === 'published' && !r.published) return false;
+      if (filter === 'draft' && r.published) return false;
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        const matchTitle = (r.title || '').toLowerCase().includes(q);
+        const matchDesc = (r.description || '').toLowerCase().includes(q);
+        return matchTitle || matchDesc;
+      }
+      return true;
+    });
+  }, [exercises, filter, search]);
+
+  const teacherName = useMemo(() => {
+    if (!user?.email) return 'Teacher';
+    const prefix = user.email.split('@')[0];
+    return prefix.charAt(0).toUpperCase() + prefix.slice(1);
+  }, [user]);
+
+  // Loading skeleton state
+  if (authLoading) {
+    return (
+      <div className="app-shell" style={{ alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ width: '100%', maxWidth: 460, padding: 32 }} className="card skeleton">
+          <div style={{ height: 28, width: '40%', marginBottom: 16 }} className="skeleton" />
+          <div style={{ height: 16, width: '70%', marginBottom: 32 }} className="skeleton" />
+          <div style={{ height: 48, marginBottom: 16 }} className="skeleton" />
+          <div style={{ height: 48, marginBottom: 24 }} className="skeleton" />
+          <div style={{ height: 44, borderRadius: 12 }} className="skeleton" />
+        </div>
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // Unauthenticated: Teacher Sign In & Teacher Registration Screen
+  // =========================================================================
   if (!user) {
     return (
-      <div className="wrap" style={{ maxWidth: 440, paddingTop: 40 }}>
-        <div className="card stack" style={{ padding: 28, boxShadow: '0 4px 16px rgba(0,0,0,0.06)' }}>
-          <div style={{ textAlign: 'center', marginBottom: 6 }}>
-            <span style={{ fontSize: '2.5rem' }}>👨‍🏫</span>
-            <h1 style={{ marginTop: 8, fontSize: '1.45rem' }}>
-              {authMode === 'login' ? 'Teacher Sign In' : 'Register Teacher Account'}
-            </h1>
-            <p className="muted" style={{ margin: 0, fontSize: '0.88rem' }}>
-              {authMode === 'login'
-                ? 'Sign in to access your exercises and student results'
-                : 'Create a new teacher account to manage exercises'}
-            </p>
+      <div className="app-shell" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div
+          style={{
+            width: '100%',
+            maxWidth: 480,
+            backgroundColor: 'var(--theme-card-bg)',
+            borderRadius: 24,
+            padding: '36px 32px',
+            boxShadow: 'var(--theme-shadow-hover)',
+            border: '1px solid var(--theme-border)',
+            position: 'relative',
+          }}
+        >
+          {/* Top Header with Theme Switcher */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div
+                style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: 12,
+                  background: 'linear-gradient(135deg, #4a67d6 0%, #3d56a6 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                }}
+              >
+                <BookOpen size={22} />
+              </div>
+              <div>
+                <h2 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
+                  MathTest
+                </h2>
+                <span style={{ fontSize: '0.8rem', color: 'var(--theme-muted)' }}>Teacher Portal</span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => setLang((prev) => (prev === 'EN' ? 'KH' : 'EN'))}
+                className="btn small secondary"
+                style={{ borderRadius: 8, padding: '4px 10px', fontSize: '0.8rem', fontWeight: 700 }}
+              >
+                {lang}
+              </button>
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className="btn small secondary"
+                style={{ borderRadius: 8, padding: '6px 8px' }}
+                aria-label="Toggle dark mode"
+              >
+                {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
+              </button>
+            </div>
           </div>
 
-          {/* Switcher Tab */}
+          {/* Mode Switcher Tabs */}
           <div
             style={{
               display: 'flex',
-              background: 'var(--bg)',
-              borderRadius: 8,
+              backgroundColor: 'var(--theme-page-bg)',
+              borderRadius: 14,
               padding: 4,
+              marginBottom: 24,
               gap: 4,
             }}
           >
             <button
               type="button"
-              className="btn small grow"
-              style={{
-                background: authMode === 'login' ? 'var(--card)' : 'transparent',
-                color: authMode === 'login' ? 'var(--brand)' : 'var(--muted)',
-                border: authMode === 'login' ? '1px solid var(--line)' : 'none',
-                boxShadow: authMode === 'login' ? '0 1px 3px rgba(0,0,0,0.05)' : 'none',
-              }}
               onClick={() => {
                 setAuthMode('login');
                 setAuthError('');
               }}
+              style={{
+                flex: 1,
+                padding: '10px 14px',
+                borderRadius: 10,
+                border: 'none',
+                background: authMode === 'login' ? 'var(--theme-card-bg)' : 'transparent',
+                color: authMode === 'login' ? 'var(--theme-primary)' : 'var(--theme-muted)',
+                fontWeight: 700,
+                fontSize: '0.9rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                boxShadow: authMode === 'login' ? '0 2px 8px rgba(0,0,0,0.06)' : 'none',
+                transition: 'all 0.15s ease',
+              }}
             >
-              Sign In
+              <LogIn size={16} />
+              {lang === 'KH' ? 'ចូលគណនីគ្រូ' : 'Teacher Login'}
             </button>
             <button
               type="button"
-              className="btn small grow"
-              style={{
-                background: authMode === 'register' ? 'var(--card)' : 'transparent',
-                color: authMode === 'register' ? 'var(--brand)' : 'var(--muted)',
-                border: authMode === 'register' ? '1px solid var(--line)' : 'none',
-                boxShadow: authMode === 'register' ? '0 1px 3px rgba(0,0,0,0.05)' : 'none',
-              }}
               onClick={() => {
                 setAuthMode('register');
                 setAuthError('');
               }}
+              style={{
+                flex: 1,
+                padding: '10px 14px',
+                borderRadius: 10,
+                border: 'none',
+                background: authMode === 'register' ? 'var(--theme-card-bg)' : 'transparent',
+                color: authMode === 'register' ? 'var(--theme-primary)' : 'var(--theme-muted)',
+                fontWeight: 700,
+                fontSize: '0.9rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                boxShadow: authMode === 'register' ? '0 2px 8px rgba(0,0,0,0.06)' : 'none',
+                transition: 'all 0.15s ease',
+              }}
             >
-              + Register Account
+              <UserPlus size={16} />
+              {lang === 'KH' ? 'ចុះឈ្មោះគ្រូថ្មី' : 'Register Account'}
             </button>
           </div>
 
           {authError && (
             <div
               style={{
-                background: 'var(--bad-bg)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: '12px 14px',
+                borderRadius: 12,
+                backgroundColor: 'var(--bad-bg)',
                 color: 'var(--bad)',
-                border: '1px solid #fad2cf',
-                padding: '8px 12px',
-                borderRadius: 8,
+                border: '1px solid #fed7d7',
                 fontSize: '0.88rem',
+                marginBottom: 18,
               }}
             >
-              {authError}
+              <AlertTriangle size={18} style={{ flexShrink: 0 }} />
+              <span>{authError}</span>
             </div>
           )}
 
           {authMode === 'login' ? (
-            <form className="stack" onSubmit={handleSignIn}>
+            <form onSubmit={handleSignIn} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
-                <label>Email Address</label>
-                <input
-                  type="email"
-                  placeholder="teacher@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  autoFocus
-                />
-              </div>
-              <div>
-                <label>Password</label>
-                <input
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
-              </div>
-              <button className="btn" type="submit" disabled={authBusy} style={{ marginTop: 6 }}>
-                {authBusy ? 'Signing in…' : 'Sign In'}
-              </button>
-              <div style={{ textAlign: 'center', marginTop: 10 }}>
-                <span className="muted" style={{ fontSize: '0.85rem' }}>Need an account? </span>
-                <button
-                  type="button"
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'var(--brand)',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    fontSize: '0.85rem',
-                    padding: 0,
-                  }}
-                  onClick={() => {
-                    setAuthMode('register');
-                    setAuthError('');
-                  }}
-                >
-                  Register here
-                </button>
-              </div>
-            </form>
-          ) : (
-            <form className="stack" onSubmit={handleRegister}>
-              <div>
-                <label>Teacher Email</label>
+                <label style={{ fontSize: '0.85rem', color: 'var(--theme-navy)', fontWeight: 600 }}>
+                  {lang === 'KH' ? 'អាសយដ្ឋានអ៊ីមែល' : 'Email Address'}
+                </label>
                 <input
                   type="email"
                   placeholder="teacher@school.edu"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  autoFocus
+                  style={{
+                    backgroundColor: 'var(--theme-page-bg)',
+                    borderColor: 'var(--theme-border)',
+                    borderRadius: 12,
+                    padding: '11px 14px',
+                  }}
                 />
               </div>
+
               <div>
-                <label>Password (min. 6 characters)</label>
+                <label style={{ fontSize: '0.85rem', color: 'var(--theme-navy)', fontWeight: 600 }}>
+                  {lang === 'KH' ? 'ពាក្យសម្ងាត់' : 'Password'}
+                </label>
                 <input
                   type="password"
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  style={{
+                    backgroundColor: 'var(--theme-page-bg)',
+                    borderColor: 'var(--theme-border)',
+                    borderRadius: 12,
+                    padding: '11px 14px',
+                  }}
                 />
               </div>
+
+              <button
+                type="submit"
+                className="btn"
+                disabled={authBusy}
+                style={{
+                  backgroundColor: 'var(--theme-primary)',
+                  borderColor: 'var(--theme-primary)',
+                  borderRadius: 12,
+                  padding: '12px 16px',
+                  fontSize: '0.95rem',
+                  fontWeight: 700,
+                  marginTop: 6,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                }}
+              >
+                {authBusy ? (
+                  lang === 'KH' ? 'កំពុងចូល…' : 'Signing in…'
+                ) : (
+                  <>
+                    <LogIn size={18} />
+                    {lang === 'KH' ? 'ចូលទៅផ្ទាំងគ្រប់គ្រង' : 'Sign In to Dashboard'}
+                  </>
+                )}
+              </button>
+
+              <div style={{ textAlign: 'center', marginTop: 8 }}>
+                <span style={{ fontSize: '0.85rem', color: 'var(--theme-muted)' }}>
+                  {lang === 'KH' ? 'មិនទាន់មានគណនីគ្រូ?' : "Don't have a teacher account? "}{' '}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode('register');
+                    setAuthError('');
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--theme-primary)',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    fontSize: '0.85rem',
+                    padding: 0,
+                  }}
+                >
+                  {lang === 'KH' ? 'ចុះឈ្មោះនៅទីនេះ' : 'Register here'}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
-                <label>Confirm Password</label>
+                <label style={{ fontSize: '0.85rem', color: 'var(--theme-navy)', fontWeight: 600 }}>
+                  {lang === 'KH' ? 'អ៊ីមែលគ្រូបង្រៀន' : 'Teacher Email'}
+                </label>
+                <input
+                  type="email"
+                  placeholder="new.teacher@school.edu"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  style={{
+                    backgroundColor: 'var(--theme-page-bg)',
+                    borderColor: 'var(--theme-border)',
+                    borderRadius: 12,
+                    padding: '11px 14px',
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.85rem', color: 'var(--theme-navy)', fontWeight: 600 }}>
+                  {lang === 'KH' ? 'ពាក្យសម្ងាត់ (យ៉ាងតិច ៦ តួ)' : 'Password (min. 6 characters)'}
+                </label>
+                <input
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  style={{
+                    backgroundColor: 'var(--theme-page-bg)',
+                    borderColor: 'var(--theme-border)',
+                    borderRadius: 12,
+                    padding: '11px 14px',
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.85rem', color: 'var(--theme-navy)', fontWeight: 600 }}>
+                  {lang === 'KH' ? 'ផ្ទៀងផ្ទាត់ពាក្យសម្ងាត់' : 'Confirm Password'}
+                </label>
                 <input
                   type="password"
                   placeholder="••••••••"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
+                  style={{
+                    backgroundColor: 'var(--theme-page-bg)',
+                    borderColor: 'var(--theme-border)',
+                    borderRadius: 12,
+                    padding: '11px 14px',
+                  }}
                 />
               </div>
-              <button className="btn" type="submit" disabled={authBusy} style={{ marginTop: 6 }}>
-                {authBusy ? 'Creating account…' : 'Create Teacher Account'}
+
+              <button
+                type="submit"
+                className="btn"
+                disabled={authBusy}
+                style={{
+                  backgroundColor: 'var(--theme-primary)',
+                  borderColor: 'var(--theme-primary)',
+                  borderRadius: 12,
+                  padding: '12px 16px',
+                  fontSize: '0.95rem',
+                  fontWeight: 700,
+                  marginTop: 6,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                }}
+              >
+                {authBusy ? (
+                  lang === 'KH' ? 'កំពុងបង្កើត…' : 'Creating account…'
+                ) : (
+                  <>
+                    <UserPlus size={18} />
+                    {lang === 'KH' ? 'បង្កើតគណនីគ្រូ' : 'Create Teacher Account'}
+                  </>
+                )}
               </button>
-              <div style={{ textAlign: 'center', marginTop: 10 }}>
-                <span className="muted" style={{ fontSize: '0.85rem' }}>Already registered? </span>
+
+              <div style={{ textAlign: 'center', marginTop: 8 }}>
+                <span style={{ fontSize: '0.85rem', color: 'var(--theme-muted)' }}>
+                  {lang === 'KH' ? 'មានគណនីរួចហើយ?' : 'Already have an account? '}{' '}
+                </span>
                 <button
                   type="button"
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'var(--brand)',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    fontSize: '0.85rem',
-                    padding: 0,
-                  }}
                   onClick={() => {
                     setAuthMode('login');
                     setAuthError('');
                   }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--theme-primary)',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    fontSize: '0.85rem',
+                    padding: 0,
+                  }}
                 >
-                  Sign in here
+                  {lang === 'KH' ? 'ចូលគណនីនៅទីនេះ' : 'Sign in here'}
                 </button>
               </div>
             </form>
@@ -354,60 +871,1947 @@ export default function AdminHome() {
     );
   }
 
-  const totalExercises = rows?.length ?? 0;
-  const publishedCount = rows?.filter((r) => r.published).length ?? 0;
-  const draftCount = totalExercises - publishedCount;
-  const totalQuestions = rows?.reduce((acc, r) => acc + (r.questions?.length || 0), 0) ?? 0;
-
-  const filteredRows = rows?.filter((r) => {
-    if (filter === 'published' && !r.published) return false;
-    if (filter === 'draft' && r.published) return false;
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      const matchTitle = (r.title || '').toLowerCase().includes(q);
-      const matchDesc = (r.description || '').toLowerCase().includes(q);
-      return matchTitle || matchDesc;
-    }
-    return true;
-  });
-
+  // =========================================================================
+  // Authenticated Teacher Dashboard (Reference Layout Redesign)
+  // =========================================================================
   return (
-    <div className="wrap stack">
-      {/* Top Header */}
-      <div className="row spread" style={{ borderBottom: '1px solid var(--line)', paddingBottom: 16 }}>
-        <div>
-          <h1 style={{ margin: 0 }}>📊 Teacher Dashboard</h1>
-          <div className="muted" style={{ marginTop: 2 }}>
-            Signed in as <strong>{user.email}</strong>
-          </div>
+    <div className="app-shell">
+      {/* Toast notification */}
+      {toastMsg && (
+        <div className="dashboard-toast">
+          <CheckCircle2 size={18} color="#1faa6b" />
+          <span>{toastMsg}</span>
         </div>
-        <div className="row">
-          <Link className="btn" href="/admin/exercises/new">+ Create New Exercise</Link>
-          <button
-            className="btn secondary"
-            onClick={() => {
-              setShowAddTeacherModal(true);
-              setAddTeacherError('');
-              setAddTeacherSuccess('');
+      )}
+
+      {/* Main App Container Shell */}
+      <div className="shell-container">
+        {/* =========================================================
+            LEFT COLUMN 1: Narrow Royal Blue Rail (72px)
+           ========================================================= */}
+        <aside
+          style={{
+            width: 72,
+            backgroundColor: 'var(--theme-sidebar-rail)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            padding: '24px 0',
+            gap: 20,
+            flexShrink: 0,
+          }}
+          className="hide-on-mobile"
+        >
+          {/* Logo Icon */}
+          <div
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 14,
+              backgroundColor: 'rgba(255, 255, 255, 0.22)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#ffffff',
+              marginBottom: 10,
             }}
           >
-            👥 Register Teacher
+            <BookOpen size={24} />
+          </div>
+
+          {/* Quick rail action icons */}
+          <button
+            type="button"
+            className="rail-icon-btn active"
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 14,
+              backgroundColor: '#ffffff',
+              color: 'var(--theme-primary)',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+            title="Dashboard"
+          >
+            <LayoutDashboard size={20} />
           </button>
-          <button className="btn secondary" onClick={() => signOut(getAuthClient())}>Sign out</button>
-        </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              const el = document.getElementById('my-exercises-section');
+              el?.scrollIntoView({ behavior: 'smooth' });
+            }}
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 14,
+              backgroundColor: 'transparent',
+              color: 'rgba(255, 255, 255, 0.8)',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+            title="Exercises"
+          >
+            <BookOpen size={20} />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              const el = document.getElementById('performance-section');
+              el?.scrollIntoView({ behavior: 'smooth' });
+            }}
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 14,
+              backgroundColor: 'transparent',
+              color: 'rgba(255, 255, 255, 0.8)',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+            title="Performance"
+          >
+            <BarChart3 size={20} />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowAddTeacherModal(true)}
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 14,
+              backgroundColor: 'transparent',
+              color: 'rgba(255, 255, 255, 0.8)',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+            title="Register Another Teacher"
+          >
+            <Users size={20} />
+          </button>
+
+          <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center' }}>
+            <button
+              type="button"
+              onClick={toggleTheme}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 12,
+                backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                color: '#ffffff',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              title="Toggle Theme"
+            >
+              {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+            </button>
+            <button
+              type="button"
+              onClick={() => signOut(getAuthClient())}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 12,
+                backgroundColor: 'rgba(217, 68, 60, 0.25)',
+                color: '#ffffff',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              title="Log Out"
+            >
+              <LogOut size={18} />
+            </button>
+          </div>
+        </aside>
+
+        {/* =========================================================
+            LEFT COLUMN 2: Wider Blue Sidebar Panel (210px)
+           ========================================================= */}
+        <nav
+          style={{
+            width: 210,
+            backgroundColor: 'var(--theme-sidebar-panel)',
+            display: 'flex',
+            flexDirection: 'column',
+            padding: '28px 0 24px 20px',
+            flexShrink: 0,
+          }}
+          className="hide-on-mobile"
+        >
+          {/* Logo Title */}
+          <div style={{ marginBottom: 36, paddingRight: 20 }}>
+            <h2 style={{ color: '#ffffff', margin: 0, fontSize: '1.4rem', fontWeight: 800, letterSpacing: '-0.02em' }}>
+              MathTest
+            </h2>
+            <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: '0.8rem', fontWeight: 500 }}>
+              Teacher Workspace
+            </div>
+          </div>
+
+          {/* Navigation Items (active item merges with white content via rounded corner tab) */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
+            <button
+              type="button"
+              className="sidebar-tab-active"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                padding: '13px 18px',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: '0.94rem',
+                textAlign: 'left',
+              }}
+            >
+              <LayoutDashboard size={18} />
+              <span>Dashboard</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                const el = document.getElementById('my-exercises-section');
+                el?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                padding: '13px 18px',
+                border: 'none',
+                background: 'transparent',
+                color: 'rgba(255, 255, 255, 0.85)',
+                borderRadius: '16px 0 0 16px',
+                cursor: 'pointer',
+                fontSize: '0.94rem',
+                fontWeight: 600,
+                textAlign: 'left',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <BookOpen size={18} />
+              <span>Exercises</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                const el = document.getElementById('performance-section');
+                el?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                padding: '13px 18px',
+                border: 'none',
+                background: 'transparent',
+                color: 'rgba(255, 255, 255, 0.85)',
+                borderRadius: '16px 0 0 16px',
+                cursor: 'pointer',
+                fontSize: '0.94rem',
+                fontWeight: 600,
+                textAlign: 'left',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <BarChart3 size={18} />
+              <span>Results</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                const el = document.getElementById('accuracy-section');
+                el?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                padding: '13px 18px',
+                border: 'none',
+                background: 'transparent',
+                color: 'rgba(255, 255, 255, 0.85)',
+                borderRadius: '16px 0 0 16px',
+                cursor: 'pointer',
+                fontSize: '0.94rem',
+                fontWeight: 600,
+                textAlign: 'left',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <Database size={18} />
+              <span>Question Bank</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                const el = document.getElementById('live-now-section');
+                el?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                padding: '13px 18px',
+                border: 'none',
+                background: 'transparent',
+                color: 'rgba(255, 255, 255, 0.85)',
+                borderRadius: '16px 0 0 16px',
+                cursor: 'pointer',
+                fontSize: '0.94rem',
+                fontWeight: 600,
+                textAlign: 'left',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <Users size={18} />
+              <span>Students</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowAddTeacherModal(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                padding: '13px 18px',
+                border: 'none',
+                background: 'transparent',
+                color: 'rgba(255, 255, 255, 0.85)',
+                borderRadius: '16px 0 0 16px',
+                cursor: 'pointer',
+                fontSize: '0.94rem',
+                fontWeight: 600,
+                textAlign: 'left',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <Settings size={18} />
+              <span>Settings</span>
+            </button>
+          </div>
+
+          {/* Sidebar bottom: Register colleague & Log out */}
+          <div style={{ marginTop: 'auto', paddingRight: 20, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <button
+              type="button"
+              onClick={() => setShowAddTeacherModal(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: '10px 14px',
+                borderRadius: 12,
+                backgroundColor: 'rgba(255, 255, 255, 0.12)',
+                color: '#ffffff',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: '0.84rem',
+                fontWeight: 600,
+              }}
+            >
+              <UserPlus size={16} />
+              <span>+ Add Teacher</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => signOut(getAuthClient())}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: '10px 14px',
+                borderRadius: 12,
+                backgroundColor: 'transparent',
+                color: 'rgba(255, 255, 255, 0.75)',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: '0.88rem',
+                fontWeight: 600,
+              }}
+            >
+              <LogOut size={16} />
+              <span>Log Out</span>
+            </button>
+          </div>
+        </nav>
+
+        {/* =========================================================
+            CONTENT AREA: Top Bar + 12-Column Grid
+           ========================================================= */}
+        <main
+          style={{
+            flex: 1,
+            backgroundColor: 'var(--theme-page-bg)',
+            overflowY: 'auto',
+            padding: '24px 28px 48px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 24,
+            minWidth: 0,
+          }}
+          className="custom-scrollbar"
+        >
+          {/* Top Bar */}
+          <header
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 16,
+              flexWrap: 'wrap',
+            }}
+          >
+            {/* Search Box */}
+            <div
+              style={{
+                position: 'relative',
+                flex: 1,
+                maxWidth: 420,
+                minWidth: 220,
+              }}
+            >
+              <Search
+                size={18}
+                style={{
+                  position: 'absolute',
+                  left: 14,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: 'var(--theme-muted)',
+                }}
+              />
+              <input
+                type="text"
+                placeholder={lang === 'KH' ? 'ស្វែងរកលំហាត់តាមចំណងជើង...' : 'Search exercises by title...'}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                style={{
+                  padding: '10px 14px 10px 42px',
+                  backgroundColor: 'var(--theme-card-bg)',
+                  borderColor: 'transparent',
+                  borderRadius: 14,
+                  boxShadow: '0 2px 10px rgba(0,0,0,0.03)',
+                  fontSize: '0.9rem',
+                }}
+              />
+            </div>
+
+            {/* Right Top Bar Controls */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              {/* Language Switcher */}
+              <button
+                type="button"
+                onClick={() => setLang((prev) => (prev === 'EN' ? 'KH' : 'EN'))}
+                style={{
+                  backgroundColor: 'var(--theme-card-bg)',
+                  border: '1px solid var(--theme-border)',
+                  color: 'var(--theme-navy)',
+                  borderRadius: 12,
+                  padding: '7px 12px',
+                  fontWeight: 700,
+                  fontSize: '0.82rem',
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
+                }}
+              >
+                {lang === 'EN' ? '🇬🇧 EN' : '🇰🇭 KH'}
+              </button>
+
+              {/* Theme Toggle Button */}
+              <button
+                type="button"
+                onClick={toggleTheme}
+                style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 12,
+                  backgroundColor: 'var(--theme-card-bg)',
+                  border: '1px solid var(--theme-border)',
+                  color: 'var(--theme-navy)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
+                }}
+                aria-label="Toggle theme"
+              >
+                {theme === 'light' ? <Moon size={17} /> : <Sun size={17} />}
+              </button>
+
+              {/* Notification Bell */}
+              <div className="notif-container" style={{ position: 'relative' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowNotifications((p) => !p)}
+                  style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 12,
+                    backgroundColor: 'var(--theme-card-bg)',
+                    border: '1px solid var(--theme-border)',
+                    color: 'var(--theme-navy)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    position: 'relative',
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
+                  }}
+                  aria-label="Notifications"
+                >
+                  <Bell size={18} />
+                  {submissionsToday.length > 0 && (
+                    <span
+                      style={{
+                        position: 'absolute',
+                        top: 7,
+                        right: 7,
+                        width: 8,
+                        height: 8,
+                        borderRadius: '50%',
+                        backgroundColor: 'var(--theme-danger)',
+                      }}
+                    />
+                  )}
+                </button>
+
+                {showNotifications && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      right: 0,
+                      top: 48,
+                      width: 290,
+                      backgroundColor: 'var(--theme-card-bg)',
+                      borderRadius: 16,
+                      boxShadow: 'var(--theme-shadow-hover)',
+                      border: '1px solid var(--theme-border)',
+                      padding: 16,
+                      zIndex: 100,
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+                      <strong style={{ fontSize: '0.9rem' }}>Notifications</strong>
+                      <span style={{ fontSize: '0.78rem', color: 'var(--theme-muted)' }}>
+                        {submissionsToday.length} today
+                      </span>
+                    </div>
+                    {submissionsToday.length === 0 ? (
+                      <div style={{ fontSize: '0.84rem', color: 'var(--theme-muted)', textAlign: 'center', padding: '12px 0' }}>
+                        No new notifications today.
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {submissionsToday.slice(0, 4).map((s) => (
+                          <div
+                            key={s.id}
+                            style={{
+                              padding: '8px 10px',
+                              backgroundColor: 'var(--theme-page-bg)',
+                              borderRadius: 10,
+                              fontSize: '0.82rem',
+                            }}
+                          >
+                            <strong>{s.studentName}</strong> submitted an exercise ({s.score}/{s.total})
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Create Exercise Primary CTA */}
+              <Link
+                href="/admin/exercises/new"
+                className="btn"
+                style={{
+                  backgroundColor: 'var(--theme-primary)',
+                  borderColor: 'var(--theme-primary)',
+                  borderRadius: 12,
+                  padding: '9px 16px',
+                  fontWeight: 700,
+                  fontSize: '0.88rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  boxShadow: '0 4px 14px rgba(74, 103, 214, 0.3)',
+                }}
+              >
+                <Plus size={16} />
+                <span>{lang === 'KH' ? 'បង្កើតលំហាត់ថ្មី' : 'Create Exercise'}</span>
+              </Link>
+
+              {/* Teacher Profile Avatar & Email */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '4px 8px 4px 4px',
+                  backgroundColor: 'var(--theme-card-bg)',
+                  borderRadius: 14,
+                  border: '1px solid var(--theme-border)',
+                }}
+              >
+                <div
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 10,
+                    background: 'linear-gradient(135deg, #4a67d6 0%, #3d56a6 100%)',
+                    color: '#ffffff',
+                    fontWeight: 700,
+                    fontSize: '0.85rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  {teacherName.charAt(0)}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', paddingRight: 4 }}>
+                  <span style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--theme-navy)', lineHeight: 1.2 }}>
+                    {teacherName}
+                  </span>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--theme-muted)', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {user.email}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          {dataError && (
+            <div
+              style={{
+                backgroundColor: 'var(--bad-bg)',
+                color: 'var(--bad)',
+                padding: '12px 16px',
+                borderRadius: 14,
+                border: '1px solid #fed7d7',
+                fontSize: '0.9rem',
+              }}
+            >
+              {dataError}
+            </div>
+          )}
+
+          {/* =========================================================
+              MAIN 12-COLUMN GRID (Center 8 cols, Right 4 cols)
+             ========================================================= */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(12, 1fr)',
+              gap: 24,
+            }}
+          >
+            {/* -------------------------------------------------------
+                CENTER COLUMN (Span 8 cols)
+               ------------------------------------------------------- */}
+            <div
+              style={{
+                gridColumn: 'span 8',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 24,
+                minWidth: 0,
+              }}
+              className="center-column-span"
+            >
+              {/* 1. Greeting Card with Flat Math Illustration */}
+              <div
+                style={{
+                  backgroundColor: 'var(--theme-card-bg)',
+                  borderRadius: 20,
+                  padding: '24px 28px',
+                  boxShadow: 'var(--theme-shadow)',
+                  border: '1px solid var(--theme-border-subtle)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 20,
+                  overflow: 'hidden',
+                  position: 'relative',
+                }}
+              >
+                <div style={{ maxWidth: 440, zIndex: 1 }}>
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      backgroundColor: 'rgba(74, 103, 214, 0.1)',
+                      color: 'var(--theme-primary)',
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
+                      padding: '3px 10px',
+                      borderRadius: 999,
+                      marginBottom: 8,
+                    }}
+                  >
+                    👋 {lang === 'KH' ? 'សួស្តីគ្រូបង្រៀន' : 'Teacher Dashboard'}
+                  </span>
+                  <h1
+                    style={{
+                      fontSize: '1.7rem',
+                      fontWeight: 800,
+                      color: 'var(--theme-navy)',
+                      margin: '0 0 8px 0',
+                      letterSpacing: '-0.02em',
+                    }}
+                  >
+                    {lang === 'KH' ? `សួស្តី, ${teacherName}!` : `Hello, ${teacherName}!`}
+                  </h1>
+                  <p style={{ margin: '0 0 16px', color: 'var(--theme-muted)', fontSize: '0.93rem' }}>
+                    {submissionsToday.length > 0
+                      ? lang === 'KH'
+                        ? `អ្នកមានការបញ្ជូនចម្លើយថ្មីចំនួន ${submissionsToday.length} ថ្ងៃនេះ។ តោះពិនិត្យមើលវា។`
+                        : `You have ${submissionsToday.length} new submissions today. Let's review them.`
+                      : lang === 'KH'
+                      ? 'លំហាត់គណិតវិទ្យារបស់អ្នកកំពុងដំណើរការយ៉ាងរលូន។'
+                      : 'Your math exercises are active and ready for your students.'}
+                  </p>
+                  {exercises && exercises.length > 0 && (
+                    <Link
+                      href={`/admin/exercises/${exercises[0].id}/results`}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        color: 'var(--theme-primary)',
+                        fontWeight: 700,
+                        fontSize: '0.88rem',
+                        textDecoration: 'none',
+                      }}
+                    >
+                      <span>{lang === 'KH' ? 'ពិនិត្យលទ្ធផល →' : 'Review latest results →'}</span>
+                    </Link>
+                  )}
+                </div>
+
+                {/* Flat Math Illustration (Pure Inline SVG) */}
+                <div style={{ width: 150, height: 120, flexShrink: 0 }}>
+                  <svg viewBox="0 0 180 140" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: '100%', height: '100%' }}>
+                    <circle cx="90" cy="70" r="58" fill="#4a67d6" fillOpacity="0.08" />
+                    <rect x="35" y="45" width="80" height="52" rx="8" fill="#4a67d6" />
+                    <rect x="42" y="52" width="66" height="38" rx="4" fill="#ffffff" />
+                    <path d="M52 64L60 76L76 60" stroke="#1faa6b" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+                    <circle cx="120" cy="40" r="14" fill="#e0a000" fillOpacity="0.2" />
+                    <text x="115" y="45" fill="#e0a000" fontSize="14" fontWeight="bold">∑</text>
+                    <rect x="95" y="80" width="50" height="32" rx="6" fill="#3d56a6" />
+                    <text x="108" y="101" fill="#ffffff" fontSize="13" fontWeight="bold">π r²</text>
+                    <path d="M135 25L138 32L145 35L138 38L135 45L132 38L125 35L132 32Z" fill="#e0a000" />
+                    <line x1="28" y1="108" x2="68" y2="108" stroke="#4a67d6" strokeWidth="6" strokeLinecap="round" />
+                    <circle cx="34" cy="108" r="1.5" fill="#ffffff" />
+                    <circle cx="44" cy="108" r="1.5" fill="#ffffff" />
+                    <circle cx="54" cy="108" r="1.5" fill="#ffffff" />
+                    <circle cx="64" cy="108" r="1.5" fill="#ffffff" />
+                  </svg>
+                </div>
+              </div>
+
+              {/* Stat Cards (Row of 4 Cards) */}
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+                  gap: 16,
+                }}
+              >
+                <div
+                  style={{
+                    backgroundColor: 'var(--theme-card-bg)',
+                    borderRadius: 16,
+                    padding: '16px 18px',
+                    boxShadow: 'var(--theme-shadow)',
+                    border: '1px solid var(--theme-border-subtle)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                  }}
+                >
+                  <span style={{ fontSize: '0.76rem', color: 'var(--theme-muted)', fontWeight: 700, textTransform: 'uppercase' }}>
+                    Total Exercises
+                  </span>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                    <span style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--theme-primary)' }}>
+                      {exercises?.length ?? 0}
+                    </span>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--theme-muted)' }}>tests</span>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    backgroundColor: 'var(--theme-card-bg)',
+                    borderRadius: 16,
+                    padding: '16px 18px',
+                    boxShadow: 'var(--theme-shadow)',
+                    border: '1px solid var(--theme-border-subtle)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                  }}
+                >
+                  <span style={{ fontSize: '0.76rem', color: 'var(--theme-muted)', fontWeight: 700, textTransform: 'uppercase' }}>
+                    Published (Live)
+                  </span>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                    <span style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--theme-success)' }}>
+                      {exercises?.filter((e) => e.published).length ?? 0}
+                    </span>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--theme-muted)' }}>active</span>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    backgroundColor: 'var(--theme-card-bg)',
+                    borderRadius: 16,
+                    padding: '16px 18px',
+                    boxShadow: 'var(--theme-shadow)',
+                    border: '1px solid var(--theme-border-subtle)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                  }}
+                >
+                  <span style={{ fontSize: '0.76rem', color: 'var(--theme-muted)', fontWeight: 700, textTransform: 'uppercase' }}>
+                    Drafts
+                  </span>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                    <span style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--theme-warning)' }}>
+                      {(exercises?.length ?? 0) - (exercises?.filter((e) => e.published).length ?? 0)}
+                    </span>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--theme-muted)' }}>editing</span>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    backgroundColor: 'var(--theme-card-bg)',
+                    borderRadius: 16,
+                    padding: '16px 18px',
+                    boxShadow: 'var(--theme-shadow)',
+                    border: '1px solid var(--theme-border-subtle)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                  }}
+                >
+                  <span style={{ fontSize: '0.76rem', color: 'var(--theme-muted)', fontWeight: 700, textTransform: 'uppercase' }}>
+                    Submissions Today
+                  </span>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                    <span style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
+                      {submissionsToday.length}
+                    </span>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--theme-muted)' }}>students</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. Performance Card */}
+              <div
+                id="performance-section"
+                style={{
+                  backgroundColor: 'var(--theme-card-bg)',
+                  borderRadius: 20,
+                  padding: '24px 28px',
+                  boxShadow: 'var(--theme-shadow)',
+                  border: '1px solid var(--theme-border-subtle)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 20,
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
+                      Performance
+                    </h3>
+                    <span style={{ fontSize: '0.82rem', color: 'var(--theme-muted)' }}>
+                      Average student score across recent exercises
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <select
+                      value={selectedMonth}
+                      onChange={(e) => setSelectedMonth(e.target.value)}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: 10,
+                        backgroundColor: 'var(--theme-page-bg)',
+                        borderColor: 'var(--theme-border)',
+                        fontSize: '0.84rem',
+                        fontWeight: 600,
+                        width: 'auto',
+                      }}
+                    >
+                      <option value="All">All Time</option>
+                      <option value="October 2026">October 2026</option>
+                      <option value="September 2026">September 2026</option>
+                    </select>
+
+                    <button
+                      type="button"
+                      className="btn small secondary"
+                      style={{ borderRadius: 10, fontSize: '0.82rem', fontWeight: 700 }}
+                    >
+                      All Exercises
+                    </button>
+                  </div>
+                </div>
+
+                {/* Score Summary + Bar Chart */}
+                <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                      <span style={{ fontSize: '2.5rem', fontWeight: 900, color: 'var(--theme-navy)', letterSpacing: '-0.03em' }}>
+                        {overallAvgScore}%
+                      </span>
+                      <TrendingUp size={20} color="var(--theme-success)" />
+                    </div>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--theme-muted)', marginTop: 2 }}>
+                      {exercises?.[0]?.title ? `Latest: ${exercises[0].title}` : 'Average across tests'}
+                    </div>
+                  </div>
+
+                  {/* Two-tone Bar Chart of 6 Recent Exercises */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-end',
+                      gap: 16,
+                      height: 140,
+                      flex: 1,
+                      justifyContent: 'flex-end',
+                      minWidth: 260,
+                    }}
+                  >
+                    {recentExercisesForChart.length === 0 ? (
+                      <div style={{ color: 'var(--theme-muted)', fontSize: '0.85rem' }}>No exercise data yet.</div>
+                    ) : (
+                      recentExercisesForChart.map((item, idx) => {
+                        const heightPct = Math.max(18, item.avg);
+                        return (
+                          <div
+                            key={item.id}
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              gap: 6,
+                              width: 38,
+                            }}
+                          >
+                            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--theme-muted)' }}>
+                              {item.avg}%
+                            </span>
+                            <div
+                              style={{
+                                width: '100%',
+                                height: 90,
+                                backgroundColor: 'rgba(74, 103, 214, 0.08)',
+                                borderRadius: 8,
+                                display: 'flex',
+                                alignItems: 'flex-end',
+                                overflow: 'hidden',
+                              }}
+                            >
+                              <div
+                                style={{
+                                  width: '100%',
+                                  height: `${heightPct}%`,
+                                  background: idx % 2 === 0
+                                    ? 'linear-gradient(180deg, #4a67d6 0%, #3d56a6 100%)'
+                                    : 'linear-gradient(180deg, #5b7bdc 0%, #4a67d6 100%)',
+                                  borderRadius: 8,
+                                  transition: 'height 0.3s ease',
+                                }}
+                              />
+                            </div>
+                            <span
+                              style={{
+                                fontSize: '0.72rem',
+                                color: 'var(--theme-muted)',
+                                maxWidth: 44,
+                                textAlign: 'center',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}
+                              title={item.title}
+                            >
+                              {item.title.slice(0, 5)}
+                            </span>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. Per-Question Accuracy (Grid of Donut Rings: 2 cols x 3 rows) */}
+              <div
+                id="accuracy-section"
+                style={{
+                  backgroundColor: 'var(--theme-card-bg)',
+                  borderRadius: 20,
+                  padding: '24px 28px',
+                  boxShadow: 'var(--theme-shadow)',
+                  border: '1px solid var(--theme-border-subtle)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 16,
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
+                      Per-Question Accuracy
+                    </h3>
+                    <span style={{ fontSize: '0.82rem', color: 'var(--theme-muted)' }}>
+                      Accuracy rings under 50% are red (needs review), 50%+ are blue
+                    </span>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, 1fr)',
+                    gap: 16,
+                  }}
+                  className="accuracy-grid"
+                >
+                  {accuracyRings.map((item) => {
+                    const radius = 32;
+                    const circumference = 2 * Math.PI * radius;
+                    const strokeOffset = circumference - (item.pct / 100) * circumference;
+                    const isLow = item.pct < 50;
+                    const ringColor = isLow ? 'var(--theme-danger)' : 'var(--theme-primary)';
+
+                    return (
+                      <div
+                        key={item.id}
+                        style={{
+                          backgroundColor: 'var(--theme-page-bg)',
+                          borderRadius: 16,
+                          padding: '16px 12px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          gap: 10,
+                          textAlign: 'center',
+                        }}
+                      >
+                        {/* SVG Donut Ring */}
+                        <div style={{ position: 'relative', width: 78, height: 78 }}>
+                          <svg width="78" height="78" viewBox="0 0 78 78">
+                            <circle
+                              cx="39"
+                              cy="39"
+                              r={radius}
+                              fill="none"
+                              stroke="var(--theme-border)"
+                              strokeWidth="7"
+                            />
+                            <circle
+                              cx="39"
+                              cy="39"
+                              r={radius}
+                              fill="none"
+                              stroke={ringColor}
+                              strokeWidth="7"
+                              strokeDasharray={circumference}
+                              strokeDashoffset={strokeOffset}
+                              strokeLinecap="round"
+                              transform="rotate(-90 39 39)"
+                              style={{ transition: 'stroke-dashoffset 0.4s ease' }}
+                            />
+                          </svg>
+                          <div
+                            style={{
+                              position: 'absolute',
+                              inset: 0,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontWeight: 800,
+                              fontSize: '0.95rem',
+                              color: ringColor,
+                            }}
+                          >
+                            {item.pct}%
+                          </div>
+                        </div>
+
+                        <span
+                          style={{
+                            fontSize: '0.82rem',
+                            fontWeight: 700,
+                            color: 'var(--theme-navy)',
+                            maxWidth: 120,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {item.label}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 4. My Exercises List (Replaces Linked Teachers) */}
+              <div
+                id="my-exercises-section"
+                style={{
+                  backgroundColor: 'var(--theme-card-bg)',
+                  borderRadius: 20,
+                  padding: '24px 28px',
+                  boxShadow: 'var(--theme-shadow)',
+                  border: '1px solid var(--theme-border-subtle)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 16,
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
+                      My Exercises
+                    </h3>
+                    <span style={{ fontSize: '0.82rem', color: 'var(--theme-muted)' }}>
+                      Manage tests, view live submissions, copy links, or print QR codes
+                    </span>
+                  </div>
+
+                  {/* Filter Pills */}
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      type="button"
+                      className={`btn small ${filter === 'all' ? '' : 'secondary'}`}
+                      onClick={() => setFilter('all')}
+                      style={{ borderRadius: 10, fontSize: '0.8rem' }}
+                    >
+                      All ({exercises?.length ?? 0})
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn small ${filter === 'published' ? '' : 'secondary'}`}
+                      onClick={() => setFilter('published')}
+                      style={{ borderRadius: 10, fontSize: '0.8rem' }}
+                    >
+                      Published ({exercises?.filter((e) => e.published).length ?? 0})
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn small ${filter === 'draft' ? '' : 'secondary'}`}
+                      onClick={() => setFilter('draft')}
+                      style={{ borderRadius: 10, fontSize: '0.8rem' }}
+                    >
+                      Drafts ({exercises?.filter((e) => !e.published).length ?? 0})
+                    </button>
+                  </div>
+                </div>
+
+                {/* Exercises Rows */}
+                {loadingData ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {[1, 2, 3].map((n) => (
+                      <div key={n} style={{ height: 64, borderRadius: 12 }} className="skeleton" />
+                    ))}
+                  </div>
+                ) : filteredExercises.length === 0 ? (
+                  <div
+                    style={{
+                      textAlign: 'center',
+                      padding: '36px 16px',
+                      backgroundColor: 'var(--theme-page-bg)',
+                      borderRadius: 16,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: 12,
+                    }}
+                  >
+                    <BookOpen size={36} color="var(--theme-muted)" />
+                    <p style={{ margin: 0, color: 'var(--theme-muted)', fontSize: '0.92rem' }}>
+                      {search ? 'No exercises match your search query.' : 'No exercises created yet.'}
+                    </p>
+                    <Link
+                      href="/admin/exercises/new"
+                      className="btn"
+                      style={{
+                        backgroundColor: 'var(--theme-primary)',
+                        borderColor: 'var(--theme-primary)',
+                        borderRadius: 12,
+                        padding: '8px 16px',
+                        fontSize: '0.88rem',
+                      }}
+                    >
+                      Create your first exercise
+                    </Link>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {filteredExercises.map((r) => {
+                      const stats = exStats.get(r.id);
+                      const subCount = stats?.count ?? 0;
+                      const isMenuOpen = activeMenuId === r.id;
+
+                      return (
+                        <div
+                          key={r.id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '14px 18px',
+                            backgroundColor: 'var(--theme-page-bg)',
+                            borderRadius: 14,
+                            gap: 14,
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          {/* Title + Meta */}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                              <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700, color: 'var(--theme-navy)' }}>
+                                {r.title || 'Untitled'}
+                              </h4>
+                              <span
+                                style={{
+                                  fontSize: '0.72rem',
+                                  fontWeight: 700,
+                                  padding: '2px 8px',
+                                  borderRadius: 999,
+                                  backgroundColor: r.published ? 'var(--good-bg)' : 'var(--warn-bg)',
+                                  color: r.published ? 'var(--theme-success)' : 'var(--theme-warning)',
+                                }}
+                              >
+                                {r.published ? 'Published' : 'Draft'}
+                              </span>
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: '0.8rem', color: 'var(--theme-muted)' }}>
+                              <span>{r.questions?.length ?? 0} Qs</span>
+                              <span>•</span>
+                              <span>{r.timeLimitMinutes ? `${r.timeLimitMinutes}m limit` : 'No time limit'}</span>
+                              <span>•</span>
+                              <span>{subCount} submissions</span>
+                            </div>
+
+                            {/* Submissions Mini Progress Bar */}
+                            <div
+                              style={{
+                                width: 120,
+                                height: 4,
+                                backgroundColor: 'var(--theme-border)',
+                                borderRadius: 999,
+                                marginTop: 6,
+                                overflow: 'hidden',
+                              }}
+                            >
+                              <div
+                                style={{
+                                  width: `${Math.min(100, subCount * 10)}%`,
+                                  height: '100%',
+                                  backgroundColor: 'var(--theme-primary)',
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                            {/* QR Code Button */}
+                            <button
+                              type="button"
+                              onClick={() => setQrModalEx(r)}
+                              style={{
+                                width: 34,
+                                height: 34,
+                                borderRadius: 10,
+                                backgroundColor: 'var(--theme-card-bg)',
+                                border: '1px solid var(--theme-border)',
+                                color: 'var(--theme-navy)',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                              title="Show QR Code"
+                              aria-label="QR Code"
+                            >
+                              <QrCode size={16} />
+                            </button>
+
+                            {/* Results Primary Button */}
+                            <Link
+                              href={`/admin/exercises/${r.id}/results`}
+                              className="btn small"
+                              style={{
+                                backgroundColor: 'var(--theme-primary)',
+                                borderColor: 'var(--theme-primary)',
+                                borderRadius: 10,
+                                padding: '6px 12px',
+                                fontSize: '0.82rem',
+                                fontWeight: 700,
+                              }}
+                            >
+                              Results
+                            </Link>
+
+                            {/* More Actions Dropdown Menu */}
+                            <div className="action-menu-container" style={{ position: 'relative' }}>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveMenuId(isMenuOpen ? null : r.id);
+                                }}
+                                style={{
+                                  width: 34,
+                                  height: 34,
+                                  borderRadius: 10,
+                                  backgroundColor: 'var(--theme-card-bg)',
+                                  border: '1px solid var(--theme-border)',
+                                  color: 'var(--theme-navy)',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                }}
+                                aria-label="More actions"
+                              >
+                                <MoreVertical size={16} />
+                              </button>
+
+                              {isMenuOpen && (
+                                <div
+                                  style={{
+                                    position: 'absolute',
+                                    right: 0,
+                                    top: 40,
+                                    width: 170,
+                                    backgroundColor: 'var(--theme-card-bg)',
+                                    borderRadius: 14,
+                                    boxShadow: 'var(--theme-shadow-hover)',
+                                    border: '1px solid var(--theme-border)',
+                                    padding: '6px 0',
+                                    zIndex: 50,
+                                  }}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      copyStudentLink(r.id);
+                                      setActiveMenuId(null);
+                                    }}
+                                    style={{
+                                      width: '100%',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: 10,
+                                      padding: '8px 14px',
+                                      border: 'none',
+                                      background: 'none',
+                                      color: 'var(--theme-navy)',
+                                      fontSize: '0.84rem',
+                                      fontWeight: 600,
+                                      cursor: 'pointer',
+                                      textAlign: 'left',
+                                    }}
+                                  >
+                                    <Copy size={14} />
+                                    <span>Copy Link</span>
+                                  </button>
+
+                                  <Link
+                                    href={`/admin/exercises/${r.id}`}
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: 10,
+                                      padding: '8px 14px',
+                                      color: 'var(--theme-navy)',
+                                      fontSize: '0.84rem',
+                                      fontWeight: 600,
+                                      textDecoration: 'none',
+                                    }}
+                                  >
+                                    <Edit3 size={14} />
+                                    <span>Edit</span>
+                                  </Link>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      handleDuplicateExercise(r);
+                                      setActiveMenuId(null);
+                                    }}
+                                    style={{
+                                      width: '100%',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: 10,
+                                      padding: '8px 14px',
+                                      border: 'none',
+                                      background: 'none',
+                                      color: 'var(--theme-navy)',
+                                      fontSize: '0.84rem',
+                                      fontWeight: 600,
+                                      cursor: 'pointer',
+                                      textAlign: 'left',
+                                    }}
+                                  >
+                                    <CopyPlus size={14} />
+                                    <span>Duplicate</span>
+                                  </button>
+
+                                  <div style={{ height: 1, backgroundColor: 'var(--theme-border)', margin: '4px 0' }} />
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setDeleteConfirmEx(r);
+                                      setActiveMenuId(null);
+                                    }}
+                                    style={{
+                                      width: '100%',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: 10,
+                                      padding: '8px 14px',
+                                      border: 'none',
+                                      background: 'none',
+                                      color: 'var(--theme-danger)',
+                                      fontSize: '0.84rem',
+                                      fontWeight: 600,
+                                      cursor: 'pointer',
+                                      textAlign: 'left',
+                                    }}
+                                  >
+                                    <Trash2 size={14} />
+                                    <span>Delete</span>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* -------------------------------------------------------
+                RIGHT COLUMN (Span 4 cols)
+               ------------------------------------------------------- */}
+            <div
+              style={{
+                gridColumn: 'span 4',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 24,
+                minWidth: 0,
+              }}
+              className="right-column-span"
+            >
+              {/* 5. Right Column: "Live Now" Card (Replaces Calendar) */}
+              <div
+                id="live-now-section"
+                style={{
+                  backgroundColor: 'var(--theme-card-bg)',
+                  borderRadius: 20,
+                  padding: '24px 22px',
+                  boxShadow: 'var(--theme-shadow)',
+                  border: '1px solid var(--theme-border-subtle)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 16,
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: '50%',
+                        backgroundColor: 'var(--theme-danger)',
+                        boxShadow: '0 0 0 4px rgba(217, 68, 60, 0.2)',
+                      }}
+                    />
+                    <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
+                      Live Now
+                    </h3>
+                  </div>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--theme-muted)' }}>
+                    Real-time activity
+                  </span>
+                </div>
+
+                {liveNowList.length === 0 ? (
+                  <div
+                    style={{
+                      textAlign: 'center',
+                      padding: '24px 12px',
+                      color: 'var(--theme-muted)',
+                      fontSize: '0.86rem',
+                      backgroundColor: 'var(--theme-page-bg)',
+                      borderRadius: 14,
+                    }}
+                  >
+                    No students taking tests right now.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {liveNowList.map((item, idx) => {
+                      // Most recent item highlighted in solid royal blue with white text!
+                      const isHighlighted = idx === 0;
+
+                      return (
+                        <div
+                          key={item.id}
+                          style={{
+                            padding: '14px 16px',
+                            borderRadius: 14,
+                            backgroundColor: isHighlighted ? 'var(--theme-primary)' : 'var(--theme-page-bg)',
+                            color: isHighlighted ? '#ffffff' : 'var(--theme-navy)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 12,
+                            boxShadow: isHighlighted ? '0 6px 20px rgba(74, 103, 214, 0.35)' : 'none',
+                          }}
+                        >
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontWeight: 800, fontSize: '0.92rem', marginBottom: 2 }}>
+                              {item.studentName}
+                            </div>
+                            <div
+                              style={{
+                                fontSize: '0.78rem',
+                                color: isHighlighted ? 'rgba(255,255,255,0.85)' : 'var(--theme-muted)',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {item.exerciseTitle}
+                            </div>
+                          </div>
+
+                          <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                            <div
+                              style={{
+                                fontWeight: 800,
+                                fontSize: '0.88rem',
+                                color: isHighlighted ? '#ffffff' : 'var(--theme-navy)',
+                              }}
+                            >
+                              {item.scoreText}
+                            </div>
+                            <span
+                              style={{
+                                fontSize: '0.72rem',
+                                color: isHighlighted ? 'rgba(255,255,255,0.7)' : 'var(--theme-muted)',
+                              }}
+                            >
+                              {item.timeAgo}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* 6. Right Column: "Upcoming Deadlines" Card */}
+              <div
+                style={{
+                  backgroundColor: 'var(--theme-card-bg)',
+                  borderRadius: 20,
+                  padding: '24px 22px',
+                  boxShadow: 'var(--theme-shadow)',
+                  border: '1px solid var(--theme-border-subtle)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 16,
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Clock size={18} color="var(--theme-primary)" />
+                    <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
+                      Upcoming Deadlines
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const el = document.getElementById('my-exercises-section');
+                      el?.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--theme-primary)',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      padding: 0,
+                    }}
+                  >
+                    See all
+                  </button>
+                </div>
+
+                {upcomingDeadlines.length === 0 ? (
+                  <div
+                    style={{
+                      textAlign: 'center',
+                      padding: '24px 12px',
+                      color: 'var(--theme-muted)',
+                      fontSize: '0.86rem',
+                      backgroundColor: 'var(--theme-page-bg)',
+                      borderRadius: 14,
+                    }}
+                  >
+                    No upcoming deadlines set.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {upcomingDeadlines.map((e) => (
+                      <div
+                        key={e.id}
+                        style={{
+                          padding: '12px 14px',
+                          borderRadius: 14,
+                          backgroundColor: 'var(--theme-page-bg)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 12,
+                        }}
+                      >
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <h4 style={{ margin: '0 0 2px', fontSize: '0.88rem', fontWeight: 700, color: 'var(--theme-navy)' }}>
+                            {e.title || 'Untitled'}
+                          </h4>
+                          <span style={{ fontSize: '0.74rem', color: 'var(--theme-muted)' }}>
+                            Due {new Date(e.deadline!).toLocaleDateString()}
+                          </span>
+                        </div>
+
+                        <span
+                          style={{
+                            fontSize: '0.72rem',
+                            fontWeight: 700,
+                            padding: '3px 8px',
+                            borderRadius: 8,
+                            backgroundColor: e.isUrgent ? 'var(--bad-bg)' : 'rgba(74, 103, 214, 0.1)',
+                            color: e.isUrgent ? 'var(--theme-danger)' : 'var(--theme-primary)',
+                            flexShrink: 0,
+                          }}
+                        >
+                          {e.countdownText}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 7. Teacher Quick Card (Colleagues / Invites) */}
+              <div
+                style={{
+                  backgroundColor: 'var(--theme-card-bg)',
+                  borderRadius: 20,
+                  padding: '20px 22px',
+                  boxShadow: 'var(--theme-shadow)',
+                  border: '1px solid var(--theme-border-subtle)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                }}
+              >
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '0.92rem', fontWeight: 700, color: 'var(--theme-navy)' }}>
+                    Add another teacher?
+                  </h4>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--theme-muted)' }}>
+                    Create login credentials for fellow teachers
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAddTeacherModal(true)}
+                  className="btn small"
+                  style={{
+                    backgroundColor: 'var(--theme-primary)',
+                    borderColor: 'var(--theme-primary)',
+                    borderRadius: 10,
+                    padding: '6px 12px',
+                    fontSize: '0.82rem',
+                    flexShrink: 0,
+                  }}
+                >
+                  + Add
+                </button>
+              </div>
+            </div>
+          </div>
+        </main>
       </div>
 
-      {/* Modal / Dialog for registering another teacher */}
+      {/* =========================================================
+          MODAL 1: QR Code Modal
+         ========================================================= */}
+      {qrModalEx && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.6)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: 16,
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setQrModalEx(null);
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: 'var(--theme-card-bg)',
+              borderRadius: 24,
+              padding: '28px 32px',
+              maxWidth: 400,
+              width: '100%',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+              textAlign: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 16,
+            }}
+          >
+            <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
+                Student Test QR Code
+              </h3>
+              <button
+                type="button"
+                onClick={() => setQrModalEx(null)}
+                style={{
+                  border: 'none',
+                  background: 'none',
+                  color: 'var(--theme-muted)',
+                  cursor: 'pointer',
+                  padding: 4,
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <p style={{ margin: 0, fontSize: '0.86rem', color: 'var(--theme-muted)' }}>
+              Scan with phone or tablet to open <strong>{qrModalEx.title || 'Exercise'}</strong>
+            </p>
+
+            <div
+              style={{
+                padding: 16,
+                backgroundColor: '#ffffff',
+                borderRadius: 16,
+                boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
+                border: '1px solid #e2e8f0',
+              }}
+            >
+              <QRCodeSVG
+                value={`${typeof window !== 'undefined' ? window.location.origin : ''}/e/${qrModalEx.id}`}
+                size={200}
+                level="M"
+              />
+            </div>
+
+            <div style={{ width: '100%', display: 'flex', gap: 10 }}>
+              <button
+                type="button"
+                className="btn grow"
+                onClick={() => {
+                  copyStudentLink(qrModalEx.id);
+                  setQrModalEx(null);
+                }}
+                style={{
+                  backgroundColor: 'var(--theme-primary)',
+                  borderColor: 'var(--theme-primary)',
+                  borderRadius: 12,
+                  fontSize: '0.88rem',
+                }}
+              >
+                Copy Link
+              </button>
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={() => setQrModalEx(null)}
+                style={{ borderRadius: 12, fontSize: '0.88rem' }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================
+          MODAL 2: Delete Confirmation Modal
+         ========================================================= */}
+      {deleteConfirmEx && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.6)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: 16,
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setDeleteConfirmEx(null);
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: 'var(--theme-card-bg)',
+              borderRadius: 24,
+              padding: '28px 30px',
+              maxWidth: 420,
+              width: '100%',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+              textAlign: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 16,
+            }}
+          >
+            <div
+              style={{
+                width: 52,
+                height: 52,
+                borderRadius: '50%',
+                backgroundColor: 'var(--bad-bg)',
+                color: 'var(--theme-danger)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Trash2 size={24} />
+            </div>
+
+            <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
+              Delete Exercise?
+            </h3>
+
+            <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--theme-muted)' }}>
+              Are you sure you want to delete <strong>{deleteConfirmEx.title || 'this exercise'}</strong>? Existing student submissions will remain safely in the database.
+            </p>
+
+            <div style={{ width: '100%', display: 'flex', gap: 10, marginTop: 8 }}>
+              <button
+                type="button"
+                className="btn secondary grow"
+                onClick={() => setDeleteConfirmEx(null)}
+                style={{ borderRadius: 12 }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn danger grow"
+                onClick={() => handleDeleteExercise(deleteConfirmEx.id)}
+                style={{
+                  backgroundColor: 'var(--theme-danger)',
+                  borderColor: 'var(--theme-danger)',
+                  color: '#ffffff',
+                  borderRadius: 12,
+                }}
+              >
+                Yes, Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================
+          MODAL 3: Register Another Teacher Modal
+         ========================================================= */}
       {showAddTeacherModal && (
         <div
           style={{
             position: 'fixed',
             inset: 0,
-            backgroundColor: 'rgba(0,0,0,0.45)',
+            backgroundColor: 'rgba(15, 23, 42, 0.6)',
+            backdropFilter: 'blur(6px)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 999,
+            zIndex: 1000,
             padding: 16,
           }}
           onClick={(e) => {
@@ -415,38 +2819,50 @@ export default function AdminHome() {
           }}
         >
           <div
-            className="card stack"
             style={{
+              backgroundColor: 'var(--theme-card-bg)',
+              borderRadius: 24,
+              padding: '28px 32px',
+              maxWidth: 460,
               width: '100%',
-              maxWidth: 480,
-              boxShadow: '0 12px 32px rgba(0,0,0,0.15)',
-              padding: 24,
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 16,
             }}
           >
-            <div className="row spread">
-              <h2 style={{ margin: 0 }}>👥 Register Another Teacher</h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
+                Register Another Teacher
+              </h3>
               <button
                 type="button"
-                className="btn small secondary"
                 onClick={() => setShowAddTeacherModal(false)}
-                style={{ border: 'none', fontSize: '1.2rem', padding: '0 6px', cursor: 'pointer' }}
+                style={{
+                  border: 'none',
+                  background: 'none',
+                  color: 'var(--theme-muted)',
+                  cursor: 'pointer',
+                  padding: 4,
+                }}
               >
-                ✕
+                <X size={20} />
               </button>
             </div>
-            <p className="muted" style={{ margin: '0 0 10px 0', fontSize: '0.88rem' }}>
-              Create a login account for a fellow teacher. They will be able to sign in, create math exercises, and see student submissions.
+
+            <p style={{ margin: 0, fontSize: '0.86rem', color: 'var(--theme-muted)' }}>
+              Create a login account for a fellow teacher. They can sign in immediately at <strong>/admin</strong> to manage exercises and see student submissions.
             </p>
 
             {addTeacherSuccess && (
               <div
                 style={{
-                  background: 'var(--good-bg)',
-                  color: 'var(--good)',
-                  border: '1px solid #b7eb8f',
-                  padding: '8px 12px',
-                  borderRadius: 8,
+                  backgroundColor: 'var(--good-bg)',
+                  color: 'var(--theme-success)',
+                  padding: '10px 14px',
+                  borderRadius: 12,
                   fontSize: '0.88rem',
+                  fontWeight: 600,
                 }}
               >
                 {addTeacherSuccess}
@@ -456,59 +2872,87 @@ export default function AdminHome() {
             {addTeacherError && (
               <div
                 style={{
-                  background: 'var(--bad-bg)',
-                  color: 'var(--bad)',
-                  border: '1px solid #fad2cf',
-                  padding: '8px 12px',
-                  borderRadius: 8,
+                  backgroundColor: 'var(--bad-bg)',
+                  color: 'var(--theme-danger)',
+                  padding: '10px 14px',
+                  borderRadius: 12,
                   fontSize: '0.88rem',
+                  fontWeight: 600,
                 }}
               >
                 {addTeacherError}
               </div>
             )}
 
-            <form className="stack" onSubmit={handleRegisterAnotherTeacher}>
+            <form onSubmit={handleRegisterAnotherTeacher} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
-                <label>Teacher Email</label>
+                <label style={{ fontSize: '0.84rem', fontWeight: 600 }}>Teacher Email</label>
                 <input
                   type="email"
                   placeholder="colleague@school.edu"
                   value={newTeacherEmail}
                   onChange={(e) => setNewTeacherEmail(e.target.value)}
                   required
+                  style={{
+                    backgroundColor: 'var(--theme-page-bg)',
+                    borderColor: 'var(--theme-border)',
+                    borderRadius: 12,
+                  }}
                 />
               </div>
+
               <div>
-                <label>Initial Password (min. 6 characters)</label>
+                <label style={{ fontSize: '0.84rem', fontWeight: 600 }}>Initial Password (min. 6 characters)</label>
                 <input
                   type="password"
                   placeholder="••••••••"
                   value={newTeacherPassword}
                   onChange={(e) => setNewTeacherPassword(e.target.value)}
                   required
+                  style={{
+                    backgroundColor: 'var(--theme-page-bg)',
+                    borderColor: 'var(--theme-border)',
+                    borderRadius: 12,
+                  }}
                 />
               </div>
+
               <div>
-                <label>Confirm Password</label>
+                <label style={{ fontSize: '0.84rem', fontWeight: 600 }}>Confirm Password</label>
                 <input
                   type="password"
                   placeholder="••••••••"
                   value={newTeacherConfirm}
                   onChange={(e) => setNewTeacherConfirm(e.target.value)}
                   required
+                  style={{
+                    backgroundColor: 'var(--theme-page-bg)',
+                    borderColor: 'var(--theme-border)',
+                    borderRadius: 12,
+                  }}
                 />
               </div>
-              <div className="row spread" style={{ marginTop: 12 }}>
+
+              <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
                 <button
                   type="button"
-                  className="btn secondary"
+                  className="btn secondary grow"
                   onClick={() => setShowAddTeacherModal(false)}
+                  style={{ borderRadius: 12 }}
                 >
                   Close
                 </button>
-                <button type="submit" className="btn" disabled={addTeacherBusy}>
-                  {addTeacherBusy ? 'Creating account…' : 'Create Teacher Account'}
+                <button
+                  type="submit"
+                  className="btn grow"
+                  disabled={addTeacherBusy}
+                  style={{
+                    backgroundColor: 'var(--theme-primary)',
+                    borderColor: 'var(--theme-primary)',
+                    borderRadius: 12,
+                  }}
+                >
+                  {addTeacherBusy ? 'Creating…' : 'Create Account'}
                 </button>
               </div>
             </form>
@@ -516,111 +2960,28 @@ export default function AdminHome() {
         </div>
       )}
 
-      {error && <div className="error">{error}</div>}
-
-      {/* Analytics / Stats Overview Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
-        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span className="muted" style={{ fontSize: '0.82rem', fontWeight: 600, textTransform: 'uppercase' }}>Total Exercises</span>
-          <span style={{ fontSize: '1.8rem', fontWeight: 700, color: 'var(--brand)' }}>{totalExercises}</span>
-          <span className="muted" style={{ fontSize: '0.8rem' }}>{totalQuestions} total questions</span>
-        </div>
-        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span className="muted" style={{ fontSize: '0.82rem', fontWeight: 600, textTransform: 'uppercase' }}>Published (Live)</span>
-          <span style={{ fontSize: '1.8rem', fontWeight: 700, color: 'var(--good)' }}>{publishedCount}</span>
-          <span className="muted" style={{ fontSize: '0.8rem' }}>Accessible to students</span>
-        </div>
-        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span className="muted" style={{ fontSize: '0.82rem', fontWeight: 600, textTransform: 'uppercase' }}>Drafts</span>
-          <span style={{ fontSize: '1.8rem', fontWeight: 700, color: '#b57900' }}>{draftCount}</span>
-          <span className="muted" style={{ fontSize: '0.8rem' }}>Unpublished</span>
-        </div>
-      </div>
-
-      {/* Search & Filter Toolbar */}
-      <div className="card row spread" style={{ padding: '12px 16px', gap: 12 }}>
-        <div className="grow" style={{ minWidth: 220 }}>
-          <input
-            placeholder="🔍 Search exercises by title or description..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ padding: '7px 12px' }}
-          />
-        </div>
-        <div className="row" style={{ gap: 8 }}>
-          <button
-            className={`btn small ${filter === 'all' ? '' : 'secondary'}`}
-            onClick={() => setFilter('all')}
-          >
-            All ({totalExercises})
-          </button>
-          <button
-            className={`btn small ${filter === 'published' ? '' : 'secondary'}`}
-            onClick={() => setFilter('published')}
-          >
-            Published ({publishedCount})
-          </button>
-          <button
-            className={`btn small ${filter === 'draft' ? '' : 'secondary'}`}
-            onClick={() => setFilter('draft')}
-          >
-            Drafts ({draftCount})
-          </button>
-        </div>
-      </div>
-
-      {rows === null && !error && <div className="muted">Loading exercises…</div>}
-      {rows && filteredRows?.length === 0 && (
-        <div className="card muted" style={{ textAlign: 'center', padding: '36px 16px' }}>
-          {search ? 'No exercises match your search query.' : 'No exercises yet. Click "+ Create New Exercise" to get started.'}
-        </div>
-      )}
-
-      {/* Exercises List */}
-      <div className="stack" style={{ gap: 12 }}>
-        {filteredRows?.map((r) => (
-          <div className="card row spread" key={r.id} style={{ transition: 'box-shadow 0.15s ease' }}>
-            <div className="grow" style={{ paddingRight: 12 }}>
-              <div className="row" style={{ gap: 10, marginBottom: 4 }}>
-                <h2 style={{ margin: 0, fontSize: '1.25rem' }}>{r.title || 'Untitled'}</h2>
-                <span className={`badge ${r.published ? 'live' : 'warn'}`}>
-                  {r.published ? '● Published' : 'Draft'}
-                </span>
-              </div>
-              {r.description && (
-                <p className="muted" style={{ margin: '0 0 8px 0', fontSize: '0.9rem', maxLines: 2 }}>
-                  {r.description.slice(0, 120)}{r.description.length > 120 ? '...' : ''}
-                </p>
-              )}
-              <div className="row muted" style={{ fontSize: '0.85rem', gap: 16 }}>
-                <span>📝 {r.questions?.length ?? 0} questions</span>
-                <span>⏱️ {r.timeLimitMinutes ? `${r.timeLimitMinutes} min limit` : 'No time limit'}</span>
-                {r.deadline && <span>📅 Due {new Date(r.deadline).toLocaleDateString()} {new Date(r.deadline).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>}
-                <span>🕒 Updated {new Date(r.updatedAt).toLocaleDateString()}</span>
-              </div>
-            </div>
-            <div className="row" style={{ gap: 8 }}>
-              {r.published && (
-                <button className="btn secondary small" onClick={() => copyLink(r.id)} title="Copy Student Link">
-                  {copied === r.id ? '✓ Copied' : '🔗 Link'}
-                </button>
-              )}
-              <Link className="btn secondary small" href={`/admin/exercises/${r.id}/results`} title="View Student Submissions">
-                📊 Results
-              </Link>
-              <Link className="btn secondary small" href={`/admin/exercises/${r.id}`} title="Edit Exercise">
-                ✏️ Edit
-              </Link>
-              <button className="btn secondary small" onClick={() => duplicate(r)} title="Duplicate Exercise">
-                📋 Duplicate
-              </button>
-              <button className="btn danger small" onClick={() => remove(r.id)} title="Delete Exercise">
-                🗑️
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
+      {/* Responsive mobile overrides */}
+      <style jsx>{`
+        @media (max-width: 1024px) {
+          .hide-on-mobile {
+            display: none !important;
+          }
+          .center-column-span {
+            grid-column: span 12 !important;
+          }
+          .right-column-span {
+            grid-column: span 12 !important;
+          }
+          .accuracy-grid {
+            grid-template-columns: repeat(2, 1fr) !important;
+          }
+        }
+        @media (max-width: 640px) {
+          .accuracy-grid {
+            grid-template-columns: 1fr !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }
