@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { addDoc, collection, doc, getDoc, setDoc } from 'firebase/firestore';
+import { Moon, Sun } from 'lucide-react';
 import { getDb } from '@/lib/firebaseClient';
 import { useAdmin } from '@/lib/useAdmin';
 import MathText from '@/components/MathText';
@@ -45,8 +46,8 @@ function toLocalInput(iso: string | null) {
 // Converts Khmer digits ០-៩ and fullwidth digits to ASCII 0-9
 function toAsciiDigits(str: string): string {
   return str
-    .replace(/[០-៩]/g, (ch) => String(ch.charCodeAt(0) - 0x17e0))
-    .replace(/[０-９]/g, (ch) => String(ch.charCodeAt(0) - 0xff10));
+    .replace(/[\u17e0-\u17e9]/g, (ch) => String(ch.charCodeAt(0) - 0x17e0))
+    .replace(/[\uff10-\uff19]/g, (ch) => String(ch.charCodeAt(0) - 0xff10));
 }
 
 export default function EditExercise() {
@@ -56,12 +57,32 @@ export default function EditExercise() {
   const [ex, setEx] = useState<Exercise | null>(id === 'new' ? blankExercise() : null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
   // Paste-import panel
   const [pasteText, setPasteText] = useState('');
   const [pasteMsg, setPasteMsg] = useState('');
   const [pasteTime, setPasteTime] = useState<string>('');
   const [viewMode, setViewMode] = useState<'published' | 'edit'>('published');
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('theme') as 'light' | 'dark' | null;
+      const isDark = saved === 'dark' || (!saved && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      const activeTheme = isDark ? 'dark' : 'light';
+      setTheme(activeTheme);
+      document.documentElement.setAttribute('data-theme', activeTheme);
+    } catch {}
+  }, []);
+
+  const toggleTheme = () => {
+    const next = theme === 'light' ? 'dark' : 'light';
+    setTheme(next);
+    try {
+      localStorage.setItem('theme', next);
+    } catch {}
+    document.documentElement.setAttribute('data-theme', next);
+  };
 
   useEffect(() => {
     if (!isAdmin || id === 'new') return;
@@ -239,7 +260,19 @@ export default function EditExercise() {
           <img src="/logo.png" alt="Math Logo" style={{ height: 28, width: 'auto', objectFit: 'contain' }} />
           <Link href="/admin">← All exercises</Link>
         </div>
-        <span className={`badge ${ex.published ? 'live' : 'warn'}`}>{ex.published ? 'Published' : 'Draft'}</span>
+        <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="btn secondary small"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px' }}
+            title="Toggle Theme"
+          >
+            {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+            <span>{theme === 'dark' ? 'Light' : 'Dark'}</span>
+          </button>
+          <span className={`badge ${ex.published ? 'live' : 'warn'}`}>{ex.published ? 'Published' : 'Draft'}</span>
+        </div>
       </div>
 
       <div className="card stack">
@@ -257,7 +290,7 @@ export default function EditExercise() {
                   ⏱️ {ex.timeLimitMinutes} minutes
                 </span>
               ) : (
-                <span style={{ fontSize: '0.82rem', color: '#6b7280', fontWeight: 500 }}>
+                <span style={{ fontSize: '0.82rem', color: 'var(--muted)', fontWeight: 500 }}>
                   ♾️ No time limit
                 </span>
               )}
@@ -277,7 +310,7 @@ export default function EditExercise() {
                   fontSize: '1.05rem',
                 }}
               />
-              <span style={{ fontSize: '0.9rem', color: '#6b7280', fontWeight: 500, whiteSpace: 'nowrap' }}>
+              <span style={{ fontSize: '0.9rem', color: 'var(--muted)', fontWeight: 500, whiteSpace: 'nowrap' }}>
                 minutes (0 = none)
               </span>
             </div>
@@ -303,9 +336,9 @@ export default function EditExercise() {
                       fontSize: '0.8rem',
                       fontWeight: active ? 700 : 500,
                       borderRadius: 6,
-                      border: active ? '1.5px solid var(--brand)' : '1px solid #d1d5db',
-                      background: active ? 'rgba(79, 70, 229, 0.12)' : '#f9fafb',
-                      color: active ? 'var(--brand)' : '#374151',
+                      border: active ? '1.5px solid var(--brand)' : '1px solid var(--line)',
+                      background: active ? 'rgba(74, 103, 214, 0.16)' : 'var(--card)',
+                      color: active ? 'var(--brand)' : 'var(--ink)',
                       cursor: 'pointer',
                       transition: 'all 0.15s ease',
                     }}
@@ -409,7 +442,7 @@ export default function EditExercise() {
             <div className="card q-card" key={q.id}>
               {/* Question number and exercise on 1 line: "1. (-12) + 7 = ?" */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
-                <div className="q-title" style={{ fontSize: '1.25rem', fontWeight: 600, color: '#111827', lineHeight: 1.3 }}>
+                <div className="q-title" style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--ink)', lineHeight: 1.3 }}>
                   <span style={{ marginRight: 6 }}>{i + 1}.</span>
                   <MathText text={q.prompt} />
                 </div>
@@ -431,7 +464,7 @@ export default function EditExercise() {
                           gap: 12,
                           fontSize: '1.08rem',
                           fontWeight: 500,
-                          color: '#1f2937',
+                          color: 'var(--ink)',
                           padding: '3px 0',
                         }}
                       >
@@ -441,8 +474,8 @@ export default function EditExercise() {
                             width: 24,
                             height: 24,
                             borderRadius: '50%',
-                            border: isKey ? '3px solid var(--good)' : '2.5px solid #4b5563',
-                            background: '#fff',
+                            border: isKey ? '3px solid var(--good)' : '2.5px solid var(--muted)',
+                            background: 'var(--card)',
                             flexShrink: 0,
                           }}
                         />
@@ -460,7 +493,7 @@ export default function EditExercise() {
                 </div>
               ) : (
                 <div style={{ marginTop: 12 }}>
-                  <div style={{ maxWidth: 320, padding: '10px 14px', border: '1px solid var(--line)', borderRadius: 8, background: '#f9fafb', color: '#6b7280' }}>
+                  <div style={{ maxWidth: 320, padding: '10px 14px', border: '1px solid var(--line)', borderRadius: 8, background: 'var(--bg)', color: 'var(--muted)' }}>
                     {q.kind === 'number' ? 'Number or fraction answer input' : 'Text answer input'}
                   </div>
                   {q.answer && (
@@ -472,7 +505,7 @@ export default function EditExercise() {
               )}
 
               {q.explanation && (
-                <div style={{ marginTop: 14, padding: '10px 14px', background: '#f3f4f6', borderRadius: 8, fontSize: '0.9rem' }}>
+                <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 8, fontSize: '0.9rem', color: 'var(--ink)' }}>
                   <strong>Explanation:</strong> <MathText text={q.explanation} />
                 </div>
               )}

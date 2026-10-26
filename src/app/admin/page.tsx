@@ -1094,26 +1094,6 @@ export default function AdminHome() {
             <BookOpen size={20} />
           </button>
 
-          <button
-            type="button"
-            onClick={() => setShowAddTeacherModal(true)}
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 14,
-              backgroundColor: 'transparent',
-              color: 'rgba(255, 255, 255, 0.8)',
-              border: 'none',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-            title="Register Another Teacher"
-          >
-            <Users size={20} />
-          </button>
-
           {/* Laptop Toggle button to expand/collapse the 210px panel */}
           <button
             type="button"
@@ -1297,53 +1277,10 @@ export default function AdminHome() {
               <span>Exercises</span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => setShowAddTeacherModal(true)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                padding: '13px 18px',
-                border: 'none',
-                background: 'transparent',
-                color: 'rgba(255, 255, 255, 0.85)',
-                borderRadius: '16px 0 0 16px',
-                cursor: 'pointer',
-                fontSize: '0.94rem',
-                fontWeight: 600,
-                textAlign: 'left',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              <Settings size={18} />
-              <span>Settings</span>
-            </button>
           </div>
 
-          {/* Sidebar bottom: Register colleague & Log out */}
+          {/* Sidebar bottom: Log out */}
           <div style={{ marginTop: 'auto', paddingRight: 20, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <button
-              type="button"
-              onClick={() => setShowAddTeacherModal(true)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                padding: '10px 14px',
-                borderRadius: 12,
-                backgroundColor: 'rgba(255, 255, 255, 0.12)',
-                color: '#ffffff',
-                border: 'none',
-                cursor: 'pointer',
-                fontSize: '0.84rem',
-                fontWeight: 600,
-              }}
-            >
-              <UserPlus size={16} />
-              <span>+ Add Teacher</span>
-            </button>
-
             <button
               type="button"
               onClick={() => signOut(getAuthClient())}

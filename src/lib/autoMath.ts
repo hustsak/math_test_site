@@ -7,12 +7,12 @@
 
 export type Piece = { type: 'text' | 'math'; value: string };
 
-// One "math token": a number, a single letter (never part of a word), sqrt(...), pi, or an operator.
-const TOKEN = String.raw`(?:\d+(?:\.\d+)?|(?<![A-Za-z])[A-Za-z](?![A-Za-z])|sqrt\([^()]*\)|(?<![A-Za-z])pi(?![A-Za-z])|>=|<=|!=|[()+\-*/^=<>≤≥≠×÷−√π])`;
+// One "math token": a number, a single letter (never part of a word), sqrt(...), pi, lim, oo, inf, or an operator.
+const TOKEN = String.raw`(?:\d+(?:\.\d+)?|(?<![A-Za-z])[A-Za-z](?![A-Za-z])|sqrt\([^()]*\)|(?<![A-Za-z])(?:pi|lim|oo|inf)(?![A-Za-z])|->|→|>=|<=|!=|[()+\-*/^=<>≤≥≠×÷−√π_])`;
 const RUN = new RegExp(`${TOKEN}(?:[ ]?${TOKEN})*`, 'g');
 
 // A run only counts as math if it contains an operator (so a lone "a" or "5" stays plain text)...
-const TRIGGER = /[*^/=<>≤≥≠×÷+]|sqrt|√/;
+const TRIGGER = /[*^/=<>≤≥≠×÷+]|sqrt|√|->|→|lim/;
 // ...and at least one number or letter.
 const HAS_OPERAND = /[0-9A-Za-zπ]/;
 
@@ -25,6 +25,19 @@ const stripParens = (s: string) => (s.startsWith('(') && s.endsWith(')') ? s.sli
 /** Converts one plain-math run (e.g. "x^2+3*4") to LaTeX. */
 export function toLatex(run: string): string {
   let s = run.replace(/−/g, '-');
+
+  // arrows and infinity
+  s = s.replace(/->|→/g, '\\to ');
+  s = s.replace(/(?<![A-Za-z\\])(?:oo|inf|infinity)(?![A-Za-z])/g, '\\infty ');
+
+  // limits: lim_{...}, lim_(...), lim(x->...)
+  s = s.replace(
+    /(?<![A-Za-z\\])lim(?:\s*(?:_|\^)\s*(?:\{([^{}]*)\}|\(([^()]*)\)|([A-Za-z0-9+\-]+))|\s*\(([^()]*)\))?/g,
+    (_m, g1, g2, g3, g4) => {
+      const sub = g1 || g2 || g3 || g4;
+      return sub ? `\\lim\\limits_{${toLatex(sub).trim()}}` : '\\lim\\limits ';
+    },
+  );
 
   // sqrt(...) and √x first, so fractions can use them as operands
   s = s.replace(/sqrt\(([^()]*)\)/g, '\\sqrt{$1}');

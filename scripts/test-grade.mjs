@@ -85,6 +85,9 @@ const latexCases = [
   ['x^-2', 'x^{-2}'],
   ['(a+b)/c', '\\frac{a+b}{c}'],
   ['sqrt(2)/3', '\\frac{\\sqrt{2}}{3}'],
+  ['lim_(x->0)', '\\lim\\limits_{x\\to 0}'],
+  ['lim_{x->+oo}', '\\lim\\limits_{x\\to +\\infty}'],
+  ['lim(x->+inf)', '\\lim\\limits_{x\\to +\\infty}'],
 ];
 for (const [input, expected] of latexCases) {
   const got = toLatex(input);
@@ -99,6 +102,7 @@ const splitCases = [
   ['I have 3 apples', [['text', 'I have 3 apples']]],
   ['1) 3*4', [['text', '1) '], ['math', '3*4']]],
   ['Solve x^2 = 9 (cm)', [['text', 'Solve '], ['math', 'x^2 = 9'], ['text', ' (cm)']]],
+  ['Find lim_(x->+oo) now', [['text', 'Find '], ['math', 'lim_(x->+oo)'], ['text', ' now']]],
 ];
 for (const [input, expected] of splitCases) {
   const got = splitAutoMath(input).map((p) => [p.type, p.value]);

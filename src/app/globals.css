@@ -32,10 +32,13 @@
 
 [data-theme="dark"] {
   --bg: #0f1422;
-  --card: #171f33;
+  --card: #161e33;
   --ink: #f1f5f9;
   --muted: #94a3b8;
   --line: #232d47;
+  --good-bg: rgba(31, 170, 107, 0.18);
+  --bad-bg: rgba(217, 68, 60, 0.18);
+  --warn-bg: rgba(224, 160, 0, 0.18);
   --theme-page-bg: #0c101c;
   --theme-card-bg: #161e33;
   --theme-primary: #5c79e6;
@@ -48,6 +51,31 @@
   --theme-border-subtle: #1c253d;
   --theme-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
   --theme-shadow-hover: 0 8px 30px rgba(0, 0, 0, 0.45);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1422;
+    --card: #161e33;
+    --ink: #f1f5f9;
+    --muted: #94a3b8;
+    --line: #232d47;
+    --good-bg: rgba(31, 170, 107, 0.18);
+    --bad-bg: rgba(217, 68, 60, 0.18);
+    --warn-bg: rgba(224, 160, 0, 0.18);
+    --theme-page-bg: #0c101c;
+    --theme-card-bg: #161e33;
+    --theme-primary: #5c79e6;
+    --theme-primary-hover: #4e6cd6;
+    --theme-sidebar-rail: #3a5099;
+    --theme-sidebar-panel: #243468;
+    --theme-navy: #f8fafc;
+    --theme-muted: #94a3b8;
+    --theme-border: #232e49;
+    --theme-border-subtle: #1c253d;
+    --theme-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    --theme-shadow-hover: 0 8px 30px rgba(0, 0, 0, 0.45);
+  }
 }
 
 * { box-sizing: border-box; }
@@ -74,22 +102,24 @@ h1 { font-size: 1.6rem; margin: 0 0 6px; }
 h2 { font-size: 1.2rem; margin: 0 0 6px; }
 
 .card {
-  background: var(--card);
-  border: 1px solid var(--line);
+  background: var(--theme-card-bg, var(--card));
+  border: 1px solid var(--theme-border, var(--line));
   border-radius: 12px;
   padding: 18px;
+  color: var(--theme-navy, var(--ink));
 }
 
-label { display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 4px; }
+label { display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 4px; color: var(--theme-navy, var(--ink)); }
 
 input, textarea, select {
   width: 100%;
   font: inherit;
   padding: 9px 11px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--theme-border, var(--line));
   border-radius: 8px;
-  background: #fff;
-  color: var(--ink);
+  background: var(--theme-card-bg, var(--card));
+  color: var(--theme-navy, var(--ink));
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 input:focus, textarea:focus, select:focus {
   outline: 2px solid color-mix(in srgb, var(--brand) 40%, transparent);
@@ -111,20 +141,21 @@ input[type='checkbox'] { width: auto; }
   display: inline-block;
 }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn.secondary { background: #fff; color: var(--brand); }
-.btn.danger { background: #fff; color: var(--bad); border-color: var(--bad); }
+.btn.secondary { background: var(--theme-card-bg, var(--card)); color: var(--brand); border: 1px solid var(--theme-border, var(--line)); }
+.btn.danger { background: var(--theme-card-bg, var(--card)); color: var(--bad); border: 1px solid var(--bad); }
 .btn.small { padding: 5px 10px; font-size: 0.85rem; }
 
 .sym {
   font: inherit;
   padding: 3px 9px;
   min-width: 34px;
-  border: 1px solid var(--line);
-  background: #fff;
+  border: 1px solid var(--theme-border, var(--line));
+  background: var(--theme-card-bg, var(--card));
+  color: var(--theme-navy, var(--ink));
   border-radius: 6px;
   cursor: pointer;
 }
-.sym:hover { background: var(--bg); }
+.sym:hover { background: var(--theme-page-bg, var(--bg)); }
 
 .badge {
   display: inline-block;
@@ -132,16 +163,19 @@ input[type='checkbox'] { width: auto; }
   font-weight: 600;
   padding: 2px 9px;
   border-radius: 999px;
-  background: var(--bg);
-  border: 1px solid var(--line);
+  background: var(--theme-page-bg, var(--bg));
+  border: 1px solid var(--theme-border, var(--line));
+  color: var(--theme-navy, var(--ink));
 }
 .badge.live { background: var(--good-bg); color: var(--good); border-color: transparent; }
-.badge.warn { background: var(--warn-bg); color: #9a6700; border-color: transparent; }
+.badge.warn { background: var(--warn-bg); color: #d97706; border-color: transparent; }
 
 .preview {
   margin-top: 8px;
   padding: 10px 12px;
-  background: var(--bg);
+  background: var(--theme-page-bg, var(--bg));
+  border: 1px solid var(--theme-border, var(--line));
+  color: var(--theme-navy, var(--ink));
   border-radius: 8px;
   min-height: 40px;
   font-size: 1.05rem;

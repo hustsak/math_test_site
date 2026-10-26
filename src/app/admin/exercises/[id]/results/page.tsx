@@ -339,7 +339,7 @@ export default function Results() {
                     </tr>
                     {open === s.id && (
                       <tr>
-                        <td colSpan={6} style={{ background: '#fafbfc', padding: '16px 20px' }}>
+                        <td colSpan={6} style={{ background: 'var(--bg)', padding: '16px 20px' }}>
                           <h4 style={{ margin: '0 0 12px', fontSize: '0.95rem' }}>
                             Answers Breakdown for {s.studentName}
                           </h4>
@@ -354,7 +354,7 @@ export default function Results() {
                                     alignItems: 'flex-start',
                                     justifyContent: 'space-between',
                                     padding: '8px 12px',
-                                    background: '#fff',
+                                    background: 'var(--card)',
                                     borderRadius: 8,
                                     border: '1px solid var(--line)',
                                     gap: 12,

@@ -1,8 +1,29 @@
 import katex from 'katex';
 import { splitAutoMath, toLatex } from '@/lib/autoMath';
 
+/**
+ * Normalizes LaTeX math input:
+ * - Ensures mathematical operators (\lim, \sum, \prod, etc.) use \limits so that indices
+ *   and limits are typeset directly underneath / above (standard "real write" handwriting style)
+ *   rather than inline side-subscripts.
+ * - Supports typing shorthand like "->" or "oo" inside math.
+ */
+function prepareTex(tex: string): string {
+  if (!tex) return '';
+  let s = tex;
+  s = s.replace(/->|→/g, '\\to ');
+  s = s.replace(/(?<![A-Za-z\\])(?:oo|inf|infinity)(?![A-Za-z])/g, '\\infty ');
+  s = s.replace(/(?<![a-zA-Z\\])lim(?![a-zA-Z])/g, '\\lim');
+  s = s.replace(
+    /\\(lim|limsup|liminf|max|min|sup|inf|sum|prod)(?!\s*\\(?:limits|nolimits)|[a-zA-Z])/g,
+    (_, op) => `\\${op}\\limits`,
+  );
+  return s;
+}
+
 function render(tex: string, displayMode: boolean) {
-  return katex.renderToString(tex, { throwOnError: false, displayMode, strict: 'ignore' });
+  const prepared = prepareTex(tex);
+  return katex.renderToString(prepared, { throwOnError: false, displayMode, strict: 'ignore' });
 }
 
 /**
