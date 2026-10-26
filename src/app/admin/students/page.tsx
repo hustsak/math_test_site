@@ -1,305 +1,673 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { QRCodeSVG } from 'qrcode.react';
-import {
-  Users,
-  Plus,
-  Printer,
-  Copy,
-  QrCode,
-  RefreshCw,
-  Search,
-  Check,
-  ArrowLeft,
-  AlertTriangle,
-  UserCheck,
-  UserX,
-  Trash2,
-  ExternalLink,
-  MessageSquare,
-  X,
-  FileText,
-} from 'lucide-react';
 import { useAdmin } from '@/lib/useAdmin';
 import { adminPost } from '@/lib/authFetch';
-import type { Student } from '@/lib/types';
+import type { StudentAccess, StudentAccessStatus, ProfileWithStats } from '@/lib/types';
+import {
+  Users,
+  Search,
+  Plus,
+  Calendar,
+  Clock,
+  CheckCircle2,
+  AlertTriangle,
+  XCircle,
+  ShieldAlert,
+  Edit2,
+  Trash2,
+  RefreshCw,
+  QrCode,
+  Copy,
+  Printer,
+  ArrowLeft,
+  X,
+  Filter,
+  Check,
+  ChevronRight,
+  Sun,
+  Moon,
+  ExternalLink,
+  Ban,
+  Sparkles,
+} from 'lucide-react';
 
 export default function AdminStudentsPage() {
-  const { user, isAdmin, loading: authLoading } = useAdmin();
-  const [students, setStudents] = useState<Student[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [search, setSearch] = useState('');
+  const { user, loading: authLoading, isAdmin } = useAdmin();
 
-  // Add Student Modal State
+  // Tab switcher: 'access' (Student Access & Expiry) | 'parent' (Parent Tracking & QR)
+  const [activeTab, setActiveTab] = useState<'access' | 'parent'>('access');
+
+  // Theme & Language
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [lang, setLang] = useState<'KH' | 'EN'>('KH');
+
+  // Student Access State
+  const [students, setStudents] = useState<StudentAccess[]>([]);
+  const [loadingStudents, setLoadingStudents] = useState(true);
+  const [studentError, setStudentError] = useState('');
+
+  // Parent Profiles State
+  const [profiles, setProfiles] = useState<ProfileWithStats[]>([]);
+  const [loadingProfiles, setLoadingProfiles] = useState(false);
+  const [showHiddenProfiles, setShowHiddenProfiles] = useState(false);
+  const [showClassAverage, setShowClassAverage] = useState(false);
+
+  // Filters & Search (Access tab)
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedClass, setSelectedClass] = useState<string>('all');
+  const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [selectedGrade, setSelectedGrade] = useState<string>('all');
+
+  // Modals
   const [showAddModal, setShowAddModal] = useState(false);
-  const [addMode, setAddMode] = useState<'single' | 'bulk'>('single');
-  const [singleName, setSingleName] = useState('');
-  const [bulkNames, setBulkNames] = useState('');
-  const [classNameInput, setClassNameInput] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [editingStudent, setEditingStudent] = useState<StudentAccess | null>(null);
+  const [extendingStudent, setExtendingStudent] = useState<StudentAccess | null>(null);
+  const [blockingStudent, setBlockingStudent] = useState<StudentAccess | null>(null);
+  const [deletingStudent, setDeletingStudent] = useState<StudentAccess | null>(null);
+  const [qrStudent, setQrStudent] = useState<{ name: string; className?: string; token: string } | null>(null);
+  const [historyStudent, setHistoryStudent] = useState<StudentAccess | null>(null);
+  const [studentSubmissions, setStudentSubmissions] = useState<any[]>([]);
+  const [loadingSubmissions, setLoadingSubmissions] = useState(false);
 
-  // Single Student QR Modal
-  const [qrStudent, setQrStudent] = useState<Student | null>(null);
+  // Form states for Add / Edit
+  const [formName, setFormName] = useState('');
+  const [formGrade, setFormGrade] = useState<number>(7);
+  const [formClass, setFormClass] = useState('');
+  const [formExpiration, setFormExpiration] = useState('');
+  const [formAccessEnabled, setFormAccessEnabled] = useState(true);
+  const [formSubmitting, setFormSubmitting] = useState(false);
+  const [formError, setFormError] = useState('');
 
-  // Regenerate Confirm Modal
-  const [regenStudent, setRegenStudent] = useState<Student | null>(null);
-  const [regenerating, setRegenerating] = useState(false);
+  // Extension Modal state
+  const [customExtDate, setCustomExtDate] = useState('');
+  const [extSubmitting, setExtSubmitting] = useState(false);
 
-  // Printable View Mode
-  const [printMode, setPrintMode] = useState(false);
+  // Toast
+  const [toast, setToast] = useState('');
 
-  // Message language toggle
-  const [messageLang, setMessageLang] = useState<'kh' | 'en'>('kh');
-  const [copiedId, setCopiedId] = useState<string | null>(null);
+  // Print Mode
+  const [isPrintMode, setIsPrintMode] = useState(false);
 
-  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  // Parent tracking rename/merge modal
+  const [mergeModalProfile, setMergeModalProfile] = useState<ProfileWithStats | null>(null);
+  const [mergeMode, setMergeMode] = useState<'rename' | 'merge'>('rename');
+  const [renameName, setRenameName] = useState('');
+  const [renameClass, setRenameClass] = useState('');
+  const [targetMergeId, setTargetMergeId] = useState('');
+  const [mergeBusy, setMergeBusy] = useState(false);
 
+  function showToast(msg: string) {
+    setToast(msg);
+    setTimeout(() => setToast(''), 3500);
+  }
+
+  // Load theme preference
+  useEffect(() => {
+    const saved = localStorage.getItem('mathtest_theme') as 'light' | 'dark' | null;
+    if (saved) {
+      setTheme(saved);
+      document.documentElement.setAttribute('data-theme', saved);
+    }
+  }, []);
+
+  function toggleTheme() {
+    const next = theme === 'light' ? 'dark' : 'light';
+    setTheme(next);
+    localStorage.setItem('mathtest_theme', next);
+    document.documentElement.setAttribute('data-theme', next);
+  }
+
+  // Load Students Access Data
   async function loadStudents() {
-    setLoading(true);
-    setError('');
+    setLoadingStudents(true);
+    setStudentError('');
     try {
-      const data = await adminPost<{ students: Student[] }>('/api/admin/students', {});
-      setStudents(data?.students || []);
+      const token = await user?.getIdToken();
+      const res = await fetch('/api/admin/students', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Failed to load students.');
+      const data = await res.json();
+      setStudents(data.students || []);
     } catch (e: any) {
-      // Fallback: try GET if adminPost with POST is used or vice versa
-      try {
-        const user = (await import('@/lib/firebaseClient')).getAuthClient().currentUser;
-        if (user) {
-          const token = await user.getIdToken();
-          const res = await fetch('/api/admin/students', {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          const json = await res.json();
-          if (res.ok) {
-            setStudents(json.students || []);
-            return;
-          }
-        }
-      } catch {}
-      setError(e?.message || 'Could not load students.');
+      setStudentError(e?.message || 'Error loading student list.');
     } finally {
-      setLoading(false);
+      setLoadingStudents(false);
+    }
+  }
+
+  // Load Parent Profiles Data
+  async function loadProfiles() {
+    setLoadingProfiles(true);
+    try {
+      const token = await user?.getIdToken();
+      const [pRes, sRes] = await Promise.all([
+        fetch('/api/admin/profiles', { headers: { Authorization: `Bearer ${token}` } }),
+        fetch('/api/admin/settings', { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+      if (pRes.ok) {
+        const pData = await pRes.json();
+        setProfiles(pData.profiles || []);
+      }
+      if (sRes.ok) {
+        const sData = await sRes.json();
+        setShowClassAverage(!!sData.showClassAverageToParents);
+      }
+    } catch (e: any) {
+      console.error(e);
+    } finally {
+      setLoadingProfiles(false);
     }
   }
 
   useEffect(() => {
     if (isAdmin) {
       loadStudents();
+      loadProfiles();
     }
   }, [isAdmin]);
 
-  async function handleAddStudent(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    setError('');
+  // Helper: Get Cambodia default date (+30 days)
+  function getDefaultExpirationDate(): string {
+    const d = new Date(Date.now() + 7 * 60 * 60 * 1000 + 30 * 24 * 60 * 60 * 1000);
+    return d.toISOString().split('T')[0];
+  }
 
+  function openAddModal() {
+    setFormName('');
+    setFormGrade(7);
+    setFormClass('');
+    setFormExpiration(getDefaultExpirationDate());
+    setFormAccessEnabled(true);
+    setFormError('');
+    setShowAddModal(true);
+  }
+
+  function openEditModal(s: StudentAccess) {
+    setEditingStudent(s);
+    setFormName(s.name);
+    setFormGrade(s.grade || 7);
+    setFormClass(s.className || '');
+    setFormExpiration(s.expirationDate);
+    setFormAccessEnabled(s.accessEnabled);
+    setFormError('');
+  }
+
+  // View Student Submission History
+  async function handleViewSubmissions(s: StudentAccess) {
+    setHistoryStudent(s);
+    setLoadingSubmissions(true);
+    setStudentSubmissions([]);
     try {
-      const names =
-        addMode === 'single'
-          ? [singleName.trim()]
-          : bulkNames
-              .split('\n')
-              .map((s) => s.trim())
-              .filter((s) => s.length > 0);
-
-      if (names.length === 0) {
-        throw new Error('Please enter at least one name.');
-      }
-
-      await adminPost('/api/admin/students', {
-        names,
-        className: classNameInput.trim(),
+      const token = await user?.getIdToken();
+      const res = await fetch(`/api/admin/students/${s.id}/submissions`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
-
-      setSingleName('');
-      setBulkNames('');
-      setShowAddModal(false);
-      await loadStudents();
+      if (res.ok) {
+        const data = await res.json();
+        setStudentSubmissions(data.submissions || []);
+      }
     } catch (e: any) {
-      setError(e?.message || 'Failed to add student.');
+      console.error(e);
     } finally {
-      setSaving(false);
+      setLoadingSubmissions(false);
     }
   }
 
-  async function handleRegenerateParentToken() {
-    if (!regenStudent) return;
-    setRegenerating(true);
+  // Submit Add Student
+  async function handleAddSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!formName.trim()) {
+      setFormError('Please enter the student name.');
+      return;
+    }
+    if (!formExpiration) {
+      setFormError('Please set an expiration date.');
+      return;
+    }
+
+    setFormSubmitting(true);
+    setFormError('');
     try {
-      const res = await adminPost<{ success: boolean; parentToken: string }>(
-        '/api/admin/students/regenerate',
-        { studentId: regenStudent.id }
-      );
-      if (res?.parentToken) {
-        setStudents((prev) =>
-          prev.map((s) => (s.id === regenStudent.id ? { ...s, parentToken: res.parentToken } : s))
+      const res = await adminPost('/api/admin/students', {
+        name: formName.trim(),
+        grade: formGrade,
+        className: formClass.trim() || null,
+        expirationDate: formExpiration,
+        accessEnabled: formAccessEnabled,
+      });
+
+      if (res.warning) {
+        showToast(`⚠️ ${res.warning}`);
+      } else {
+        showToast(
+          lang === 'KH'
+            ? `បានបន្ថែមសិស្ស "${formName.trim()}" ដោយជោគជ័យ!`
+            : `Student "${formName.trim()}" added successfully!`
         );
       }
-      setRegenStudent(null);
-    } catch (e: any) {
-      alert(e?.message || 'Failed to regenerate token.');
+
+      setShowAddModal(false);
+      loadStudents();
+      loadProfiles();
+    } catch (err: any) {
+      setFormError(err?.message || 'Failed to add student.');
     } finally {
-      setRegenerating(false);
+      setFormSubmitting(false);
     }
   }
 
-  async function handleToggleActive(s: Student) {
+  // Submit Edit Student
+  async function handleEditSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingStudent) return;
+    if (!formName.trim()) {
+      setFormError('Please enter the student name.');
+      return;
+    }
+    if (!formExpiration) {
+      setFormError('Please set an expiration date.');
+      return;
+    }
+
+    setFormSubmitting(true);
+    setFormError('');
     try {
-      const nextActive = !s.active;
-      await adminPost('/api/admin/students/toggle-active', {
-        studentId: s.id,
-        active: nextActive,
+      const token = await user?.getIdToken();
+      const res = await fetch(`/api/admin/students/${editingStudent.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: formName.trim(),
+          grade: formGrade,
+          className: formClass.trim() || null,
+          expirationDate: formExpiration,
+          accessEnabled: formAccessEnabled,
+        }),
       });
-      setStudents((prev) =>
-        prev.map((item) => (item.id === s.id ? { ...item, active: nextActive } : item))
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update student.');
+
+      showToast(
+        lang === 'KH'
+          ? `បានកែសម្រួលទិន្នន័យ "${formName.trim()}" ដោយជោគជ័យ!`
+          : `Updated student "${formName.trim()}" successfully!`
+      );
+      setEditingStudent(null);
+      loadStudents();
+    } catch (err: any) {
+      setFormError(err?.message || 'Failed to update student.');
+    } finally {
+      setFormSubmitting(false);
+    }
+  }
+
+  // Extend Expiration (Quick preset or custom date)
+  async function handleExtend(days: number, customDate?: string) {
+    if (!extendingStudent) return;
+    setExtSubmitting(true);
+    try {
+      const token = await user?.getIdToken();
+      const bodyPayload = customDate ? { expirationDate: customDate } : { extensionDays: days };
+
+      const res = await fetch(`/api/admin/students/${extendingStudent.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(bodyPayload),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to extend access.');
+
+      showToast(
+        lang === 'KH'
+          ? `បានបន្តការចូលប្រើសម្រាប់ "${extendingStudent.name}"!`
+          : `Extended access for "${extendingStudent.name}"!`
+      );
+      setExtendingStudent(null);
+      setCustomExtDate('');
+      loadStudents();
+    } catch (err: any) {
+      alert(err?.message || 'Error extending access.');
+    } finally {
+      setExtSubmitting(false);
+    }
+  }
+
+  // Toggle Block / Activate
+  async function handleToggleBlock() {
+    if (!blockingStudent) return;
+    const nextEnabled = !blockingStudent.accessEnabled;
+    try {
+      const token = await user?.getIdToken();
+      const res = await fetch(`/api/admin/students/${blockingStudent.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ accessEnabled: nextEnabled }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update status.');
+
+      showToast(
+        nextEnabled
+          ? lang === 'KH'
+            ? `បានបើកដំណើរការសិស្ស "${blockingStudent.name}" ឡើងវិញ!`
+            : `Activated "${blockingStudent.name}"!`
+          : lang === 'KH'
+          ? `បានផ្អាកការចូលប្រើរបស់ "${blockingStudent.name}"!`
+          : `Paused access for "${blockingStudent.name}"!`
+      );
+      setBlockingStudent(null);
+      loadStudents();
+    } catch (err: any) {
+      alert(err?.message || 'Error updating access.');
+    }
+  }
+
+  // Delete Student
+  async function handleDeleteStudent() {
+    if (!deletingStudent) return;
+    try {
+      const token = await user?.getIdToken();
+      const res = await fetch(`/api/admin/students/${deletingStudent.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to delete student.');
+
+      showToast(
+        lang === 'KH'
+          ? `បានលុបសិស្ស "${deletingStudent.name}" (លទ្ធផលប្រឡងចាស់នៅតែរក្សាទុក)!`
+          : `Deleted student "${deletingStudent.name}" (historical submissions preserved)!`
+      );
+      setDeletingStudent(null);
+      loadStudents();
+    } catch (err: any) {
+      alert(err?.message || 'Error deleting student.');
+    }
+  }
+
+  // Parent Tracking Functions
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  function getParentLink(token: string) {
+    return `${origin}/p/${token}`;
+  }
+
+  function copyParentMessage(p: ProfileWithStats) {
+    const link = getParentLink(p.parentToken);
+    const msg =
+      lang === 'KH'
+        ? `សួស្តី! នេះជាតំណផ្ទាល់ខ្លួនសម្រាប់តាមដានលទ្ធផលលំហាត់របស់ ${p.name} ៖ ${link}`
+        : `Hello! Here is your private link to follow ${p.name}'s math exercises and results: ${link}`;
+    navigator.clipboard.writeText(msg);
+    showToast(`Copied ${lang === 'KH' ? 'Khmer' : 'English'} parent message for ${p.name}!`);
+  }
+
+  async function handleToggleClassAverage(val: boolean) {
+    setShowClassAverage(val);
+    try {
+      await adminPost('/api/admin/settings', { showClassAverageToParents: val });
+      showToast(val ? 'Class average is now shown to parents' : 'Class average hidden from parents');
+    } catch (e: any) {
+      alert('Failed to update setting: ' + (e?.message || 'Error'));
+    }
+  }
+
+  async function handleToggleHideProfile(p: ProfileWithStats) {
+    const nextHidden = !p.hidden;
+    try {
+      await adminPost('/api/admin/profiles/hide', { profileId: p.id, hidden: nextHidden });
+      showToast(nextHidden ? `Hidden profile for ${p.name}` : `Restored profile for ${p.name}`);
+      setProfiles((prev) =>
+        prev.map((item) => (item.id === p.id ? { ...item, hidden: nextHidden } : item))
       );
     } catch (e: any) {
-      alert(e?.message || 'Failed to update student status.');
+      alert('Failed to update: ' + (e?.message || 'Error'));
     }
   }
 
-  async function handleDeleteStudent(s: Student) {
-    if (!confirm(`Are you sure you want to delete ${s.name}?`)) return;
+  function openMergeModal(p: ProfileWithStats) {
+    setMergeModalProfile(p);
+    setMergeMode('rename');
+    setRenameName(p.name);
+    setRenameClass(p.className || '');
+    setTargetMergeId('');
+  }
+
+  async function handleMergeSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!mergeModalProfile) return;
+    setMergeBusy(true);
     try {
-      await adminPost('/api/admin/students/delete', { studentId: s.id });
-      setStudents((prev) => prev.filter((item) => item.id !== s.id));
-    } catch (e: any) {
-      alert(e?.message || 'Failed to delete student.');
+      if (mergeMode === 'rename') {
+        if (!renameName.trim()) return;
+        await adminPost('/api/admin/profiles/merge', {
+          sourceProfileId: mergeModalProfile.id,
+          newName: renameName.trim(),
+          newClass: renameClass.trim(),
+        });
+        showToast(`Renamed to "${renameName.trim()}"`);
+      } else {
+        if (!targetMergeId) {
+          alert('Please select a student to merge into.');
+          return;
+        }
+        const ok = window.confirm(
+          `Merge all submissions from "${mergeModalProfile.name}" into the selected student?\n\nThis cannot be undone!`
+        );
+        if (!ok) return;
+        await adminPost('/api/admin/profiles/merge', {
+          sourceProfileId: mergeModalProfile.id,
+          targetProfileId: targetMergeId,
+        });
+        showToast('Submissions merged successfully!');
+      }
+      setMergeModalProfile(null);
+      loadProfiles();
+    } catch (err: any) {
+      alert('Action failed: ' + (err?.message || 'Error'));
+    } finally {
+      setMergeBusy(false);
     }
   }
 
-  function copyText(text: string, id: string) {
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
-  }
+  // Filtered Students List
+  const uniqueClasses = useMemo(() => {
+    const set = new Set<string>();
+    students.forEach((s) => {
+      if (s.className) set.add(s.className);
+    });
+    return Array.from(set).sort();
+  }, [students]);
 
-  function copyParentMessage(s: Student) {
-    const parentLink = `${origin}/p/${s.parentToken}`;
-    const msg =
-      messageLang === 'kh'
-        ? `សួស្តី! នេះជាតំណរបស់អ្នកដើម្បីមើលលទ្ធផលរបស់ ${s.name}៖ ${parentLink}`
-        : `Hello! Here is your link to view results for ${s.name}: ${parentLink}`;
-    copyText(msg, `msg-${s.id}`);
-  }
+  const stats = useMemo(() => {
+    let active = 0;
+    let expiring = 0;
+    let expired = 0;
+    let blocked = 0;
+
+    students.forEach((s) => {
+      if (s.status === 'blocked') blocked++;
+      else if (s.status === 'expired') expired++;
+      else if (s.status === 'expiring_soon') expiring++;
+      else if (s.status === 'active') active++;
+    });
+
+    return { total: students.length, active, expiring, expired, blocked };
+  }, [students]);
 
   const filteredStudents = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return students;
-    return students.filter(
-      (s) =>
-        s.name.toLowerCase().includes(q) || (s.className && s.className.toLowerCase().includes(q))
-    );
-  }, [students, search]);
+    return students.filter((s) => {
+      // Search term
+      if (searchTerm.trim()) {
+        const q = searchTerm.trim().toLowerCase();
+        const matchName = s.name.toLowerCase().includes(q);
+        const matchClass = s.className?.toLowerCase().includes(q);
+        if (!matchName && !matchClass) return false;
+      }
+      // Class filter
+      if (selectedClass !== 'all') {
+        if ((s.className || 'none') !== selectedClass) return false;
+      }
+      // Status filter
+      if (selectedStatus !== 'all') {
+        if (s.status !== selectedStatus) return false;
+      }
+      // Grade filter (7-12)
+      if (selectedGrade !== 'all') {
+        if ((s.grade || 7) !== Number(selectedGrade)) return false;
+      }
+      return true;
+    });
+  }, [students, searchTerm, selectedClass, selectedStatus, selectedGrade]);
 
-  if (authLoading) {
-    return <div className="wrap muted" style={{ textAlign: 'center', paddingTop: 60 }}>Checking admin authentication…</div>;
+  // Status Badge Component
+  function StatusBadge({ status }: { status: StudentAccessStatus }) {
+    switch (status) {
+      case 'active':
+        return (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+              padding: '4px 10px',
+              borderRadius: 20,
+              fontSize: '0.8rem',
+              fontWeight: 800,
+              backgroundColor: 'rgba(16, 185, 129, 0.12)',
+              color: '#059669',
+              border: '1px solid rgba(16, 185, 129, 0.3)',
+            }}
+          >
+            <CheckCircle2 size={13} />
+            <span>{lang === 'KH' ? 'សកម្ម (Active)' : 'Active'}</span>
+          </span>
+        );
+      case 'expiring_soon':
+        return (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+              padding: '4px 10px',
+              borderRadius: 20,
+              fontSize: '0.8rem',
+              fontWeight: 800,
+              backgroundColor: 'rgba(245, 158, 11, 0.14)',
+              color: '#d97706',
+              border: '1px solid rgba(245, 158, 11, 0.35)',
+            }}
+          >
+            <Clock size={13} />
+            <span>{lang === 'KH' ? 'ជិតផុតកំណត់ (Expiring)' : 'Expiring Soon'}</span>
+          </span>
+        );
+      case 'expired':
+        return (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+              padding: '4px 10px',
+              borderRadius: 20,
+              fontSize: '0.8rem',
+              fontWeight: 800,
+              backgroundColor: 'rgba(239, 68, 68, 0.12)',
+              color: '#dc2626',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+            }}
+          >
+            <XCircle size={13} />
+            <span>{lang === 'KH' ? 'ផុតកំណត់ (Expired)' : 'Expired'}</span>
+          </span>
+        );
+      case 'blocked':
+        return (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+              padding: '4px 10px',
+              borderRadius: 20,
+              fontSize: '0.8rem',
+              fontWeight: 800,
+              backgroundColor: 'rgba(100, 116, 139, 0.14)',
+              color: '#475569',
+              border: '1px solid rgba(100, 116, 139, 0.3)',
+            }}
+          >
+            <Ban size={13} />
+            <span>{lang === 'KH' ? 'បានផ្អាក (Blocked)' : 'Blocked'}</span>
+          </span>
+        );
+    }
   }
 
-  if (!user || !isAdmin) {
+  // Print Mode
+  if (isPrintMode) {
+    const visibleProfiles = profiles.filter((p) => showHiddenProfiles || !p.hidden);
     return (
-      <div className="wrap" style={{ textAlign: 'center', paddingTop: 60 }}>
-        <h2>Admin Sign In Required</h2>
-        <p className="muted">Please log in to the admin dashboard to manage the student roster.</p>
-        <Link href="/admin" className="btn" style={{ display: 'inline-block', marginTop: 14 }}>
-          Go to Sign In
-        </Link>
-      </div>
-    );
-  }
-
-  // ================= PRINTABLE QR SHEET VIEW =================
-  if (printMode) {
-    return (
-      <div className="print-sheet-wrapper" style={{ padding: 24, backgroundColor: '#ffffff', minHeight: '100vh' }}>
-        {/* Print controls (hidden during window.print) */}
-        <div className="no-print" style={{ display: 'flex', gap: 12, marginBottom: 24, alignItems: 'center' }}>
+      <div style={{ backgroundColor: '#ffffff', color: '#000000', padding: 20 }}>
+        <div className="no-print" style={{ marginBottom: 20, display: 'flex', gap: 12 }}>
           <button
             type="button"
             className="btn"
             onClick={() => window.print()}
-            style={{ borderRadius: 10, padding: '10px 20px', fontWeight: 700 }}
+            style={{ backgroundColor: '#2563eb', color: '#fff', padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer', fontWeight: 700 }}
           >
-            <Printer size={18} style={{ marginRight: 8, verticalAlign: 'middle' }} />
-            Print QR Sheet Now
+            🖨️ Print Now
           </button>
           <button
             type="button"
             className="btn secondary"
-            onClick={() => setPrintMode(false)}
-            style={{ borderRadius: 10 }}
+            onClick={() => setIsPrintMode(false)}
+            style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #ccc', cursor: 'pointer' }}
           >
-            Back to Student Roster
+            Exit Print View
           </button>
-          <span className="muted" style={{ fontSize: '0.88rem' }}>
-            Tip: These cards can be cut out and glued directly into students' math notebooks.
-          </span>
         </div>
 
-        {/* Printable Grid of Cards */}
-        <div
-          className="print-grid"
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-            gap: 16,
-          }}
-        >
-          {students.map((s) => (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
+          {visibleProfiles.map((p) => (
             <div
-              key={s.id}
-              className="student-print-card"
+              key={p.id}
               style={{
                 border: '2px dashed #94a3b8',
-                borderRadius: 14,
-                padding: '16px 14px',
-                pageBreakInside: 'avoid',
-                backgroundColor: '#ffffff',
-                color: '#0f172a',
+                borderRadius: 12,
+                padding: 16,
                 display: 'flex',
                 flexDirection: 'column',
+                alignItems: 'center',
                 gap: 10,
+                pageBreakInside: 'avoid',
+                textAlign: 'center',
               }}
             >
-              {/* Card Header: Student Name & Class */}
-              <div style={{ borderBottom: '1.5px solid #e2e8f0', paddingBottom: 8, textAlign: 'center' }}>
-                <div style={{ fontSize: '1.25rem', fontWeight: 800 }}>{s.name}</div>
-                {s.className && (
-                  <div style={{ fontSize: '0.88rem', fontWeight: 600, color: '#475569' }}>
-                    ថ្នាក់៖ {s.className}
-                  </div>
-                )}
+              <div>
+                <h3 style={{ margin: '0 0 2px 0', fontSize: '1.15rem', fontWeight: 900 }}>{p.name}</h3>
+                {p.className && <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Class: {p.className}</span>}
               </div>
-
-              {/* QR Codes Row: Parent QR + Student QR */}
-              <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center', gap: 8 }}>
-                {/* Parent QR */}
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1e3a8a', marginBottom: 4 }}>
-                    📱 មាតាបិតា (Parent)
-                  </div>
-                  <div style={{ padding: 4, border: '1px solid #cbd5e1', borderRadius: 8, display: 'inline-block' }}>
-                    <QRCodeSVG value={`${origin}/p/${s.parentToken}`} size={105} level="M" />
-                  </div>
-                  <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: 2 }}>ស្កេនមើលលទ្ធផល</div>
-                </div>
-
-                <div style={{ width: 1, backgroundColor: '#cbd5e1', height: 110 }} />
-
-                {/* Student QR */}
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#047857', marginBottom: 4 }}>
-                    🎓 សិស្ស (Student)
-                  </div>
-                  <div style={{ padding: 4, border: '1px solid #cbd5e1', borderRadius: 8, display: 'inline-block' }}>
-                    <QRCodeSVG value={`${origin}/s/${s.studentToken}`} size={105} level="M" />
-                  </div>
-                  <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: 2 }}>ស្កេនធ្វើលំហាត់</div>
-                </div>
-              </div>
+              <QRCodeSVG value={getParentLink(p.parentToken)} size={130} />
+              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#16a34a' }}>Parent Tracking QR</div>
+              <div style={{ fontSize: '0.7rem', color: '#64748b' }}>ស្កេនដើម្បីមើលលទ្ធផលកូន / Scan to follow results</div>
             </div>
           ))}
         </div>
@@ -309,445 +677,1150 @@ export default function AdminStudentsPage() {
             .no-print {
               display: none !important;
             }
-            body {
-              background: #ffffff !important;
-              color: #000000 !important;
-            }
-            .print-grid {
-              display: grid !important;
-              grid-template-columns: repeat(2, 1fr) !important;
-              gap: 12px !important;
-            }
-            .student-print-card {
-              border: 1.5px dashed #475569 !important;
-              break-inside: avoid !important;
-            }
           }
         `}</style>
       </div>
     );
   }
 
-  // ================= MAIN ROSTER VIEW =================
   return (
-    <div className="wrap" style={{ maxWidth: 1040, padding: '24px 16px 80px' }}>
-      {/* Navigation and Title */}
-      <div style={{ marginBottom: 16 }}>
-        <Link
-          href="/admin"
+    <div style={{ minHeight: '100vh', backgroundColor: 'var(--theme-page-bg)', padding: '24px 20px 80px 20px' }}>
+      {/* Toast Notification */}
+      {toast && (
+        <div
           style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
+            position: 'fixed',
+            top: 20,
+            right: 20,
+            zIndex: 9999,
+            backgroundColor: 'var(--theme-navy)',
+            color: '#ffffff',
+            padding: '12px 20px',
+            borderRadius: 12,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
+            fontWeight: 700,
             fontSize: '0.92rem',
-            fontWeight: 600,
-            color: 'var(--brand)',
-            textDecoration: 'none',
-            marginBottom: 10,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            maxWidth: 420,
           }}
         >
-          <ArrowLeft size={16} /> Back to Dashboard
-        </Link>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: '1.85rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
-              បញ្ជីសិស្ស / Student Roster
-            </h1>
-            <p className="muted" style={{ margin: '4px 0 0', fontSize: '0.94rem' }}>
-              Manage student roster, generate private parent tracking links, and print QR codes.
-            </p>
-          </div>
-
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              className="btn secondary"
-              onClick={() => setPrintMode(true)}
-              style={{ borderRadius: 12, padding: '9px 16px', fontWeight: 700 }}
-              disabled={students.length === 0}
-            >
-              <Printer size={16} style={{ marginRight: 6 }} /> Print QR Sheet
-            </button>
-            <button
-              type="button"
-              className="btn"
-              onClick={() => setShowAddModal(true)}
-              style={{ borderRadius: 12, padding: '9px 18px', fontWeight: 700 }}
-            >
-              <Plus size={18} style={{ marginRight: 6 }} /> Add Student(s)
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Security Privacy Notice */}
-      <div
-        style={{
-          backgroundColor: '#eff6ff',
-          border: '1.5px solid #bfdbfe',
-          color: '#1e40af',
-          borderRadius: 14,
-          padding: '12px 16px',
-          marginBottom: 20,
-          fontSize: '0.94rem',
-          fontWeight: 600,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-        }}
-      >
-        <AlertTriangle size={20} color="#2563eb" style={{ flexShrink: 0 }} />
-        <div>
-          <strong>Privacy Notice:</strong> Anyone with a parent link can see that child&apos;s results. Share it only with the parent.
-        </div>
-      </div>
-
-      {/* Filter Bar & Language Toggle */}
-      <div
-        className="card"
-        style={{
-          padding: '14px 18px',
-          borderRadius: 16,
-          marginBottom: 18,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: 12,
-        }}
-      >
-        {/* Search */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 220 }}>
-          <Search size={18} color="var(--muted)" />
-          <input
-            type="text"
-            placeholder="Search student by name or class…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{
-              border: 'none',
-              outline: 'none',
-              background: 'transparent',
-              fontSize: '0.94rem',
-              width: '100%',
-              padding: '4px 0',
-            }}
-          />
-        </div>
-
-        {/* Message Language Toggle */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.88rem' }}>
-          <span className="muted" style={{ fontWeight: 600 }}>Message Language:</span>
-          <button
-            type="button"
-            className={`btn small ${messageLang === 'kh' ? '' : 'secondary'}`}
-            onClick={() => setMessageLang('kh')}
-            style={{ borderRadius: 8, padding: '4px 10px', fontSize: '0.82rem' }}
-          >
-            ភាសាខ្មែរ (Khmer)
-          </button>
-          <button
-            type="button"
-            className={`btn small ${messageLang === 'en' ? '' : 'secondary'}`}
-            onClick={() => setMessageLang('en')}
-            style={{ borderRadius: 8, padding: '4px 10px', fontSize: '0.82rem' }}
-          >
-            English
-          </button>
-        </div>
-      </div>
-
-      {/* Roster List / Table */}
-      {loading ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} style={{ height: 68, borderRadius: 14 }} className="skeleton" />
-          ))}
-        </div>
-      ) : filteredStudents.length === 0 ? (
-        <div className="card" style={{ padding: '40px 20px', textAlign: 'center', borderRadius: 16 }}>
-          <Users size={40} style={{ color: 'var(--muted)', margin: '0 auto 10px' }} />
-          <h3 style={{ margin: '0 0 6px', fontSize: '1.2rem' }}>
-            {search ? 'No students found matching your search.' : 'No students added yet.'}
-          </h3>
-          <p className="muted" style={{ margin: '0 0 16px', fontSize: '0.92rem' }}>
-            Add students one by one or paste your entire class list at once.
-          </p>
-          <button type="button" className="btn" onClick={() => setShowAddModal(true)}>
-            + Add Students Now
-          </button>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {filteredStudents.map((s) => {
-            const parentLink = `${origin}/p/${s.parentToken}`;
-            const studentLink = `${origin}/s/${s.studentToken}`;
-
-            return (
-              <div
-                key={s.id}
-                className="card"
-                style={{
-                  padding: '16px 20px',
-                  borderRadius: 16,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  flexWrap: 'wrap',
-                  gap: 14,
-                  opacity: s.active ? 1 : 0.6,
-                  border: s.active ? '1px solid var(--line)' : '1px dashed var(--line)',
-                }}
-              >
-                {/* Left: Name, Class, Status */}
-                <div style={{ minWidth: 200 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
-                      {s.name}
-                    </span>
-                    {!s.active && (
-                      <span
-                        style={{
-                          fontSize: '0.75rem',
-                          fontWeight: 700,
-                          padding: '2px 8px',
-                          borderRadius: 999,
-                          backgroundColor: 'var(--bad-bg)',
-                          color: 'var(--bad)',
-                        }}
-                      >
-                        Deactivated
-                      </span>
-                    )}
-                  </div>
-                  {s.className && (
-                    <div style={{ fontSize: '0.85rem', color: 'var(--muted)', marginTop: 2, fontWeight: 500 }}>
-                      ថ្នាក់៖ {s.className}
-                    </div>
-                  )}
-                </div>
-
-                {/* Right: Action Buttons */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  {/* Copy Parent Link */}
-                  <button
-                    type="button"
-                    className="btn secondary small"
-                    onClick={() => copyText(parentLink, `p-${s.id}`)}
-                    style={{ borderRadius: 10, fontSize: '0.84rem', fontWeight: 600 }}
-                    title={parentLink}
-                  >
-                    {copiedId === `p-${s.id}` ? <Check size={14} color="var(--good)" /> : <Copy size={14} />}
-                    <span style={{ marginLeft: 4 }}>
-                      {copiedId === `p-${s.id}` ? 'Copied!' : 'Copy parent link'}
-                    </span>
-                  </button>
-
-                  {/* Copy Student Link */}
-                  <button
-                    type="button"
-                    className="btn secondary small"
-                    onClick={() => copyText(studentLink, `s-${s.id}`)}
-                    style={{ borderRadius: 10, fontSize: '0.84rem', fontWeight: 600 }}
-                    title={studentLink}
-                  >
-                    {copiedId === `s-${s.id}` ? <Check size={14} color="var(--good)" /> : <Copy size={14} />}
-                    <span style={{ marginLeft: 4 }}>
-                      {copiedId === `s-${s.id}` ? 'Copied!' : 'Copy student link'}
-                    </span>
-                  </button>
-
-                  {/* Copy Message for Parent */}
-                  <button
-                    type="button"
-                    className="btn secondary small"
-                    onClick={() => copyParentMessage(s)}
-                    style={{
-                      borderRadius: 10,
-                      fontSize: '0.84rem',
-                      fontWeight: 700,
-                      backgroundColor: 'rgba(74, 103, 214, 0.08)',
-                      borderColor: 'var(--brand)',
-                      color: 'var(--brand)',
-                    }}
-                    title="Copy message formatted for Telegram or Messenger"
-                  >
-                    {copiedId === `msg-${s.id}` ? (
-                      <Check size={14} color="var(--good)" />
-                    ) : (
-                      <MessageSquare size={14} />
-                    )}
-                    <span style={{ marginLeft: 4 }}>
-                      {copiedId === `msg-${s.id}` ? 'Copied!' : 'Copy message for parent'}
-                    </span>
-                  </button>
-
-                  {/* View QR Code */}
-                  <button
-                    type="button"
-                    className="btn secondary small"
-                    onClick={() => setQrStudent(s)}
-                    style={{ borderRadius: 10, padding: '6px 10px' }}
-                    title="Show QR Code"
-                  >
-                    <QrCode size={15} />
-                  </button>
-
-                  {/* Regenerate Parent Link */}
-                  <button
-                    type="button"
-                    className="btn secondary small"
-                    onClick={() => setRegenStudent(s)}
-                    style={{ borderRadius: 10, padding: '6px 10px' }}
-                    title="New parent link (regenerates token)"
-                  >
-                    <RefreshCw size={14} />
-                  </button>
-
-                  {/* Toggle Active */}
-                  <button
-                    type="button"
-                    className="btn secondary small"
-                    onClick={() => handleToggleActive(s)}
-                    style={{
-                      borderRadius: 10,
-                      padding: '6px 10px',
-                      color: s.active ? 'var(--muted)' : 'var(--good)',
-                    }}
-                    title={s.active ? 'Deactivate student' : 'Reactivate student'}
-                  >
-                    {s.active ? <UserX size={15} /> : <UserCheck size={15} />}
-                  </button>
-
-                  {/* Delete */}
-                  <button
-                    type="button"
-                    className="btn danger small"
-                    onClick={() => handleDeleteStudent(s)}
-                    style={{ borderRadius: 10, padding: '6px 10px' }}
-                    title="Delete student"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+          <CheckCircle2 size={18} color="#34d399" />
+          <span>{toast}</span>
         </div>
       )}
 
-      {/* ================= ADD STUDENT MODAL ================= */}
+      <div style={{ maxWidth: 1140, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
+        {/* Top Header Bar */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <Link
+              href="/admin"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '8px 14px',
+                borderRadius: 10,
+                backgroundColor: 'var(--theme-card-bg)',
+                border: '1px solid var(--theme-border)',
+                color: 'var(--theme-navy)',
+                fontSize: '0.85rem',
+                fontWeight: 700,
+                textDecoration: 'none',
+              }}
+            >
+              <ArrowLeft size={16} />
+              <span>{lang === 'KH' ? 'ត្រឡប់ទៅផ្ទាំងគ្រប់គ្រង' : 'Back to Dashboard'}</span>
+            </Link>
+
+            <div>
+              <h1 style={{ margin: 0, fontSize: '1.45rem', fontWeight: 900, color: 'var(--theme-navy)' }}>
+                {lang === 'KH' ? 'ការគ្រប់គ្រងសិស្ស & ការចូលប្រើ' : 'Student Management & Access Control'}
+              </h1>
+              <span style={{ fontSize: '0.82rem', color: 'var(--theme-muted)' }}>
+                {lang === 'KH'
+                  ? 'កំណត់ការអនុញ្ញាត និងកាលបរិច្ឆេទផុតកំណត់សម្រាប់សិស្សម្នាក់ៗ (Asia/Phnom_Penh)'
+                  : 'Manage approved students and expiration dates (Cambodia Timezone UTC+7)'}
+              </span>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {/* Language toggle */}
+            <button
+              type="button"
+              onClick={() => setLang((prev) => (prev === 'KH' ? 'EN' : 'KH'))}
+              className="btn small secondary"
+              style={{ borderRadius: 10, padding: '7px 12px', fontSize: '0.82rem', fontWeight: 800 }}
+            >
+              {lang === 'KH' ? '🇰🇭 ខ្មែរ' : '🇬🇧 EN'}
+            </button>
+
+            {/* Theme toggle */}
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="btn small secondary"
+              style={{ borderRadius: 10, padding: '7px 10px' }}
+              aria-label="Toggle theme"
+            >
+              {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
+            </button>
+          </div>
+        </div>
+
+        {/* Tab Switcher: Access vs Parent Tracking */}
+        <div
+          style={{
+            display: 'flex',
+            backgroundColor: 'var(--theme-card-bg)',
+            borderRadius: 14,
+            padding: 4,
+            border: '1px solid var(--theme-border)',
+            gap: 6,
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setActiveTab('access')}
+            style={{
+              flex: 1,
+              padding: '10px 16px',
+              borderRadius: 10,
+              border: 'none',
+              backgroundColor: activeTab === 'access' ? 'var(--theme-primary)' : 'transparent',
+              color: activeTab === 'access' ? '#ffffff' : 'var(--theme-navy)',
+              fontWeight: 800,
+              fontSize: '0.92rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <Users size={18} />
+            <span>
+              {lang === 'KH'
+                ? `សិស្សអនុញ្ញាត & ផុតកំណត់ (${students.length})`
+                : `Student Access & Expiry (${students.length})`}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('parent')}
+            style={{
+              flex: 1,
+              padding: '10px 16px',
+              borderRadius: 10,
+              border: 'none',
+              backgroundColor: activeTab === 'parent' ? 'var(--theme-primary)' : 'transparent',
+              color: activeTab === 'parent' ? '#ffffff' : 'var(--theme-navy)',
+              fontWeight: 800,
+              fontSize: '0.92rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <QrCode size={18} />
+            <span>
+              {lang === 'KH'
+                ? `តំណតាមដានសម្រាប់មាតាបិតា (${profiles.length})`
+                : `Parent Tracking & QR (${profiles.length})`}
+            </span>
+          </button>
+        </div>
+
+        {/* ========================================================================= */}
+        {/* TAB 1: STUDENT ACCESS & EXPIRATION CONTROL */}
+        {/* ========================================================================= */}
+        {activeTab === 'access' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {/* Summary Metric Cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
+              <div
+                style={{
+                  backgroundColor: 'var(--theme-card-bg)',
+                  borderRadius: 14,
+                  padding: '14px 16px',
+                  border: '1px solid var(--theme-border)',
+                }}
+              >
+                <div style={{ fontSize: '0.78rem', color: 'var(--theme-muted)', fontWeight: 700 }}>
+                  {lang === 'KH' ? 'សរុបសិស្សអនុញ្ញាត' : 'Total Approved'}
+                </div>
+                <div style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--theme-navy)', marginTop: 4 }}>
+                  {stats.total}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  backgroundColor: 'var(--theme-card-bg)',
+                  borderRadius: 14,
+                  padding: '14px 16px',
+                  border: '1px solid var(--theme-border)',
+                  cursor: 'pointer',
+                }}
+                onClick={() => setSelectedStatus(selectedStatus === 'active' ? 'all' : 'active')}
+              >
+                <div style={{ fontSize: '0.78rem', color: '#059669', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <CheckCircle2 size={14} />
+                  <span>{lang === 'KH' ? 'កំពុងមានសិទ្ធិ' : 'Active'}</span>
+                </div>
+                <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#059669', marginTop: 4 }}>
+                  {stats.active}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  backgroundColor: 'var(--theme-card-bg)',
+                  borderRadius: 14,
+                  padding: '14px 16px',
+                  border: '1px solid var(--theme-border)',
+                  cursor: 'pointer',
+                }}
+                onClick={() => setSelectedStatus(selectedStatus === 'expiring_soon' ? 'all' : 'expiring_soon')}
+              >
+                <div style={{ fontSize: '0.78rem', color: '#d97706', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Clock size={14} />
+                  <span>{lang === 'KH' ? 'ជិតផុតកំណត់ (<= 7 ថ្ងៃ)' : 'Expiring Soon'}</span>
+                </div>
+                <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#d97706', marginTop: 4 }}>
+                  {stats.expiring}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  backgroundColor: 'var(--theme-card-bg)',
+                  borderRadius: 14,
+                  padding: '14px 16px',
+                  border: '1px solid var(--theme-border)',
+                  cursor: 'pointer',
+                }}
+                onClick={() => setSelectedStatus(selectedStatus === 'expired' ? 'all' : 'expired')}
+              >
+                <div style={{ fontSize: '0.78rem', color: '#dc2626', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <XCircle size={14} />
+                  <span>{lang === 'KH' ? 'ផុតកំណត់ហើយ' : 'Expired'}</span>
+                </div>
+                <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#dc2626', marginTop: 4 }}>
+                  {stats.expired}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  backgroundColor: 'var(--theme-card-bg)',
+                  borderRadius: 14,
+                  padding: '14px 16px',
+                  border: '1px solid var(--theme-border)',
+                  cursor: 'pointer',
+                }}
+                onClick={() => setSelectedStatus(selectedStatus === 'blocked' ? 'all' : 'blocked')}
+              >
+                <div style={{ fontSize: '0.78rem', color: '#475569', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Ban size={14} />
+                  <span>{lang === 'KH' ? 'បានផ្អាក' : 'Blocked'}</span>
+                </div>
+                <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#475569', marginTop: 4 }}>
+                  {stats.blocked}
+                </div>
+              </div>
+            </div>
+
+            {/* Action Bar: Search, Filters & Add Student Button */}
+            <div
+              style={{
+                backgroundColor: 'var(--theme-card-bg)',
+                borderRadius: 16,
+                padding: '16px 18px',
+                border: '1px solid var(--theme-border)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 12,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', flex: 1 }}>
+                {/* Search Input */}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '8px 12px',
+                    borderRadius: 10,
+                    backgroundColor: 'var(--theme-page-bg)',
+                    border: '1px solid var(--theme-border)',
+                    minWidth: 220,
+                    maxWidth: 320,
+                    flex: 1,
+                  }}
+                >
+                  <Search size={16} color="var(--theme-muted)" />
+                  <input
+                    type="text"
+                    placeholder={lang === 'KH' ? 'ស្វែងរកតាមឈ្មោះសិស្ស…' : 'Search by student name…'}
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    style={{
+                      border: 'none',
+                      background: 'none',
+                      color: 'var(--theme-navy)',
+                      fontSize: '0.88rem',
+                      width: '100%',
+                      outline: 'none',
+                    }}
+                  />
+                  {searchTerm && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchTerm('')}
+                      style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}
+                    >
+                      <X size={14} color="var(--theme-muted)" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Grade Filter */}
+                <select
+                  value={selectedGrade}
+                  onChange={(e) => setSelectedGrade(e.target.value)}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 10,
+                    backgroundColor: 'var(--theme-page-bg)',
+                    border: '1px solid var(--theme-border)',
+                    color: 'var(--theme-navy)',
+                    fontSize: '0.86rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    outline: 'none',
+                  }}
+                  aria-label="Filter by Grade"
+                >
+                  <option value="all">{lang === 'KH' ? 'គ្រប់កម្រិតថ្នាក់ (7–12)' : 'All Grades (7–12)'}</option>
+                  <option value="7">ថ្នាក់ទី ៧ (Grade 7)</option>
+                  <option value="8">ថ្នាក់ទី ៨ (Grade 8)</option>
+                  <option value="9">ថ្នាក់ទី ៩ (Grade 9)</option>
+                  <option value="10">ថ្នាក់ទី ១០ (Grade 10)</option>
+                  <option value="11">ថ្នាក់ទី ១១ (Grade 11)</option>
+                  <option value="12">ថ្នាក់ទី ១២ (Grade 12)</option>
+                </select>
+
+                {/* Class Filter */}
+                <select
+                  value={selectedClass}
+                  onChange={(e) => setSelectedClass(e.target.value)}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 10,
+                    backgroundColor: 'var(--theme-page-bg)',
+                    border: '1px solid var(--theme-border)',
+                    color: 'var(--theme-navy)',
+                    fontSize: '0.86rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    outline: 'none',
+                  }}
+                >
+                  <option value="all">{lang === 'KH' ? 'គ្រប់ថ្នាក់ទាំងអស់' : 'All Classes'}</option>
+                  {uniqueClasses.map((c) => (
+                    <option key={c} value={c}>
+                      Class {c}
+                    </option>
+                  ))}
+                </select>
+
+                {/* Status Filter */}
+                <select
+                  value={selectedStatus}
+                  onChange={(e) => setSelectedStatus(e.target.value)}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 10,
+                    backgroundColor: 'var(--theme-page-bg)',
+                    border: '1px solid var(--theme-border)',
+                    color: 'var(--theme-navy)',
+                    fontSize: '0.86rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    outline: 'none',
+                  }}
+                >
+                  <option value="all">{lang === 'KH' ? 'ស្ថានភាពទាំងអស់' : 'All Statuses'}</option>
+                  <option value="active">{lang === 'KH' ? 'សកម្ម (Active)' : 'Active'}</option>
+                  <option value="expiring_soon">{lang === 'KH' ? 'ជិតផុតកំណត់ (Expiring Soon)' : 'Expiring Soon'}</option>
+                  <option value="expired">{lang === 'KH' ? 'ផុតកំណត់ (Expired)' : 'Expired'}</option>
+                  <option value="blocked">{lang === 'KH' ? 'បានផ្អាក (Blocked)' : 'Blocked'}</option>
+                </select>
+              </div>
+
+              {/* Add Student Button */}
+              <button
+                type="button"
+                onClick={openAddModal}
+                className="btn"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '9px 18px',
+                  borderRadius: 12,
+                  backgroundColor: 'var(--theme-primary)',
+                  color: '#ffffff',
+                  fontWeight: 800,
+                  fontSize: '0.92rem',
+                  border: 'none',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(37,99,235,0.25)',
+                }}
+              >
+                <Plus size={18} />
+                <span>{lang === 'KH' ? '+ បន្ថែមសិស្សថ្មី' : '+ Add Student'}</span>
+              </button>
+            </div>
+
+            {/* Note banner: Manual Payment & Name-only matching */}
+            <div
+              style={{
+                backgroundColor: 'rgba(59, 130, 246, 0.08)',
+                border: '1px solid rgba(59, 130, 246, 0.25)',
+                borderRadius: 14,
+                padding: '12px 16px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                fontSize: '0.85rem',
+                color: 'var(--theme-navy)',
+              }}
+            >
+              <ShieldAlert size={20} color="var(--theme-primary)" style={{ flexShrink: 0 }} />
+              <div>
+                <strong>{lang === 'KH' ? 'ប្រព័ន្ធទូទាត់ក្រៅបណ្ដាញ & ការចូលប្រើ ៖' : 'Offline Payment & Access Control:'}</strong>{' '}
+                {lang === 'KH'
+                  ? 'បន្ទាប់ពីទទួលបានការបង់ប្រាក់ផ្ទាល់ លោកគ្រូអ្នកគ្រូគ្រាន់តែបន្ថែមឈ្មោះ និងកំណត់កាលបរិច្ឆេទផុតកំណត់។ សិស្សមិនចាំបាច់មានគណនី ឬលេខសម្ងាត់ទេ គ្រាន់តែវាយឈ្មោះខ្លួនឯងដើម្បីធ្វើលំហាត់។'
+                  : 'After receiving manual payment outside the site, add the student and set an expiration date. Students enter only their name to start exercises.'}
+              </div>
+            </div>
+
+            {/* Student Table */}
+            <div
+              style={{
+                backgroundColor: 'var(--theme-card-bg)',
+                borderRadius: 16,
+                border: '1px solid var(--theme-border)',
+                overflow: 'hidden',
+                boxShadow: 'var(--theme-shadow)',
+              }}
+            >
+              {loadingStudents ? (
+                <div style={{ padding: 40, textAlign: 'center', color: 'var(--theme-muted)' }}>
+                  <RefreshCw size={24} className="spin" style={{ margin: '0 auto 10px' }} />
+                  <p style={{ margin: 0, fontWeight: 700 }}>
+                    {lang === 'KH' ? 'កំពុងទាញយកទិន្នន័យសិស្ស…' : 'Loading approved student list…'}
+                  </p>
+                </div>
+              ) : filteredStudents.length === 0 ? (
+                <div style={{ padding: 48, textAlign: 'center', color: 'var(--theme-muted)' }}>
+                  <Users size={36} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
+                  <h3 style={{ margin: '0 0 6px 0', fontSize: '1.1rem', color: 'var(--theme-navy)' }}>
+                    {lang === 'KH' ? 'មិនមានទិន្នន័យសិស្សទេ' : 'No students found'}
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '0.85rem' }}>
+                    {searchTerm || selectedClass !== 'all' || selectedStatus !== 'all'
+                      ? lang === 'KH'
+                        ? 'មិនមានសិស្សត្រូវនឹងលក្ខខណ្ឌស្វែងរកនេះទេ។'
+                        : 'No students match the selected filters.'
+                      : lang === 'KH'
+                      ? 'ចុចប៊ូតុង "+ បន្ថែមសិស្សថ្មី" ដើម្បីចាប់ផ្ដើមអនុញ្ញាតសិស្ស។'
+                      : 'Click "+ Add Student" to add approved students.'}
+                  </p>
+                </div>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
+                    <thead>
+                      <tr
+                        style={{
+                          backgroundColor: 'var(--theme-page-bg)',
+                          borderBottom: '1px solid var(--theme-border)',
+                          color: 'var(--theme-muted)',
+                          fontSize: '0.8rem',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.04em',
+                          fontWeight: 800,
+                        }}
+                      >
+                        <th style={{ padding: '14px 18px' }}>{lang === 'KH' ? 'ឈ្មោះសិស្ស' : 'Student Name'}</th>
+                        <th style={{ padding: '14px 18px' }}>{lang === 'KH' ? 'កម្រិតថ្នាក់' : 'Grade'}</th>
+                        <th style={{ padding: '14px 18px' }}>{lang === 'KH' ? 'ថ្នាក់' : 'Class'}</th>
+                        <th style={{ padding: '14px 18px' }}>{lang === 'KH' ? 'កាលបរិច្ឆេទផុតកំណត់' : 'Expiration Date'}</th>
+                        <th style={{ padding: '14px 18px' }}>{lang === 'KH' ? 'ស្ថានភាពចូលប្រើ' : 'Access Status'}</th>
+                        <th style={{ padding: '14px 18px' }}>{lang === 'KH' ? 'កែប្រែចុងក្រោយ' : 'Last Updated'}</th>
+                        <th style={{ padding: '14px 18px', textAlign: 'right' }}>{lang === 'KH' ? 'សកម្មភាព' : 'Actions'}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredStudents.map((s) => (
+                        <tr
+                          key={s.id}
+                          style={{
+                            borderBottom: '1px solid var(--theme-border)',
+                            transition: 'background-color 0.1s ease',
+                          }}
+                        >
+                          {/* Student Name */}
+                          <td style={{ padding: '14px 18px' }}>
+                            <div style={{ fontWeight: 800, color: 'var(--theme-navy)', fontSize: '0.95rem' }}>
+                              {s.name}
+                            </div>
+                            {s.lastActivityAt && (
+                              <div style={{ fontSize: '0.74rem', color: 'var(--theme-muted)', marginTop: 2 }}>
+                                <span>{lang === 'KH' ? 'សកម្មភាពចុងក្រោយ ៖ ' : 'Last activity: '}</span>
+                                {new Date(s.lastActivityAt).toLocaleDateString()}
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Grade */}
+                          <td style={{ padding: '14px 18px' }}>
+                            <span
+                              style={{
+                                padding: '3px 8px',
+                                borderRadius: 8,
+                                backgroundColor: 'rgba(74, 103, 214, 0.12)',
+                                color: 'var(--brand)',
+                                fontWeight: 800,
+                                fontSize: '0.82rem',
+                                border: '1px solid rgba(74, 103, 214, 0.25)',
+                              }}
+                            >
+                              {lang === 'KH' ? `ថ្នាក់ទី ${s.grade || 7}` : `Grade ${s.grade || 7}`}
+                            </span>
+                          </td>
+
+                          {/* Class */}
+                          <td style={{ padding: '14px 18px' }}>
+                            {s.className ? (
+                              <span
+                                style={{
+                                  padding: '3px 8px',
+                                  borderRadius: 8,
+                                  backgroundColor: 'rgba(74, 103, 214, 0.1)',
+                                  color: 'var(--theme-primary)',
+                                  fontWeight: 700,
+                                  fontSize: '0.82rem',
+                                }}
+                              >
+                                {s.className}
+                              </span>
+                            ) : (
+                              <span style={{ color: 'var(--theme-muted)', fontSize: '0.85rem' }}>—</span>
+                            )}
+                          </td>
+
+                          {/* Expiration Date */}
+                          <td style={{ padding: '14px 18px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, color: 'var(--theme-navy)' }}>
+                              <Calendar size={15} color="var(--theme-muted)" />
+                              <span>{s.expirationDate}</span>
+                            </div>
+                            <div style={{ fontSize: '0.74rem', color: 'var(--theme-muted)', marginTop: 2 }}>
+                              Asia/Phnom_Penh (23:59:59)
+                            </div>
+                          </td>
+
+                          {/* Access Status */}
+                          <td style={{ padding: '14px 18px' }}>
+                            <StatusBadge status={s.status} />
+                          </td>
+
+                          {/* Last Updated */}
+                          <td style={{ padding: '14px 18px', color: 'var(--theme-muted)', fontSize: '0.84rem' }}>
+                            {new Date(s.updatedAt || s.createdAt).toLocaleDateString()}
+                          </td>
+
+                          {/* Actions */}
+                          <td style={{ padding: '14px 18px', textAlign: 'right' }}>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                              {/* View Submissions Button */}
+                              <button
+                                type="button"
+                                onClick={() => handleViewSubmissions(s)}
+                                title={lang === 'KH' ? 'មើលប្រវត្តិធ្វើលំហាត់' : 'View Submission History'}
+                                style={{
+                                  padding: '6px 10px',
+                                  borderRadius: 8,
+                                  border: '1px solid var(--theme-border)',
+                                  backgroundColor: 'var(--theme-page-bg)',
+                                  color: 'var(--theme-primary)',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  fontSize: '0.8rem',
+                                  fontWeight: 700,
+                                }}
+                              >
+                                <Clock size={14} />
+                                <span>{lang === 'KH' ? 'ប្រវត្តិ' : 'History'}</span>
+                              </button>
+
+                              {/* Extend Button */}
+                              <button
+                                type="button"
+                                onClick={() => setExtendingStudent(s)}
+                                title={lang === 'KH' ? 'បន្តការចូលប្រើ' : 'Extend Expiration'}
+                                style={{
+                                  padding: '6px 10px',
+                                  borderRadius: 8,
+                                  border: '1px solid var(--theme-border)',
+                                  backgroundColor: 'var(--theme-page-bg)',
+                                  color: '#059669',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  fontSize: '0.8rem',
+                                  fontWeight: 700,
+                                }}
+                              >
+                                <Plus size={14} />
+                                <span>{lang === 'KH' ? 'បន្ត' : 'Extend'}</span>
+                              </button>
+
+                              {/* Edit Button */}
+                              <button
+                                type="button"
+                                onClick={() => openEditModal(s)}
+                                title={lang === 'KH' ? 'កែសម្រួល' : 'Edit Student'}
+                                style={{
+                                  padding: '6px 8px',
+                                  borderRadius: 8,
+                                  border: '1px solid var(--theme-border)',
+                                  backgroundColor: 'var(--theme-page-bg)',
+                                  color: 'var(--theme-navy)',
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                <Edit2 size={15} />
+                              </button>
+
+                              {/* Block / Activate Button */}
+                              <button
+                                type="button"
+                                onClick={() => setBlockingStudent(s)}
+                                title={s.accessEnabled ? (lang === 'KH' ? 'ផ្អាកការចូលប្រើ' : 'Block Access') : (lang === 'KH' ? 'បើកដំណើរការឡើងវិញ' : 'Activate Access')}
+                                style={{
+                                  padding: '6px 8px',
+                                  borderRadius: 8,
+                                  border: '1px solid var(--theme-border)',
+                                  backgroundColor: 'var(--theme-page-bg)',
+                                  color: s.accessEnabled ? '#d97706' : '#059669',
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                {s.accessEnabled ? <Ban size={15} /> : <CheckCircle2 size={15} />}
+                              </button>
+
+                              {/* Delete Button */}
+                              <button
+                                type="button"
+                                onClick={() => setDeletingStudent(s)}
+                                title={lang === 'KH' ? 'លុបសិស្ស' : 'Delete Student'}
+                                style={{
+                                  padding: '6px 8px',
+                                  borderRadius: 8,
+                                  border: '1px solid var(--theme-border)',
+                                  backgroundColor: 'var(--theme-page-bg)',
+                                  color: '#dc2626',
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                <Trash2 size={15} />
+                              </button>
+
+                              {/* Parent QR Code shortcut */}
+                              {s.parentToken && (
+                                <button
+                                  type="button"
+                                  onClick={() => setQrStudent({ name: s.name, className: s.className || '', token: s.parentToken! })}
+                                  title={lang === 'KH' ? 'QR មាតាបិតា' : 'Parent QR'}
+                                  style={{
+                                    padding: '6px 8px',
+                                    borderRadius: 8,
+                                    border: '1px solid var(--theme-border)',
+                                    backgroundColor: 'var(--theme-page-bg)',
+                                    color: 'var(--theme-primary)',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  <QrCode size={15} />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB 2: PARENT TRACKING PROFILES & QR CODES */}
+        {/* ========================================================================= */}
+        {activeTab === 'parent' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {/* Parent Tracking Header Options */}
+            <div
+              style={{
+                backgroundColor: 'var(--theme-card-bg)',
+                borderRadius: 16,
+                padding: '16px 18px',
+                border: '1px solid var(--theme-border)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 12,
+              }}
+            >
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
+                  {lang === 'KH' ? 'ប្រវត្តិរូបតាមដានសម្រាប់មាតាបិតា' : 'Parent Tracking Profiles'}
+                </h3>
+                <span style={{ fontSize: '0.82rem', color: 'var(--theme-muted)' }}>
+                  {lang === 'KH'
+                    ? 'មាតាបិតាអាចមើលលទ្ធផលកូនបានតាមតំណឯកជន និង QR code ដោយមិនបាច់ចុះឈ្មោះ'
+                    : 'Private tracking links and QR codes for parents. No login required.'}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="btn secondary small"
+                  onClick={() => setIsPrintMode(true)}
+                  style={{ borderRadius: 10, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                >
+                  <Printer size={15} />
+                  <span>{lang === 'KH' ? 'បោះពុម្ពសន្លឹក QR' : 'Print QR Sheet'}</span>
+                </button>
+
+                <label
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    cursor: 'pointer',
+                    fontSize: '0.82rem',
+                    fontWeight: 700,
+                    color: 'var(--theme-navy)',
+                    padding: '7px 12px',
+                    borderRadius: 10,
+                    backgroundColor: 'var(--theme-page-bg)',
+                    border: '1px solid var(--theme-border)',
+                    userSelect: 'none',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={showClassAverage}
+                    onChange={(e) => handleToggleClassAverage(e.target.checked)}
+                    style={{ width: 15, height: 15, cursor: 'pointer', accentColor: 'var(--theme-primary)' }}
+                  />
+                  <span>{lang === 'KH' ? 'បង្ហាញមធ្យមភាគថ្នាក់ដល់មាតាបិតា' : 'Show class average to parents'}</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Profiles Cards Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
+              {profiles
+                .filter((p) => showHiddenProfiles || !p.hidden)
+                .map((p) => (
+                  <div
+                    key={p.id}
+                    style={{
+                      backgroundColor: 'var(--theme-card-bg)',
+                      borderRadius: 14,
+                      padding: 16,
+                      border: '1px solid var(--theme-border)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                      gap: 12,
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
+                          {p.name}
+                        </h4>
+                        {p.className && (
+                          <span style={{ fontSize: '0.78rem', color: 'var(--theme-muted)' }}>Class: {p.className}</span>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button
+                          type="button"
+                          onClick={() => setQrStudent({ name: p.name, className: p.className || '', token: p.parentToken })}
+                          title="Show QR Code"
+                          style={{
+                            padding: '6px 8px',
+                            borderRadius: 8,
+                            border: '1px solid var(--theme-border)',
+                            backgroundColor: 'var(--theme-page-bg)',
+                            color: 'var(--theme-navy)',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <QrCode size={15} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => copyParentMessage(p)}
+                          title="Copy Parent Message"
+                          style={{
+                            padding: '6px 8px',
+                            borderRadius: 8,
+                            border: '1px solid var(--theme-border)',
+                            backgroundColor: 'var(--theme-page-bg)',
+                            color: 'var(--theme-primary)',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <Copy size={15} />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: 'var(--theme-muted)' }}>
+                      <span>Completed: <strong>{p.completedCount}</strong></span>
+                      <span>Avg Score: <strong>{p.averagePercent !== null ? `${p.averagePercent}%` : '—'}</strong></span>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                      <a
+                        href={getParentLink(p.parentToken)}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{
+                          flex: 1,
+                          textAlign: 'center',
+                          padding: '7px 12px',
+                          borderRadius: 8,
+                          backgroundColor: 'var(--theme-page-bg)',
+                          border: '1px solid var(--theme-border)',
+                          color: 'var(--theme-navy)',
+                          fontSize: '0.8rem',
+                          fontWeight: 700,
+                          textDecoration: 'none',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 4,
+                        }}
+                      >
+                        <ExternalLink size={13} />
+                        <span>Open Link</span>
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => openMergeModal(p)}
+                        style={{
+                          padding: '7px 12px',
+                          borderRadius: 8,
+                          backgroundColor: 'var(--theme-page-bg)',
+                          border: '1px solid var(--theme-border)',
+                          color: 'var(--theme-muted)',
+                          fontSize: '0.8rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Rename/Merge
+                      </button>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ========================================================================= */}
+      {/* MODAL 1: ADD STUDENT */}
+      {/* ========================================================================= */}
       {showAddModal && (
         <div
           style={{
             position: 'fixed',
             inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.55)',
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            backdropFilter: 'blur(3px)',
+            zIndex: 999,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 100,
             padding: 16,
           }}
         >
           <div
-            className="card"
             style={{
-              maxWidth: 500,
-              width: '100%',
+              backgroundColor: 'var(--theme-card-bg)',
               borderRadius: 20,
+              maxWidth: 480,
+              width: '100%',
               padding: '24px 22px',
-              boxShadow: '0 12px 40px rgba(0,0,0,0.2)',
+              border: '1px solid var(--theme-border)',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h2 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 800 }}>Add Student(s)</h2>
+              <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 900, color: 'var(--theme-navy)' }}>
+                {lang === 'KH' ? '➕ បន្ថែមសិស្សអនុញ្ញាតថ្មី' : '➕ Add Approved Student'}
+              </h3>
               <button
                 type="button"
                 onClick={() => setShowAddModal(false)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}
+                style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 4 }}
               >
-                <X size={20} />
+                <X size={20} color="var(--theme-muted)" />
               </button>
             </div>
 
-            {/* Mode Tabs */}
-            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-              <button
-                type="button"
-                className={`btn small ${addMode === 'single' ? '' : 'secondary'}`}
-                onClick={() => setAddMode('single')}
-                style={{ flex: 1, borderRadius: 10 }}
-              >
-                Single Student
-              </button>
-              <button
-                type="button"
-                className={`btn small ${addMode === 'bulk' ? '' : 'secondary'}`}
-                onClick={() => setAddMode('bulk')}
-                style={{ flex: 1, borderRadius: 10 }}
-              >
-                Paste Many (Bulk)
-              </button>
-            </div>
-
-            <form onSubmit={handleAddStudent} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {addMode === 'single' ? (
-                <div>
-                  <label style={{ display: 'block', fontWeight: 600, fontSize: '0.88rem', marginBottom: 4 }}>
-                    Student Name (ឈ្មោះសិស្ស) *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. សុខ វិសាល"
-                    value={singleName}
-                    onChange={(e) => setSingleName(e.target.value)}
-                    autoFocus
-                  />
-                </div>
-              ) : (
-                <div>
-                  <label style={{ display: 'block', fontWeight: 600, fontSize: '0.88rem', marginBottom: 4 }}>
-                    Paste Names (One per line / ឈ្មោះមួយជួរមួយ) *
-                  </label>
-                  <textarea
-                    rows={6}
-                    required
-                    placeholder={'សុខ វិសាល\nចាន់ ធីតា\nរ័ត្ន បញ្ញា'}
-                    value={bulkNames}
-                    onChange={(e) => setBulkNames(e.target.value)}
-                    style={{ width: '100%', fontFamily: 'inherit' }}
-                    autoFocus
-                  />
+            <form onSubmit={handleAddSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {formError && (
+                <div
+                  style={{
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    color: '#dc2626',
+                    padding: '10px 14px',
+                    borderRadius: 10,
+                    fontSize: '0.86rem',
+                    fontWeight: 700,
+                  }}
+                >
+                  {formError}
                 </div>
               )}
 
+              {/* Student Name */}
               <div>
-                <label style={{ display: 'block', fontWeight: 600, fontSize: '0.88rem', marginBottom: 4 }}>
-                  Class / Group (optional / ថ្នាក់)
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 800, color: 'var(--theme-navy)', marginBottom: 6 }}>
+                  {lang === 'KH' ? 'ឈ្មោះសិស្ស (Student Name) *' : 'Student Name *'}
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Grade 9A or ថ្នាក់ទី ៩A"
-                  value={classNameInput}
-                  onChange={(e) => setClassNameInput(e.target.value)}
+                  required
+                  placeholder="e.g. ស៊ុន ដារ៉ា ឬ Sok Dara"
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '11px 14px',
+                    borderRadius: 10,
+                    border: '1px solid var(--theme-border)',
+                    backgroundColor: 'var(--theme-page-bg)',
+                    color: 'var(--theme-navy)',
+                    fontSize: '0.95rem',
+                    fontWeight: 700,
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
                 />
               </div>
 
-              {error && <div className="error">{error}</div>}
+              {/* Grade Selection (Grades 7–12) */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 800, color: 'var(--theme-navy)', marginBottom: 6 }}>
+                  {lang === 'KH' ? 'កម្រិតថ្នាក់ (Grade 7–12) *' : 'Grade (7–12) *'}
+                </label>
+                <select
+                  value={formGrade}
+                  onChange={(e) => setFormGrade(Number(e.target.value))}
+                  style={{
+                    width: '100%',
+                    padding: '11px 14px',
+                    borderRadius: 10,
+                    border: '1px solid var(--theme-border)',
+                    backgroundColor: 'var(--theme-page-bg)',
+                    color: 'var(--theme-navy)',
+                    fontSize: '0.92rem',
+                    fontWeight: 700,
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {[7, 8, 9, 10, 11, 12].map((g) => (
+                    <option key={g} value={g}>
+                      {lang === 'KH' ? `ថ្នាក់ទី ${g} (Grade ${g})` : `Grade ${g}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
+              {/* Class Name */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 800, color: 'var(--theme-navy)', marginBottom: 6 }}>
+                  {lang === 'KH' ? 'ថ្នាក់ (Class) — មិនបង្ខំ' : 'Class — Optional'}
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. 7A, 8B"
+                  value={formClass}
+                  onChange={(e) => setFormClass(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '11px 14px',
+                    borderRadius: 10,
+                    border: '1px solid var(--theme-border)',
+                    backgroundColor: 'var(--theme-page-bg)',
+                    color: 'var(--theme-navy)',
+                    fontSize: '0.92rem',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              {/* Expiration Date */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 800, color: 'var(--theme-navy)', marginBottom: 6 }}>
+                  {lang === 'KH' ? 'កាលបរិច្ឆេទផុតកំណត់ (Expiration Date) *' : 'Expiration Date (Cambodia Time) *'}
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={formExpiration}
+                  onChange={(e) => setFormExpiration(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '11px 14px',
+                    borderRadius: 10,
+                    border: '1px solid var(--theme-border)',
+                    backgroundColor: 'var(--theme-page-bg)',
+                    color: 'var(--theme-navy)',
+                    fontSize: '0.95rem',
+                    fontWeight: 700,
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                />
+                {/* Quick Presets */}
+                <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                  {[
+                    { label: '+30 ថ្ងៃ', days: 30 },
+                    { label: '+60 ថ្ងៃ', days: 60 },
+                    { label: '+90 ថ្ងៃ', days: 90 },
+                    { label: '+1 ឆ្នាំ', days: 365 },
+                  ].map((p) => (
+                    <button
+                      key={p.days}
+                      type="button"
+                      onClick={() => {
+                        const d = new Date(Date.now() + 7 * 60 * 60 * 1000 + p.days * 24 * 60 * 60 * 1000);
+                        setFormExpiration(d.toISOString().split('T')[0]);
+                      }}
+                      style={{
+                        padding: '4px 8px',
+                        borderRadius: 6,
+                        border: '1px solid var(--theme-border)',
+                        backgroundColor: 'var(--theme-page-bg)',
+                        color: 'var(--theme-primary)',
+                        fontSize: '0.78rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Access Enabled Toggle */}
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  cursor: 'pointer',
+                  padding: '8px 10px',
+                  borderRadius: 10,
+                  backgroundColor: 'var(--theme-page-bg)',
+                  userSelect: 'none',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={formAccessEnabled}
+                  onChange={(e) => setFormAccessEnabled(e.target.checked)}
+                  style={{ width: 17, height: 17, accentColor: 'var(--theme-primary)', cursor: 'pointer' }}
+                />
+                <span style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--theme-navy)' }}>
+                  {lang === 'KH' ? 'បើកដំណើរការការចូលប្រើ (Access Enabled)' : 'Enable Access Immediately'}
+                </span>
+              </label>
+
+              {/* Note on Name-only access */}
+              <div style={{ fontSize: '0.76rem', color: 'var(--theme-muted)', lineHeight: 1.4 }}>
+                ℹ️ {lang === 'KH'
+                  ? 'ចំណាំ ៖ ដោយសារសិស្សវាយតែឈ្មោះដើម្បីចូលធ្វើលំហាត់ ប្រសិនបើមានសិស្សឈ្មោះដូចគ្នាក្នុងថ្នាក់ផ្សេងគ្នា សូមណែនាំសិស្សឱ្យបញ្ជាក់ឱ្យច្បាស់។'
+                  : 'Note: Because students enter only their name to start, ensure unique spelling if students in different classes share identical names.'}
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
                 <button
                   type="button"
-                  className="btn secondary"
                   onClick={() => setShowAddModal(false)}
-                  disabled={saving}
+                  className="btn secondary"
+                  style={{ borderRadius: 10, padding: '9px 16px', fontWeight: 700 }}
                 >
-                  Cancel
+                  {lang === 'KH' ? 'បោះបង់' : 'Cancel'}
                 </button>
-                <button type="submit" className="btn" disabled={saving}>
-                  {saving ? 'Creating…' : 'Add Student(s)'}
+                <button
+                  type="submit"
+                  disabled={formSubmitting}
+                  className="btn"
+                  style={{
+                    borderRadius: 10,
+                    padding: '9px 20px',
+                    fontWeight: 800,
+                    backgroundColor: 'var(--theme-primary)',
+                    color: '#ffffff',
+                    border: 'none',
+                    cursor: formSubmitting ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {formSubmitting
+                    ? lang === 'KH'
+                      ? 'កំពុងរក្សាទុក…'
+                      : 'Saving…'
+                    : lang === 'KH'
+                    ? 'រក្សាទុកសិស្ស'
+                    : 'Save Student'}
                 </button>
               </div>
             </form>
@@ -755,133 +1828,961 @@ export default function AdminStudentsPage() {
         </div>
       )}
 
-      {/* ================= QR CODE MODAL ================= */}
-      {qrStudent && (
+      {/* ========================================================================= */}
+      {/* MODAL 2: EDIT STUDENT */}
+      {/* ========================================================================= */}
+      {editingStudent && (
         <div
           style={{
             position: 'fixed',
             inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.55)',
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            backdropFilter: 'blur(3px)',
+            zIndex: 999,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 100,
             padding: 16,
           }}
         >
           <div
-            className="card"
             style={{
-              maxWidth: 440,
-              width: '100%',
+              backgroundColor: 'var(--theme-card-bg)',
               borderRadius: 20,
-              padding: '24px 20px',
-              textAlign: 'center',
+              maxWidth: 480,
+              width: '100%',
+              padding: '24px 22px',
+              border: '1px solid var(--theme-border)',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 800 }}>{qrStudent.name}</h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 900, color: 'var(--theme-navy)' }}>
+                {lang === 'KH' ? '✏️ កែសម្រួលព័ត៌មានសិស្ស' : '✏️ Edit Student'}
+              </h3>
               <button
                 type="button"
-                onClick={() => setQrStudent(null)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}
+                onClick={() => setEditingStudent(null)}
+                style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 4 }}
               >
-                <X size={20} />
+                <X size={20} color="var(--theme-muted)" />
               </button>
             </div>
 
-            {qrStudent.className && <div className="muted" style={{ marginBottom: 16 }}>Class: {qrStudent.className}</div>}
+            <form onSubmit={handleEditSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {formError && (
+                <div
+                  style={{
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    color: '#dc2626',
+                    padding: '10px 14px',
+                    borderRadius: 10,
+                    fontSize: '0.86rem',
+                    fontWeight: 700,
+                  }}
+                >
+                  {formError}
+                </div>
+              )}
 
-            <div style={{ display: 'flex', justifyContent: 'space-around', gap: 16, margin: '16px 0' }}>
-              {/* Parent QR */}
               <div>
-                <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#1e3a8a', marginBottom: 6 }}>
-                  Parent Tracking QR
-                </div>
-                <div style={{ padding: 6, border: '1px solid #cbd5e1', borderRadius: 12, display: 'inline-block' }}>
-                  <QRCodeSVG value={`${origin}/p/${qrStudent.parentToken}`} size={130} level="M" />
-                </div>
-                <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginTop: 4 }}>
-                  Scan to view results
-                </div>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 800, color: 'var(--theme-navy)', marginBottom: 6 }}>
+                  {lang === 'KH' ? 'ឈ្មោះសិស្ស *' : 'Student Name *'}
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '11px 14px',
+                    borderRadius: 10,
+                    border: '1px solid var(--theme-border)',
+                    backgroundColor: 'var(--theme-page-bg)',
+                    color: 'var(--theme-navy)',
+                    fontSize: '0.95rem',
+                    fontWeight: 700,
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                />
               </div>
 
-              {/* Student QR */}
+              {/* Grade Selection (Grades 7–12) */}
               <div>
-                <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#047857', marginBottom: 6 }}>
-                  Student Link QR
-                </div>
-                <div style={{ padding: 6, border: '1px solid #cbd5e1', borderRadius: 12, display: 'inline-block' }}>
-                  <QRCodeSVG value={`${origin}/s/${qrStudent.studentToken}`} size={130} level="M" />
-                </div>
-                <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginTop: 4 }}>
-                  Scan to take tests
-                </div>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 800, color: 'var(--theme-navy)', marginBottom: 6 }}>
+                  {lang === 'KH' ? 'កម្រិតថ្នាក់ (Grade 7–12) *' : 'Grade (7–12) *'}
+                </label>
+                <select
+                  value={formGrade}
+                  onChange={(e) => setFormGrade(Number(e.target.value))}
+                  style={{
+                    width: '100%',
+                    padding: '11px 14px',
+                    borderRadius: 10,
+                    border: '1px solid var(--theme-border)',
+                    backgroundColor: 'var(--theme-page-bg)',
+                    color: 'var(--theme-navy)',
+                    fontSize: '0.92rem',
+                    fontWeight: 700,
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {[7, 8, 9, 10, 11, 12].map((g) => (
+                    <option key={g} value={g}>
+                      {lang === 'KH' ? `ថ្នាក់ទី ${g} (Grade ${g})` : `Grade ${g}`}
+                    </option>
+                  ))}
+                </select>
               </div>
-            </div>
 
-            <button
-              type="button"
-              className="btn"
-              onClick={() => setQrStudent(null)}
-              style={{ width: '100%', marginTop: 8 }}
-            >
-              Done
-            </button>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 800, color: 'var(--theme-navy)', marginBottom: 6 }}>
+                  {lang === 'KH' ? 'ថ្នាក់ (Class)' : 'Class'}
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. 7A"
+                  value={formClass}
+                  onChange={(e) => setFormClass(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '11px 14px',
+                    borderRadius: 10,
+                    border: '1px solid var(--theme-border)',
+                    backgroundColor: 'var(--theme-page-bg)',
+                    color: 'var(--theme-navy)',
+                    fontSize: '0.92rem',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 800, color: 'var(--theme-navy)', marginBottom: 6 }}>
+                  {lang === 'KH' ? 'កាលបរិច្ឆេទផុតកំណត់ *' : 'Expiration Date *'}
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={formExpiration}
+                  onChange={(e) => setFormExpiration(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '11px 14px',
+                    borderRadius: 10,
+                    border: '1px solid var(--theme-border)',
+                    backgroundColor: 'var(--theme-page-bg)',
+                    color: 'var(--theme-navy)',
+                    fontSize: '0.95rem',
+                    fontWeight: 700,
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  cursor: 'pointer',
+                  padding: '8px 10px',
+                  borderRadius: 10,
+                  backgroundColor: 'var(--theme-page-bg)',
+                  userSelect: 'none',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={formAccessEnabled}
+                  onChange={(e) => setFormAccessEnabled(e.target.checked)}
+                  style={{ width: 17, height: 17, accentColor: 'var(--theme-primary)', cursor: 'pointer' }}
+                />
+                <span style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--theme-navy)' }}>
+                  {lang === 'KH' ? 'បើកដំណើរការការចូលប្រើ (Access Enabled)' : 'Access Enabled'}
+                </span>
+              </label>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
+                <button
+                  type="button"
+                  onClick={() => setEditingStudent(null)}
+                  className="btn secondary"
+                  style={{ borderRadius: 10, padding: '9px 16px', fontWeight: 700 }}
+                >
+                  {lang === 'KH' ? 'បោះបង់' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  disabled={formSubmitting}
+                  className="btn"
+                  style={{
+                    borderRadius: 10,
+                    padding: '9px 20px',
+                    fontWeight: 800,
+                    backgroundColor: 'var(--theme-primary)',
+                    color: '#ffffff',
+                    border: 'none',
+                    cursor: formSubmitting ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {formSubmitting ? 'Saving…' : lang === 'KH' ? 'កែប្រែ' : 'Update'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
 
-      {/* ================= REGENERATE TOKEN CONFIRM MODAL ================= */}
-      {regenStudent && (
+      {/* ========================================================================= */}
+      {/* MODAL 3: EXTEND ACCESS (+30, +60, +90 days, or custom date) */}
+      {/* ========================================================================= */}
+      {extendingStudent && (
         <div
           style={{
             position: 'fixed',
             inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.55)',
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            backdropFilter: 'blur(3px)',
+            zIndex: 999,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 100,
             padding: 16,
           }}
         >
           <div
-            className="card"
             style={{
+              backgroundColor: 'var(--theme-card-bg)',
+              borderRadius: 20,
               maxWidth: 440,
               width: '100%',
-              borderRadius: 20,
               padding: '24px 22px',
+              border: '1px solid var(--theme-border)',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
             }}
           >
-            <h2 style={{ margin: '0 0 10px', fontSize: '1.25rem', fontWeight: 800, color: 'var(--bad)' }}>
-              Generate New Parent Link?
-            </h2>
-            <p style={{ margin: '0 0 16px', fontSize: '0.94rem', lineHeight: 1.5 }}>
-              Are you sure you want to regenerate the parent link for <strong>{regenStudent.name}</strong>?
-              <br />
-              <strong style={{ color: 'var(--bad)' }}>
-                The previous parent link and QR code will immediately stop working.
-              </strong>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900, color: 'var(--theme-navy)' }}>
+                  {lang === 'KH' ? '📅 បន្តសុពលភាពការចូលប្រើ' : '📅 Extend Student Access'}
+                </h3>
+                <span style={{ fontSize: '0.82rem', color: 'var(--theme-muted)' }}>
+                  {extendingStudent.name} {extendingStudent.className ? `(${extendingStudent.className})` : ''}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setExtendingStudent(null)}
+                style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 4 }}
+              >
+                <X size={20} color="var(--theme-muted)" />
+              </button>
+            </div>
+
+            <div style={{ fontSize: '0.85rem', color: 'var(--theme-navy)', marginBottom: 16, backgroundColor: 'var(--theme-page-bg)', padding: '10px 14px', borderRadius: 10 }}>
+              <span>{lang === 'KH' ? 'កាលបរិច្ឆេទផុតកំណត់បច្ចុប្បន្ន ៖ ' : 'Current Expiration: '}</span>
+              <strong>{extendingStudent.expirationDate}</strong>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--theme-muted)', textTransform: 'uppercase' }}>
+                {lang === 'KH' ? 'ជ្រើសរើសរយៈពេលបន្តរហ័ស ៖' : 'Quick Extension Options:'}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                {[
+                  { label: '+30 ថ្ងៃ (+30 Days)', days: 30 },
+                  { label: '+60 ថ្ងៃ (+60 Days)', days: 60 },
+                  { label: '+90 ថ្ងៃ (+90 Days)', days: 90 },
+                  { label: '+1 ឆ្នាំ (+1 Year)', days: 365 },
+                ].map((p) => (
+                  <button
+                    key={p.days}
+                    type="button"
+                    disabled={extSubmitting}
+                    onClick={() => handleExtend(p.days)}
+                    style={{
+                      padding: '12px 14px',
+                      borderRadius: 12,
+                      border: '1px solid var(--theme-border)',
+                      backgroundColor: 'var(--theme-page-bg)',
+                      color: 'var(--theme-navy)',
+                      fontWeight: 800,
+                      fontSize: '0.88rem',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      boxShadow: '0 2px 6px rgba(0,0,0,0.04)',
+                    }}
+                  >
+                    <Plus size={15} color="var(--theme-primary)" />
+                    <span>{p.label}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Or Select Custom Date */}
+              <div style={{ marginTop: 10 }}>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 800, color: 'var(--theme-muted)', marginBottom: 6 }}>
+                  {lang === 'KH' ? 'ឬកំណត់កាលបរិច្ឆេទថ្មីផ្ទាល់ ៖' : 'Or Pick a Specific Date:'}
+                </label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    type="date"
+                    value={customExtDate}
+                    onChange={(e) => setCustomExtDate(e.target.value)}
+                    style={{
+                      flex: 1,
+                      padding: '10px 12px',
+                      borderRadius: 10,
+                      border: '1px solid var(--theme-border)',
+                      backgroundColor: 'var(--theme-page-bg)',
+                      color: 'var(--theme-navy)',
+                      fontSize: '0.9rem',
+                      outline: 'none',
+                    }}
+                  />
+                  <button
+                    type="button"
+                    disabled={!customExtDate || extSubmitting}
+                    onClick={() => handleExtend(0, customExtDate)}
+                    style={{
+                      padding: '10px 16px',
+                      borderRadius: 10,
+                      backgroundColor: 'var(--theme-primary)',
+                      color: '#ffffff',
+                      border: 'none',
+                      fontWeight: 800,
+                      fontSize: '0.85rem',
+                      cursor: !customExtDate || extSubmitting ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {lang === 'KH' ? 'យល់ព្រម' : 'Apply'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 4: BLOCK / ACTIVATE CONFIRMATION */}
+      {/* ========================================================================= */}
+      {blockingStudent && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            backdropFilter: 'blur(3px)',
+            zIndex: 999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: 'var(--theme-card-bg)',
+              borderRadius: 20,
+              maxWidth: 420,
+              width: '100%',
+              padding: '24px 22px',
+              border: '1px solid var(--theme-border)',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+              {blockingStudent.accessEnabled ? (
+                <div style={{ padding: 10, borderRadius: 12, backgroundColor: 'rgba(217, 119, 6, 0.12)', color: '#d97706' }}>
+                  <Ban size={24} />
+                </div>
+              ) : (
+                <div style={{ padding: 10, borderRadius: 12, backgroundColor: 'rgba(5, 150, 105, 0.12)', color: '#059669' }}>
+                  <CheckCircle2 size={24} />
+                </div>
+              )}
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 900, color: 'var(--theme-navy)' }}>
+                  {blockingStudent.accessEnabled
+                    ? lang === 'KH'
+                      ? 'ផ្អាកការចូលប្រើ?'
+                      : 'Pause Access?'
+                    : lang === 'KH'
+                    ? 'បើកការចូលប្រើឡើងវិញ?'
+                    : 'Re-activate Access?'}
+                </h3>
+                <span style={{ fontSize: '0.82rem', color: 'var(--theme-muted)' }}>
+                  {blockingStudent.name}
+                </span>
+              </div>
+            </div>
+
+            <p style={{ fontSize: '0.88rem', color: 'var(--theme-navy)', lineHeight: 1.5, margin: '0 0 20px 0' }}>
+              {blockingStudent.accessEnabled
+                ? lang === 'KH'
+                  ? `សិស្ស "${blockingStudent.name}" នឹងមិនអាចចាប់ផ្ដើមធ្វើលំហាត់ថ្មីៗបានទៀតទេ រហូតដល់លោកគ្រូអ្នកគ្រូបើកដំណើរការឡើងវិញ។`
+                  : `Student "${blockingStudent.name}" will immediately be prevented from starting any new exercises until reactivated.`
+                : lang === 'KH'
+                ? `សិស្ស "${blockingStudent.name}" នឹងអាចចូលធ្វើលំហាត់បានធម្មតាឡើងវិញ (រហូតដល់ផុតកំណត់ ${blockingStudent.expirationDate})។`
+                : `Student "${blockingStudent.name}" will regain access to take exercises (valid until ${blockingStudent.expirationDate}).`}
             </p>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
               <button
                 type="button"
+                onClick={() => setBlockingStudent(null)}
                 className="btn secondary"
-                onClick={() => setRegenStudent(null)}
-                disabled={regenerating}
+                style={{ borderRadius: 10, padding: '9px 16px', fontWeight: 700 }}
               >
-                Cancel
+                {lang === 'KH' ? 'បោះបង់' : 'Cancel'}
               </button>
               <button
                 type="button"
-                className="btn danger"
-                onClick={handleRegenerateParentToken}
-                disabled={regenerating}
+                onClick={handleToggleBlock}
+                className="btn"
+                style={{
+                  borderRadius: 10,
+                  padding: '9px 20px',
+                  fontWeight: 800,
+                  backgroundColor: blockingStudent.accessEnabled ? '#d97706' : '#059669',
+                  color: '#ffffff',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
               >
-                {regenerating ? 'Regenerating…' : 'Yes, generate new link'}
+                {blockingStudent.accessEnabled
+                  ? lang === 'KH'
+                    ? 'ផ្អាកការចូលប្រើ'
+                    : 'Pause Access'
+                  : lang === 'KH'
+                  ? 'បើកដំណើរការ'
+                  : 'Re-activate'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 5: DELETE CONFIRMATION */}
+      {/* ========================================================================= */}
+      {deletingStudent && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            backdropFilter: 'blur(3px)',
+            zIndex: 999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: 'var(--theme-card-bg)',
+              borderRadius: 20,
+              maxWidth: 440,
+              width: '100%',
+              padding: '24px 22px',
+              border: '1px solid var(--theme-border)',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+              <div style={{ padding: 10, borderRadius: 12, backgroundColor: 'rgba(239, 68, 68, 0.12)', color: '#dc2626' }}>
+                <Trash2 size={24} />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900, color: 'var(--theme-navy)' }}>
+                  {lang === 'KH' ? 'លុបសិស្សនេះ?' : 'Delete Student?'}
+                </h3>
+                <span style={{ fontSize: '0.82rem', color: 'var(--theme-muted)' }}>
+                  {deletingStudent.name}
+                </span>
+              </div>
+            </div>
+
+            <div
+              style={{
+                backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
+                borderRadius: 12,
+                padding: '12px 14px',
+                marginBottom: 16,
+              }}
+            >
+              <p style={{ margin: 0, fontSize: '0.86rem', color: '#b91c1c', lineHeight: 1.45 }}>
+                {lang === 'KH'
+                  ? '⚠️ ការលុបសិស្សនេះ គ្រាន់តែដកសិទ្ធិចូលធ្វើលំហាត់ប៉ុណ្ណោះ។ រាល់លទ្ធផលប្រឡងចាស់ៗ និងតំណតាមដានរបស់មាតាបិតា នឹងមិនត្រូវបានលុបបាត់ឡើយ!'
+                  : '⚠️ Deleting only removes exercise access authorization. Historical exercise submissions and parent tracking results will strictly be preserved.'}
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button
+                type="button"
+                onClick={() => setDeletingStudent(null)}
+                className="btn secondary"
+                style={{ borderRadius: 10, padding: '9px 16px', fontWeight: 700 }}
+              >
+                {lang === 'KH' ? 'បោះបង់' : 'Cancel'}
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteStudent}
+                className="btn"
+                style={{
+                  borderRadius: 10,
+                  padding: '9px 20px',
+                  fontWeight: 800,
+                  backgroundColor: '#dc2626',
+                  color: '#ffffff',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                {lang === 'KH' ? 'លុបសិស្ស' : 'Confirm Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 6: PARENT QR CODE POPUP */}
+      {/* ========================================================================= */}
+      {qrStudent && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            backdropFilter: 'blur(3px)',
+            zIndex: 999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
+          onClick={() => setQrStudent(null)}
+        >
+          <div
+            style={{
+              backgroundColor: '#ffffff',
+              borderRadius: 24,
+              padding: '28px 24px',
+              maxWidth: 360,
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              textAlign: 'center',
+              color: '#0f172a',
+              boxShadow: '0 24px 48px rgba(0,0,0,0.25)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: '0 0 4px 0', fontSize: '1.25rem', fontWeight: 900 }}>
+              {qrStudent.name}
+            </h3>
+            {qrStudent.className && (
+              <span style={{ fontSize: '0.82rem', color: '#64748b', marginBottom: 16 }}>
+                Class: {qrStudent.className}
+              </span>
+            )}
+
+            <div style={{ padding: 14, backgroundColor: '#f8fafc', borderRadius: 16, border: '1px solid #e2e8f0', marginBottom: 16 }}>
+              <QRCodeSVG value={getParentLink(qrStudent.token)} size={200} />
+            </div>
+
+            <div style={{ fontSize: '0.84rem', fontWeight: 800, color: '#16a34a', marginBottom: 4 }}>
+              📱 Parent Tracking QR Code
+            </div>
+            <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: 20 }}>
+              មាតាបិតាស្កេនដើម្បីមើលលទ្ធផល / Scan to view child results
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, width: '100%' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(getParentLink(qrStudent.token));
+                  showToast('Parent link copied to clipboard!');
+                }}
+                style={{
+                  flex: 1,
+                  padding: '10px 14px',
+                  borderRadius: 12,
+                  backgroundColor: '#2563eb',
+                  color: '#ffffff',
+                  fontWeight: 800,
+                  fontSize: '0.85rem',
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                }}
+              >
+                <Copy size={15} />
+                <span>Copy Link</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setQrStudent(null)}
+                style={{
+                  padding: '10px 18px',
+                  borderRadius: 12,
+                  backgroundColor: '#f1f5f9',
+                  color: '#475569',
+                  fontWeight: 700,
+                  fontSize: '0.85rem',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 7: RENAME / MERGE PARENT PROFILES */}
+      {/* ========================================================================= */}
+      {mergeModalProfile && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            backdropFilter: 'blur(3px)',
+            zIndex: 999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: 'var(--theme-card-bg)',
+              borderRadius: 20,
+              maxWidth: 480,
+              width: '100%',
+              padding: '24px 22px',
+              border: '1px solid var(--theme-border)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900, color: 'var(--theme-navy)' }}>
+                {mergeMode === 'rename' ? 'Rename Profile' : 'Merge Submissions'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setMergeModalProfile(null)}
+                style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 4 }}
+              >
+                <X size={20} color="var(--theme-muted)" />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+              <button
+                type="button"
+                onClick={() => setMergeMode('rename')}
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  borderRadius: 8,
+                  border: 'none',
+                  backgroundColor: mergeMode === 'rename' ? 'var(--theme-primary)' : 'var(--theme-page-bg)',
+                  color: mergeMode === 'rename' ? '#fff' : 'var(--theme-navy)',
+                  fontWeight: 700,
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                }}
+              >
+                Rename
+              </button>
+              <button
+                type="button"
+                onClick={() => setMergeMode('merge')}
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  borderRadius: 8,
+                  border: 'none',
+                  backgroundColor: mergeMode === 'merge' ? 'var(--theme-primary)' : 'var(--theme-page-bg)',
+                  color: mergeMode === 'merge' ? '#fff' : 'var(--theme-navy)',
+                  fontWeight: 700,
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                }}
+              >
+                Merge Into Another
+              </button>
+            </div>
+
+            <form onSubmit={handleMergeSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {mergeMode === 'rename' ? (
+                <>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 800, marginBottom: 4 }}>
+                      Student Name
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={renameName}
+                      onChange={(e) => setRenameName(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        borderRadius: 10,
+                        border: '1px solid var(--theme-border)',
+                        backgroundColor: 'var(--theme-page-bg)',
+                        color: 'var(--theme-navy)',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 800, marginBottom: 4 }}>
+                      Class (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={renameClass}
+                      onChange={(e) => setRenameClass(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        borderRadius: 10,
+                        border: '1px solid var(--theme-border)',
+                        backgroundColor: 'var(--theme-page-bg)',
+                        color: 'var(--theme-navy)',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  </div>
+                </>
+              ) : (
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 800, marginBottom: 4 }}>
+                    Select Target Student
+                  </label>
+                  <select
+                    value={targetMergeId}
+                    onChange={(e) => setTargetMergeId(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: 10,
+                      border: '1px solid var(--theme-border)',
+                      backgroundColor: 'var(--theme-page-bg)',
+                      color: 'var(--theme-navy)',
+                      boxSizing: 'border-box',
+                    }}
+                  >
+                    <option value="">-- Choose student --</option>
+                    {profiles
+                      .filter((p) => p.id !== mergeModalProfile.id)
+                      .map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} {p.className ? `(${p.className})` : ''}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 12 }}>
+                <button
+                  type="button"
+                  onClick={() => setMergeModalProfile(null)}
+                  className="btn secondary"
+                  style={{ borderRadius: 10, padding: '8px 14px' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={mergeBusy}
+                  className="btn"
+                  style={{
+                    borderRadius: 10,
+                    padding: '8px 18px',
+                    fontWeight: 800,
+                    backgroundColor: 'var(--theme-primary)',
+                    color: '#fff',
+                    border: 'none',
+                  }}
+                >
+                  {mergeBusy ? 'Processing…' : 'Submit'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 6: STUDENT SUBMISSION HISTORY */}
+      {/* ========================================================================= */}
+      {historyStudent && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.55)',
+            backdropFilter: 'blur(3px)',
+            zIndex: 999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: 'var(--theme-card-bg)',
+              borderRadius: 20,
+              maxWidth: 680,
+              width: '100%',
+              maxHeight: '85vh',
+              display: 'flex',
+              flexDirection: 'column',
+              padding: '24px 22px',
+              border: '1px solid var(--theme-border)',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.25)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 900, color: 'var(--theme-navy)' }}>
+                  {lang === 'KH' ? `📜 ប្រវត្តិធ្វើលំហាត់ ៖ ${historyStudent.name}` : `📜 Submission History: ${historyStudent.name}`}
+                </h3>
+                <span style={{ fontSize: '0.82rem', color: 'var(--theme-muted)' }}>
+                  ថ្នាក់ទី {historyStudent.grade || 7} {historyStudent.className ? `(Class ${historyStudent.className})` : ''} · ចូលប្រើបានរហូតដល់ {historyStudent.expirationDate}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setHistoryStudent(null)}
+                style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 4 }}
+              >
+                <X size={20} color="var(--theme-muted)" />
+              </button>
+            </div>
+
+            <div style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 10, paddingRight: 4 }}>
+              {loadingSubmissions ? (
+                <div style={{ padding: 40, textAlign: 'center', color: 'var(--theme-muted)' }}>
+                  <RefreshCw size={24} className="spin" style={{ margin: '0 auto 10px' }} />
+                  <p style={{ margin: 0, fontWeight: 700 }}>
+                    {lang === 'KH' ? 'កំពុងទាញយកប្រវត្តិលំហាត់…' : 'Loading submissions…'}
+                  </p>
+                </div>
+              ) : studentSubmissions.length === 0 ? (
+                <div style={{ padding: 36, textAlign: 'center', color: 'var(--theme-muted)', backgroundColor: 'var(--theme-page-bg)', borderRadius: 12 }}>
+                  <Clock size={32} style={{ margin: '0 auto 8px', opacity: 0.5 }} />
+                  <p style={{ margin: 0, fontWeight: 700 }}>
+                    {lang === 'KH' ? 'សិស្សនេះមិនទាន់មានប្រវត្តិធ្វើលំហាត់នៅឡើយទេ។' : 'No submissions recorded for this student yet.'}
+                  </p>
+                </div>
+              ) : (
+                studentSubmissions.map((sub: any) => {
+                  const pct = sub.total > 0 ? Math.round((sub.score / sub.total) * 100) : 0;
+                  const dateStr = sub.submittedAt
+                    ? new Date(sub.submittedAt).toLocaleDateString('km-KH', { timeZone: 'Asia/Phnom_Penh', year: 'numeric', month: 'short', day: 'numeric' })
+                    : sub.startedAt
+                    ? new Date(sub.startedAt).toLocaleDateString('km-KH', { timeZone: 'Asia/Phnom_Penh', year: 'numeric', month: 'short', day: 'numeric' })
+                    : '—';
+                  const timeStr = sub.submittedAt
+                    ? new Date(sub.submittedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Phnom_Penh' })
+                    : '';
+
+                  return (
+                    <div
+                      key={sub.id}
+                      style={{
+                        padding: '12px 16px',
+                        borderRadius: 12,
+                        backgroundColor: 'var(--theme-page-bg)',
+                        border: '1px solid var(--theme-border)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        flexWrap: 'wrap',
+                        gap: 10,
+                      }}
+                    >
+                      <div style={{ flex: 1, minWidth: 200 }}>
+                        <div style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--theme-navy)' }}>
+                          {sub.exerciseTitle || `Exercise ${sub.exerciseId}`}
+                        </div>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--theme-muted)', marginTop: 2, display: 'flex', gap: 10, alignItems: 'center' }}>
+                          <span>📅 {dateStr} {timeStr}</span>
+                          {sub.late && (
+                            <span style={{ color: '#dc2626', fontWeight: 700, backgroundColor: 'rgba(239, 68, 68, 0.1)', padding: '1px 6px', borderRadius: 4 }}>
+                              យឺតពេល (Late)
+                            </span>
+                          )}
+                          {sub.status === 'started' && (
+                            <span style={{ color: '#d97706', fontWeight: 700, backgroundColor: 'rgba(217, 119, 6, 0.1)', padding: '1px 6px', borderRadius: 4 }}>
+                              មិនទាន់បញ្ជូន (In Progress)
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        {sub.status === 'submitted' ? (
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontWeight: 900, fontSize: '1.1rem', color: pct >= 80 ? '#059669' : pct >= 50 ? 'var(--brand)' : '#dc2626' }}>
+                              {sub.score} / {sub.total}
+                            </div>
+                            <span style={{ fontSize: '0.76rem', fontWeight: 700, color: 'var(--theme-muted)' }}>
+                              {pct}%
+                            </span>
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: '0.82rem', color: 'var(--theme-muted)' }}>—</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+              <button
+                type="button"
+                onClick={() => setHistoryStudent(null)}
+                className="btn secondary"
+                style={{ borderRadius: 10, padding: '8px 18px', fontWeight: 700 }}
+              >
+                {lang === 'KH' ? 'បិទ' : 'Close'}
               </button>
             </div>
           </div>

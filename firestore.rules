@@ -19,12 +19,23 @@ service cloud.firestore {
       allow create, update: if false;
     }
 
+    match /profiles/{id} {
+      allow read, write: if isTeacher();
+    }
+
+    // Student Access Control: only the authenticated teacher can read or write student access records directly.
+    // Students and parents must NEVER read or modify student records directly from the browser;
+    // all student authorization is enforced server-side using the Firebase Admin SDK.
     match /students/{id} {
       allow read, write: if isTeacher();
     }
 
     match /settings/{id} {
       allow read, write: if isTeacher();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

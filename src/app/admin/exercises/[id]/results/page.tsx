@@ -8,7 +8,8 @@ import { getDb } from '@/lib/firebaseClient';
 import { useAdmin } from '@/lib/useAdmin';
 import { adminPost } from '@/lib/authFetch';
 import MathText from '@/components/MathText';
-import type { Exercise, Submission } from '@/lib/types';
+import { normalize } from '@/lib/grade';
+import type { Exercise, Submission, Profile } from '@/lib/types';
 
 type Sub = { id: string } & Submission;
 
@@ -27,6 +28,7 @@ export default function Results() {
   const { isAdmin, loading, user } = useAdmin();
   const [ex, setEx] = useState<Exercise | null>(null);
   const [subs, setSubs] = useState<Sub[] | null>(null);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
   const [open, setOpen] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [busyMsg, setBusyMsg] = useState('');
@@ -35,12 +37,23 @@ export default function Results() {
 
   async function load() {
     try {
-      const exSnap = await getDoc(doc(getDb(), 'exercises', id));
+      const [exSnap, sSnap, pSnap] = await Promise.all([
+        getDoc(doc(getDb(), 'exercises', id)),
+        getDocs(query(collection(getDb(), 'submissions'), where('exerciseId', '==', id))),
+        getDocs(collection(getDb(), 'profiles')).catch(() => null),
+      ]);
+
       if (exSnap.exists()) setEx(exSnap.data() as Exercise);
-      const s = await getDocs(query(collection(getDb(), 'submissions'), where('exerciseId', '==', id)));
-      const list = s.docs.map((d) => ({ id: d.id, ...(d.data() as Submission) }));
+      const list = sSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Submission) }));
       list.sort((a, b) => (b.submittedAt ?? b.startedAt) - (a.submittedAt ?? a.startedAt));
       setSubs(list);
+
+      if (pSnap) {
+        const pList = pSnap.docs
+          .map((d) => ({ id: d.id, ...(d.data() as any) }))
+          .filter((p: Profile) => !p.hidden);
+        setProfiles(pList);
+      }
     } catch (e: any) {
       setError(e?.message || 'Could not load results.');
     }
@@ -397,6 +410,111 @@ export default function Results() {
           </table>
         </div>
       )}
+
+      {/* Not Submitted Yet Section */}
+      {profiles.length > 0 && (() => {
+        const submittedProfileIds = new Set(
+          subs?.filter((s) => s.status === 'submitted').map((s) => s.profileId).filter(Boolean)
+        );
+        const submittedNameKeys = new Set(
+          subs?.filter((s) => s.status === 'submitted').map((s) => s.nameKey || normalize(s.studentName))
+        );
+
+        const unsubmittedProfiles = profiles.filter((p) => {
+          if (submittedProfileIds.has(p.id)) return false;
+          const pNameKey = p.profileKey ? p.profileKey.split('|')[0] : normalize(p.name);
+          if (submittedNameKeys.has(pNameKey)) return false;
+          return true;
+        });
+
+        const origin = typeof window !== 'undefined' ? window.location.origin : '';
+
+        return (
+          <div className="card" style={{ marginTop: 28, padding: '20px 24px', borderRadius: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>
+                  Not Submitted Yet ({unsubmittedProfiles.length})
+                </h3>
+                <span className="muted" style={{ fontSize: '0.84rem' }}>
+                  Students from automatic profiles who have not yet submitted this exercise
+                </span>
+              </div>
+
+              {unsubmittedProfiles.length > 0 && (
+                <button
+                  type="button"
+                  className="btn secondary small"
+                  onClick={() => {
+                    const allMsgs = unsubmittedProfiles.map((p) => {
+                      const parentLink = `${origin}/p/${p.parentToken}`;
+                      return `សួស្តី! សូមរំលឹកថា ${p.name} មិនទាន់បានធ្វើលំហាត់ "${ex?.title || ''}" នៅឡើយទេ។ សូមចុចតំណនេះដើម្បីពិនិត្យ៖ ${parentLink}`;
+                    }).join('\n\n');
+                    navigator.clipboard.writeText(allMsgs);
+                    alert(`Copied reminders for all ${unsubmittedProfiles.length} unsubmitted students!`);
+                  }}
+                  style={{ borderRadius: 10 }}
+                >
+                  Copy All Reminders
+                </button>
+              )}
+            </div>
+
+            {unsubmittedProfiles.length === 0 ? (
+              <div style={{ padding: '16px 0', color: 'var(--good)', fontWeight: 600, fontSize: '0.92rem' }}>
+                ✓ All student profiles have submitted this exercise! 🎉
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 360, overflowY: 'auto' }}>
+                {unsubmittedProfiles.map((p) => {
+                  const parentLink = `${origin}/p/${p.parentToken}`;
+                  const reminderText = `សួស្តី! សូមរំលឹកថា ${p.name} មិនទាន់បានធ្វើលំហាត់ "${ex?.title || ''}" នៅឡើយទេ។ សូមចុចតំណនេះដើម្បីពិនិត្យ៖ ${parentLink}`;
+
+                  return (
+                    <div
+                      key={p.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '10px 14px',
+                        backgroundColor: 'var(--bg)',
+                        borderRadius: 10,
+                        border: '1px solid var(--line)',
+                        gap: 12,
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      <div>
+                        <strong style={{ fontSize: '0.95rem' }}>{p.name}</strong>
+                        {p.className && <span className="muted" style={{ marginLeft: 8, fontSize: '0.82rem' }}>({p.className})</span>}
+                      </div>
+
+                      <button
+                        type="button"
+                        className="btn small"
+                        onClick={() => {
+                          navigator.clipboard.writeText(reminderText);
+                          alert(`Copied reminder for ${p.name}`);
+                        }}
+                        style={{
+                          borderRadius: 8,
+                          padding: '5px 11px',
+                          fontSize: '0.8rem',
+                          backgroundColor: 'var(--theme-primary, #2563eb)',
+                          borderColor: 'var(--theme-primary, #2563eb)',
+                        }}
+                      >
+                        Copy Reminder (Khmer)
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }

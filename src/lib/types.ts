@@ -30,19 +30,21 @@ export interface Exercise {
   oneAttemptPerName: boolean;
   /** Each student sees the questions in a different order. */
   shuffleQuestions?: boolean;
+  /** Grades targeted: e.g. [7], [7, 8], [9, 10, 11, 12] */
+  gradeLevels?: number[];
+  /** 'instant' | 'scheduled' | 'draft' */
+  publicationMode?: 'instant' | 'scheduled' | 'draft';
+  /** ISO string or timestamp of when exercise becomes available to students */
+  scheduledPublishAt?: string | number | null;
+  /** Default: Asia/Phnom_Penh */
+  timezone?: string;
   questions: Question[];
   createdAt: number;
   updatedAt: number;
 }
 
 /** What a student is allowed to see before submitting (no answers). */
-export interface PublicQuestion {
-  id: string;
-  prompt: string;
-  kind: QuestionKind;
-  choices?: string[];
-  points: number;
-}
+export type PublicQuestion = Omit<Question, 'answer' | 'explanation'>;
 
 export interface PublicExercise {
   id: string;
@@ -51,6 +53,8 @@ export interface PublicExercise {
   timeLimitMinutes: number;
   deadline: string | null;
   shuffleQuestions?: boolean;
+  gradeLevels?: number[];
+  scheduledPublishAt?: string | number | null;
   questions: PublicQuestion[];
 }
 
@@ -70,8 +74,11 @@ export interface QuestionResult {
 
 export interface Submission {
   exerciseId: string;
+  exerciseTitle?: string;
   studentName: string;
   studentId?: string;
+  profileId?: string;
+  grade?: number;
   nameKey: string;
   status: 'started' | 'submitted';
   startedAt: number;
@@ -79,12 +86,53 @@ export interface Submission {
   late?: boolean;
   score?: number;
   total?: number;
+  answers?: Record<string, string>;
   details?: QuestionResult[];
+}
+
+export interface Profile {
+  id: string;
+  name: string;
+  className?: string | null;
+  profileKey: string;
+  parentToken: string;
+  claimSecretHash: string;
+  createdAt: number;
+  hidden?: boolean;
+  lastActivityAt?: number | null;
+}
+
+export interface ProfileWithStats extends Profile {
+  completedCount: number;
+  averagePercent: number | null;
+  lastActivity: number | null;
+}
+
+export type StudentAccessStatus = 'active' | 'expiring_soon' | 'expired' | 'blocked';
+
+export interface StudentAccess {
+  id: string;
+  name: string;
+  nameKey: string;
+  grade: number; // Grades 7-12
+  className: string | null;
+  classKey: string;
+  accessEnabled: boolean;
+  expiresAt: number; // UTC ms of exclusive end-of-day boundary
+  expirationDate: string; // "YYYY-MM-DD" in Asia/Phnom_Penh
+  createdAt: number;
+  updatedAt: number;
+  lastActivityAt: number | null;
+  status: StudentAccessStatus;
+  studentToken?: string;
+  parentToken?: string;
+  active?: boolean;
 }
 
 export interface Student {
   id: string;
   name: string;
+  grade?: number;
   className?: string;
   studentToken: string;
   parentToken: string;

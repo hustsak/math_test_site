@@ -94,7 +94,8 @@ export default function AdminHome() {
 
   // UI Filter / Search
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<'all' | 'published' | 'draft'>('all');
+  const [filter, setFilter] = useState<'all' | 'published' | 'scheduled' | 'draft'>('all');
+  const [gradeFilter, setGradeFilter] = useState<string>('all');
 
   // Modals & Popups
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
@@ -191,9 +192,10 @@ export default function AdminHome() {
     setLoadingData(true);
     setDataError('');
     try {
-      const [exSnap, subSnap, studentSnap, settingsSnap] = await Promise.all([
+      const [exSnap, subSnap, profilesSnap, legacyStudentsSnap, settingsSnap] = await Promise.all([
         getDocs(query(collection(getDb(), 'exercises'), orderBy('updatedAt', 'desc'))),
         getDocs(collection(getDb(), 'submissions')),
+        getDocs(collection(getDb(), 'profiles')).catch(() => null),
         getDocs(collection(getDb(), 'students')).catch(() => null),
         getDoc(doc(getDb(), 'settings', 'app')).catch(() => null),
       ]);
@@ -204,8 +206,13 @@ export default function AdminHome() {
       setExercises(exList);
       setSubmissions(subList);
 
-      if (studentSnap) {
-        const sList = studentSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as Student[];
+      if (profilesSnap && !profilesSnap.empty) {
+        const pList = profilesSnap.docs
+          .map((d) => ({ id: d.id, ...(d.data() as any) }))
+          .filter((p) => !p.hidden);
+        setRosterStudents(pList as any);
+      } else if (legacyStudentsSnap) {
+        const sList = legacyStudentsSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
         setRosterStudents(sList);
       }
 
@@ -234,6 +241,9 @@ export default function AdminHome() {
     const exerciseSubs = (submissions || []).filter(
       (s) => s.exerciseId === exerciseId && s.status === 'submitted'
     );
+    const submittedProfileIds = new Set(
+      exerciseSubs.map((s) => s.profileId).filter(Boolean)
+    );
     const submittedStudentIds = new Set(
       exerciseSubs.map((s) => s.studentId).filter(Boolean)
     );
@@ -241,9 +251,9 @@ export default function AdminHome() {
       exerciseSubs.map((s) => s.nameKey || s.studentName.trim().toLowerCase())
     );
 
-    return rosterStudents.filter((student) => {
-      if (student.active === false) return false;
-      if (submittedStudentIds.has(student.id)) return false;
+    return rosterStudents.filter((student: any) => {
+      if (student.hidden === true || student.active === false) return false;
+      if (submittedProfileIds.has(student.id) || submittedStudentIds.has(student.id)) return false;
       const key = student.name.trim().toLowerCase();
       if (submittedNameKeys.has(key)) return false;
       return true;
@@ -455,9 +465,28 @@ export default function AdminHome() {
 
   // Filtered exercises list
   const filteredExercises = useMemo(() => {
+    const now = Date.now();
     return (exercises || []).filter((r) => {
-      if (filter === 'published' && !r.published) return false;
-      if (filter === 'draft' && r.published) return false;
+      // Publication status filter
+      if (filter === 'published') {
+        const isScheduledFuture = r.published && r.publicationMode === 'scheduled' && r.scheduledPublishAt && new Date(r.scheduledPublishAt).getTime() > now;
+        if (!r.published || r.publicationMode === 'draft' || isScheduledFuture) return false;
+      } else if (filter === 'scheduled') {
+        const isScheduled = r.publicationMode === 'scheduled' || (r.scheduledPublishAt && new Date(r.scheduledPublishAt).getTime() > now);
+        if (!isScheduled) return false;
+      } else if (filter === 'draft') {
+        if (r.published && r.publicationMode !== 'draft') return false;
+      }
+
+      // Grade filter (7-12)
+      if (gradeFilter !== 'all') {
+        const gNum = Number(gradeFilter);
+        if (r.gradeLevels && r.gradeLevels.length > 0 && !r.gradeLevels.includes(gNum)) {
+          return false;
+        }
+      }
+
+      // Search query
       if (search.trim()) {
         const q = search.toLowerCase();
         const matchTitle = (r.title || '').toLowerCase().includes(q);
@@ -466,7 +495,7 @@ export default function AdminHome() {
       }
       return true;
     });
-  }, [exercises, filter, search]);
+  }, [exercises, filter, gradeFilter, search]);
 
   const teacherName = useMemo(() => {
     if (!user?.email) return 'Teacher';
@@ -1003,7 +1032,7 @@ export default function AdminHome() {
                 }}
               >
                 <Users size={18} />
-                <span>Students Roster ({rosterStudents.length})</span>
+                <span>Students & Access</span>
               </Link>
 
               <button
@@ -1367,7 +1396,7 @@ export default function AdminHome() {
               }}
             >
               <Users size={18} />
-              <span>Students ({rosterStudents.length})</span>
+              <span>Students & Access</span>
             </Link>
           </div>
 
@@ -2224,8 +2253,32 @@ export default function AdminHome() {
                     </span>
                   </div>
 
-                  {/* Filter Pills */}
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {/* Filter Controls: Grade dropdown + Status Pills */}
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <select
+                      value={gradeFilter}
+                      onChange={(e) => setGradeFilter(e.target.value)}
+                      style={{
+                        padding: '6px 10px',
+                        borderRadius: 10,
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        backgroundColor: 'var(--theme-page-bg)',
+                        color: 'var(--theme-navy)',
+                        border: '1px solid var(--theme-border)',
+                        cursor: 'pointer',
+                      }}
+                      aria-label="Filter exercises by grade"
+                    >
+                      <option value="all">គ្រប់កម្រិតថ្នាក់ (All Grades 7–12)</option>
+                      <option value="7">ថ្នាក់ទី ៧ (Grade 7)</option>
+                      <option value="8">ថ្នាក់ទី ៨ (Grade 8)</option>
+                      <option value="9">ថ្នាក់ទី ៩ (Grade 9)</option>
+                      <option value="10">ថ្នាក់ទី ១០ (Grade 10)</option>
+                      <option value="11">ថ្នាក់ទី ១១ (Grade 11)</option>
+                      <option value="12">ថ្នាក់ទី ១២ (Grade 12)</option>
+                    </select>
+
                     <button
                       type="button"
                       className={`btn small ${filter === 'all' ? '' : 'secondary'}`}
@@ -2240,7 +2293,15 @@ export default function AdminHome() {
                       onClick={() => setFilter('published')}
                       style={{ borderRadius: 10, fontSize: '0.8rem' }}
                     >
-                      Published ({exercises?.filter((e) => e.published).length ?? 0})
+                      Published ({exercises?.filter((e) => e.published && e.publicationMode !== 'draft' && (!e.scheduledPublishAt || new Date(e.scheduledPublishAt).getTime() <= Date.now())).length ?? 0})
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn small ${filter === 'scheduled' ? '' : 'secondary'}`}
+                      onClick={() => setFilter('scheduled')}
+                      style={{ borderRadius: 10, fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                    >
+                      <span>⏰ Scheduled ({exercises?.filter((e) => e.publicationMode === 'scheduled' || (e.scheduledPublishAt && new Date(e.scheduledPublishAt).getTime() > Date.now())).length ?? 0})</span>
                     </button>
                     <button
                       type="button"
@@ -2248,7 +2309,7 @@ export default function AdminHome() {
                       onClick={() => setFilter('draft')}
                       style={{ borderRadius: 10, fontSize: '0.8rem' }}
                     >
-                      Drafts ({exercises?.filter((e) => !e.published).length ?? 0})
+                      Drafts ({exercises?.filter((e) => !e.published || e.publicationMode === 'draft').length ?? 0})
                     </button>
                   </div>
                 </div>
@@ -2316,28 +2377,101 @@ export default function AdminHome() {
                         >
                           {/* Title + Meta */}
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4, flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
                               <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700, color: 'var(--theme-navy)' }}>
                                 {r.title || 'Untitled'}
                               </h4>
+
+                              {/* Grade Level Tag */}
                               <span
                                 style={{
                                   fontSize: '0.72rem',
                                   fontWeight: 700,
                                   padding: '2px 8px',
                                   borderRadius: 999,
-                                  backgroundColor: r.published ? 'var(--good-bg)' : 'var(--warn-bg)',
-                                  color: r.published ? 'var(--theme-success)' : 'var(--theme-warning)',
+                                  backgroundColor: 'rgba(74, 103, 214, 0.12)',
+                                  color: 'var(--brand)',
+                                  border: '1px solid rgba(74, 103, 214, 0.25)',
                                 }}
                               >
-                                {r.published ? 'Published' : 'Draft'}
+                                {r.gradeLevels && r.gradeLevels.length > 0 && r.gradeLevels.length < 6
+                                  ? `ថ្នាក់ទី ${r.gradeLevels.join(', ')}`
+                                  : 'ថ្នាក់ទី ៧–១២'}
                               </span>
+
+                              {/* Publication Status Pill */}
+                              {(() => {
+                                const isScheduled = r.published && r.publicationMode === 'scheduled' && r.scheduledPublishAt && new Date(r.scheduledPublishAt).getTime() > Date.now();
+                                if (isScheduled) {
+                                  return (
+                                    <span
+                                      style={{
+                                        fontSize: '0.72rem',
+                                        fontWeight: 700,
+                                        padding: '2px 8px',
+                                        borderRadius: 999,
+                                        backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                                        color: '#2563eb',
+                                        border: '1px solid rgba(59, 130, 246, 0.3)',
+                                      }}
+                                    >
+                                      ⏰ Scheduled
+                                    </span>
+                                  );
+                                }
+                                if (r.published) {
+                                  return (
+                                    <span
+                                      style={{
+                                        fontSize: '0.72rem',
+                                        fontWeight: 700,
+                                        padding: '2px 8px',
+                                        borderRadius: 999,
+                                        backgroundColor: 'var(--good-bg)',
+                                        color: 'var(--theme-success)',
+                                      }}
+                                    >
+                                      Published
+                                    </span>
+                                  );
+                                }
+                                return (
+                                  <span
+                                    style={{
+                                      fontSize: '0.72rem',
+                                      fontWeight: 700,
+                                      padding: '2px 8px',
+                                      borderRadius: 999,
+                                      backgroundColor: 'var(--warn-bg)',
+                                      color: 'var(--theme-warning)',
+                                    }}
+                                  >
+                                    Draft
+                                  </span>
+                                );
+                              })()}
                             </div>
 
                             <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: '0.8rem', color: 'var(--theme-muted)', flexWrap: 'wrap' }}>
                               <span>{r.questions?.length ?? 0} Qs</span>
                               <span>•</span>
                               <span>{r.timeLimitMinutes ? `${r.timeLimitMinutes}m limit` : 'No time limit'}</span>
+                              {r.scheduledPublishAt && new Date(r.scheduledPublishAt).getTime() > Date.now() && (
+                                <>
+                                  <span>•</span>
+                                  <span style={{ color: '#2563eb', fontWeight: 600 }}>
+                                    📅 ផ្សាយ: {new Date(r.scheduledPublishAt).toLocaleDateString('km-KH', { timeZone: 'Asia/Phnom_Penh', month: 'short', day: 'numeric' })} {new Date(r.scheduledPublishAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Phnom_Penh' })}
+                                  </span>
+                                </>
+                              )}
+                              {r.deadline && (
+                                <>
+                                  <span>•</span>
+                                  <span>
+                                    ⌛ ផុតកំណត់: {new Date(r.deadline).toLocaleDateString('km-KH', { timeZone: 'Asia/Phnom_Penh', month: 'short', day: 'numeric' })}
+                                  </span>
+                                </>
+                              )}
                               <span>•</span>
                               <span>{subCount} submissions</span>
                             </div>

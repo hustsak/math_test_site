@@ -181,10 +181,40 @@ input[type='checkbox'] { width: auto; }
   font-size: 1.05rem;
 }
 
-.math-text { white-space: pre-wrap; }
+.math-text {
+  display: inline;
+  color: inherit;
+  font-family: inherit;
+  line-height: inherit;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
 strong .math-text, .row .math-text, .choice .math-text, .q-title .math-text, .q-title > span { display: inline; }
 .q-title { display: inline-flex; align-items: baseline; flex-wrap: wrap; }
-.math-text .katex-display { margin: 0.6em 0; }
+
+.math-text .katex {
+  color: inherit;
+  font-size: 1.12em;
+  text-rendering: geometricPrecision;
+}
+
+.math-text .katex-html {
+  color: inherit;
+}
+
+.math-text .katex-display {
+  display: block;
+  margin: 0.7em 0;
+  text-align: center;
+}
+
+.math-text .katex-display > .katex {
+  font-size: 1.25em;
+}
+
+.math-text .katex * {
+  border-color: currentColor;
+}
 
 .timer {
   position: sticky;
@@ -197,7 +227,7 @@ strong .math-text, .row .math-text, .choice .math-text, .q-title .math-text, .q-
 .timer .t { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 1.2rem; }
 .timer .t.low { color: var(--bad); }
 
-.q-prompt { font-size: 1.12rem; margin-bottom: 10px; }
+.q-prompt { font-size: 1.15rem; margin-bottom: 10px; line-height: 1.6; color: var(--theme-navy, var(--ink)); }
 .result-good { background: var(--good-bg); border-color: transparent; }
 .result-bad { background: var(--bad-bg); border-color: transparent; }
 
@@ -209,20 +239,28 @@ th { background: #fafbfc; font-size: 0.8rem; text-transform: uppercase; letter-s
   display: flex;
   gap: 12px;
   align-items: center;
-  font-weight: 400;
-  font-size: 1.05rem;
+  font-weight: 500;
+  font-size: 1.08rem;
   margin: 0;
-  padding: 6px 2px;
+  padding: 10px 14px;
   cursor: pointer;
-  background: transparent;
-  border: none;
-  border-radius: 6px;
-  transition: background 0.1s ease;
+  background: var(--theme-card-bg, var(--card));
+  border: 1.5px solid var(--theme-border, var(--line));
+  border-radius: 10px;
+  transition: all 0.15s ease;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
+  color: var(--theme-navy, var(--ink));
 }
-.choice:hover { background: rgba(0, 0, 0, 0.03); }
-.choice.selected { background: transparent; font-weight: 500; }
+.choice:hover {
+  background: rgba(74, 103, 214, 0.05);
+  border-color: var(--theme-primary, var(--brand));
+}
+.choice.selected {
+  background: rgba(74, 103, 214, 0.1);
+  border-color: var(--theme-primary, var(--brand));
+  font-weight: 600;
+}
 
 /* Custom clean circular radio button */
 .choice input[type="radio"] {
@@ -230,12 +268,12 @@ th { background: #fafbfc; font-size: 0.8rem; text-transform: uppercase; letter-s
   -webkit-appearance: none;
   width: 22px;
   height: 22px;
-  border: 2px solid #4b5563;
+  border: 2px solid var(--theme-border, #4b5563);
   border-radius: 50%;
   outline: none;
   margin: 0;
   cursor: pointer;
-  background: #ffffff;
+  background: var(--theme-card-bg, #ffffff);
   display: grid;
   place-content: center;
   flex: none;
@@ -245,15 +283,37 @@ th { background: #fafbfc; font-size: 0.8rem; text-transform: uppercase; letter-s
   transform: scale(0.92);
 }
 .choice input[type="radio"]:checked {
-  border-color: #2563eb;
-  background: #ffffff;
+  border-color: var(--theme-primary, #2563eb);
+  background: var(--theme-card-bg, #ffffff);
 }
 .choice input[type="radio"]:checked::before {
   content: "";
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #2563eb;
+  background: var(--theme-primary, #2563eb);
+}
+
+[data-theme="dark"] .choice {
+  background: var(--theme-card-bg);
+  border-color: var(--theme-border);
+  color: var(--theme-navy);
+}
+[data-theme="dark"] .choice:hover {
+  background: rgba(92, 121, 230, 0.12);
+  border-color: var(--theme-primary);
+}
+[data-theme="dark"] .choice.selected {
+  background: rgba(92, 121, 230, 0.2);
+  border-color: var(--theme-primary);
+}
+[data-theme="dark"] .choice input[type="radio"] {
+  background: var(--theme-card-bg);
+  border-color: var(--theme-muted);
+}
+[data-theme="dark"] .choice input[type="radio"]:checked {
+  border-color: var(--theme-primary);
+  background: var(--theme-card-bg);
 }
 
 /* Compact Question Card for mobile */
@@ -278,7 +338,21 @@ th { background: #fafbfc; font-size: 0.8rem; text-transform: uppercase; letter-s
 .bar { height: 8px; background: var(--line); border-radius: 999px; overflow: hidden; min-width: 90px; }
 .bar > span { display: block; height: 100%; background: var(--brand); }
 
-.error { color: var(--bad); font-weight: 600; }
+.error {
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.08);
+  border: 1px solid rgba(220, 38, 38, 0.25);
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+[data-theme="dark"] .error {
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.35);
+}
 .notice { background: var(--warn-bg); padding: 10px 12px; border-radius: 8px; }
 
 /* Result Screen Specifics */

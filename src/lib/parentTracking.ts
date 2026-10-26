@@ -93,7 +93,7 @@ export function formatKhmerCountdown(
 export interface BuildParentDataInput {
   childName: string;
   className?: string;
-  studentId: string;
+  studentId?: string;
   publishedExercises: Array<{ id: string; data: Exercise }>;
   submissionsForStudent: Submission[];
   classAverageMap?: Record<string, number>;

@@ -21,6 +21,7 @@ export async function POST(req: Request) {
     const db = adminDb();
     await db.collection('students').doc(studentId).update({
       active,
+      accessEnabled: active,
       updatedAt: Date.now(),
     });
 

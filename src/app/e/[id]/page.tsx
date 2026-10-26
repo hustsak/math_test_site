@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
+import { QRCodeSVG } from 'qrcode.react';
+import { Sun, Moon } from 'lucide-react';
 import MathText from '@/components/MathText';
 import ScreenGuard, { withGuardPaused } from '@/components/ScreenGuard';
 import type { PublicExercise, PublicQuestion, QuestionResult } from '@/lib/types';
@@ -13,6 +15,9 @@ interface Attempt {
   startedAt: number; // server clock
   clockOffset: number; // serverNow - clientNow at start
   name: string;
+  className?: string;
+  profileId?: string;
+  claimSecret?: string;
   answers: Record<string, string>;
 }
 
@@ -21,6 +26,7 @@ interface Result {
   total: number;
   late: boolean;
   details: QuestionResult[];
+  parentLink?: string;
 }
 
 const SYMBOLS = ['−', '×', '÷', '²', '√', 'π', '≤', '≥', '≠'];
@@ -61,6 +67,7 @@ export default function StudentPage() {
   const [ex, setEx] = useState<PublicExercise | null>(null);
   const [error, setError] = useState('');
   const [name, setName] = useState('');
+  const [className, setClassName] = useState('');
   const [studentToken, setStudentToken] = useState('');
   const [studentLocked, setStudentLocked] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -68,12 +75,52 @@ export default function StudentPage() {
   const [remaining, setRemaining] = useState<number | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [resultTab, setResultTab] = useState<'all' | 'incorrect' | 'correct'>('all');
+  const [copiedParentLink, setCopiedParentLink] = useState(false);
+  const [showResultQr, setShowResultQr] = useState(false);
+  const [showSavedParentModal, setShowSavedParentModal] = useState(false);
+  const [savedParentLink, setSavedParentLink] = useState('');
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+
   const submittingRef = useRef(false);
   const inputs = useRef<Record<string, HTMLInputElement | null>>({});
 
-  // Check URL query for studentToken to prefill and lock name
+  // Initialize theme from localStorage or system preference
   useEffect(() => {
     if (typeof window !== 'undefined') {
+      const savedTheme = localStorage.getItem('mathtest_theme') as 'light' | 'dark' | null;
+      if (savedTheme) {
+        setTheme(savedTheme);
+        document.documentElement.setAttribute('data-theme', savedTheme);
+      } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        setTheme('dark');
+        document.documentElement.setAttribute('data-theme', 'dark');
+      } else {
+        setTheme('light');
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    }
+  }, []);
+
+  function toggleTheme() {
+    const next = theme === 'light' ? 'dark' : 'light';
+    setTheme(next);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('mathtest_theme', next);
+      document.documentElement.setAttribute('data-theme', next);
+    }
+  }
+
+  // Initialize remembered name and class from localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const storedName = localStorage.getItem('math_last_student_name') || '';
+      const storedClass = localStorage.getItem('math_last_student_class') || '';
+      const storedParentLink = localStorage.getItem('math_parent_link') || '';
+
+      if (storedName && !name) setName(storedName);
+      if (storedClass && !className) setClassName(storedClass);
+      if (storedParentLink) setSavedParentLink(storedParentLink);
+
       const p = new URLSearchParams(window.location.search);
       const t = p.get('token') || '';
       if (t) {
@@ -81,15 +128,16 @@ export default function StudentPage() {
         fetch(`/api/student/${t}`)
           .then((r) => (r.ok ? r.json() : null))
           .then((d) => {
-            if (d?.student?.name) {
-              setName(d.student.name);
+            if (d?.studentName) {
+              setName(d.studentName);
+              if (d.className) setClassName(d.className);
               setStudentLocked(true);
             }
           })
           .catch(() => {});
       }
     }
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Question order: shuffled per attempt when the teacher enabled it
   const questions: PublicQuestion[] = useMemo(() => {
@@ -141,16 +189,30 @@ export default function StudentPage() {
       setBusy(true);
       setError('');
       try {
+        const claimSecret = a.claimSecret || localStorage.getItem('math_claim_secret') || '';
+        const profileId = a.profileId || localStorage.getItem('math_profile_id') || '';
+
         const res = await fetch(`/api/exercises/${id}/submit`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ attemptId: a.attemptId, answers: a.answers }),
+          body: JSON.stringify({
+            attemptId: a.attemptId,
+            answers: a.answers,
+            profileId,
+            claimSecret,
+          }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Submit failed');
         try {
           localStorage.removeItem(storeKey);
         } catch {}
+
+        if (data.parentLink) {
+          localStorage.setItem('math_parent_link', data.parentLink);
+          setSavedParentLink(data.parentLink);
+        }
+
         setResult(data);
         setPhase('done');
       } catch (e: any) {
@@ -163,7 +225,7 @@ export default function StudentPage() {
     [id, storeKey],
   );
 
-  // Countdown timer (uses the server's clock so a wrong device clock doesn't matter)
+  // Countdown timer (uses server clock offset)
   useEffect(() => {
     if (phase !== 'taking' || !attempt || !ex || !ex.timeLimitMinutes) return;
     const end = attempt.startedAt + ex.timeLimitMinutes * 60_000;
@@ -182,22 +244,49 @@ export default function StudentPage() {
     if (!name.trim()) return;
     setBusy(true);
     setError('');
+
+    // Remember name and class in localStorage
+    try {
+      localStorage.setItem('math_last_student_name', name.trim());
+      if (className.trim()) {
+        localStorage.setItem('math_last_student_class', className.trim());
+      } else {
+        localStorage.removeItem('math_last_student_class');
+      }
+    } catch {}
+
+    const storedClaimSecret = localStorage.getItem('math_claim_secret') || '';
+
     try {
       const res = await fetch(`/api/exercises/${id}/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           studentName: name.trim(),
+          className: className.trim() || undefined,
+          claimSecret: storedClaimSecret || undefined,
           ...(studentToken ? { studentToken } : {}),
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Could not start.');
+
+      // Save claim secret if issued
+      if (data.claimSecret) {
+        localStorage.setItem('math_claim_secret', data.claimSecret);
+      }
+      if (data.profileId) {
+        localStorage.setItem('math_profile_id', data.profileId);
+      }
+
       const a: Attempt = {
         attemptId: data.attemptId,
         startedAt: data.startedAt,
         clockOffset: data.serverNow - Date.now(),
         name: name.trim(),
+        className: className.trim() || undefined,
+        profileId: data.profileId,
+        claimSecret: data.claimSecret || storedClaimSecret || undefined,
         answers: {},
       };
       persist(a);
@@ -229,65 +318,173 @@ export default function StudentPage() {
     });
   }
 
-  if (phase === 'loading') return <div className="wrap muted">Loading…</div>;
+  async function handleShareToParent() {
+    if (!result?.parentLink) return;
+    const studentDisplayName = attempt?.name || name || 'កូន';
+    const shareText = `សួស្តី! នេះជាតំណដើម្បីមើលលទ្ធផលរបស់ ${studentDisplayName}៖`;
 
-  if (phase === 'error')
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({
+          title: 'លទ្ធផលលំហាត់គណិតវិទ្យា',
+          text: shareText,
+          url: result.parentLink,
+        });
+        return;
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          handleCopyParentLink();
+        }
+      }
+    } else {
+      handleCopyParentLink();
+    }
+  }
+
+  function handleCopyParentLink() {
+    const link = result?.parentLink || savedParentLink;
+    if (!link) return;
+    navigator.clipboard.writeText(link);
+    setCopiedParentLink(true);
+    setTimeout(() => setCopiedParentLink(false), 2500);
+  }
+
+  const ThemeToggle = (
+    <button
+      type="button"
+      onClick={toggleTheme}
+      aria-label="Toggle dark / light theme"
+      title={theme === 'light' ? 'Switch to Dark Mode (ពន្លឺងងឹត)' : 'Switch to Light Mode (ពន្លឺភ្លឺ)'}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 38,
+        height: 38,
+        borderRadius: 10,
+        border: '1px solid var(--theme-border)',
+        backgroundColor: 'var(--theme-card-bg)',
+        color: 'var(--theme-navy)',
+        cursor: 'pointer',
+        transition: 'all 0.15s ease',
+        flexShrink: 0,
+      }}
+    >
+      {theme === 'light' ? <Moon size={18} /> : <Sun size={18} style={{ color: '#f59e0b' }} />}
+    </button>
+  );
+
+  if (phase === 'loading') {
     return (
-      <div className="wrap">
-        <div className="card error">{error}</div>
-      </div>
-    );
-
-  if (!ex) return null;
-
-  if (phase === 'closed')
-    return (
-      <div className="wrap">
-        <div className="card stack">
-          <h1>{ex.title}</h1>
-          <p>លំហាត់នេះត្រូវបានបិទបញ្ចប់ហើយ។</p>
+      <div className="wrap" style={{ maxWidth: 520, textAlign: 'center', paddingTop: 80 }}>
+        <div style={{ fontSize: '1.2rem', color: 'var(--theme-muted)', fontWeight: 600 }}>
+          កំពុងផ្ទុកលំហាត់… / Loading exercise…
         </div>
       </div>
     );
+  }
+
+  if (phase === 'error') {
+    return (
+      <div className="wrap" style={{ maxWidth: 520, paddingTop: 60 }}>
+        <div className="card error stack" style={{ padding: 24, textAlign: 'center', backgroundColor: 'var(--theme-card-bg)', border: '1px solid var(--theme-border)' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>{ThemeToggle}</div>
+          <h2 style={{ margin: '4px 0', fontSize: '1.25rem', color: 'var(--bad)' }}>មានបញ្ហា / Error</h2>
+          <p style={{ margin: 0, color: 'var(--theme-muted)' }}>{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!ex) return null;
+
+  if (phase === 'closed') {
+    return (
+      <div className="wrap" style={{ maxWidth: 520, paddingTop: 60 }}>
+        <div className="card stack" style={{ padding: 24, textAlign: 'center', backgroundColor: 'var(--theme-card-bg)', border: '1px solid var(--theme-border)' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>{ThemeToggle}</div>
+          <h1 style={{ margin: '4px 0', fontSize: '1.4rem', color: 'var(--theme-navy)' }}>{ex.title}</h1>
+          <p style={{ color: 'var(--theme-muted)' }}>លំហាត់នេះត្រូវបានបិទបញ្ចប់ហើយ (This exercise has closed)។</p>
+        </div>
+      </div>
+    );
+  }
 
   if (phase === 'name')
     return (
-      <div className="wrap" style={{ maxWidth: 520 }}>
-        <form className="card stack" onSubmit={start}>
-          <div style={{ textAlign: 'center', marginBottom: 4 }}>
-            <img
-              src="/logo.png"
-              alt="Math Exercises"
-              style={{ height: 68, width: 'auto', objectFit: 'contain', margin: '0 auto' }}
-            />
+      <div className="wrap" style={{ maxWidth: 520, padding: '24px 16px 80px' }}>
+        <form
+          className="card stack"
+          onSubmit={start}
+          style={{
+            backgroundColor: 'var(--theme-card-bg)',
+            borderColor: 'var(--theme-border)',
+            boxShadow: 'var(--theme-shadow)',
+            padding: '26px 22px',
+            borderRadius: 20,
+          }}
+        >
+          {/* Header with Logo and Theme Toggle */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <img
+                src="/logo.png"
+                alt="Math Exercises"
+                style={{ height: 46, width: 'auto', objectFit: 'contain' }}
+              />
+              <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--theme-muted)' }}>
+                លំហាត់គណិតវិទ្យា
+              </span>
+            </div>
+            {ThemeToggle}
           </div>
-          <h1 style={{ textAlign: 'center', marginTop: 0 }}>{ex.title}</h1>
-          {ex.description && <MathText text={ex.description} />}
-          <div className="muted" style={{ textAlign: 'center' }}>
-            {ex.questions.length} សំណួរ
-            {ex.timeLimitMinutes ? ` · រយៈពេល ${ex.timeLimitMinutes} នាទី (នាឡិកានឹងចាប់ផ្ដើមពេលចុច ចាប់ផ្ដើម)` : ''}
+
+          <h1 style={{ textAlign: 'center', margin: '6px 0', fontSize: '1.45rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
+            {ex.title}
+          </h1>
+
+          {ex.description && (
+            <div style={{ textAlign: 'center', color: 'var(--theme-muted)', fontSize: '1rem', lineHeight: 1.5 }}>
+              <MathText text={ex.description} />
+            </div>
+          )}
+
+          <div
+            style={{
+              textAlign: 'center',
+              fontSize: '0.88rem',
+              color: 'var(--theme-muted)',
+              backgroundColor: 'var(--theme-page-bg)',
+              padding: '8px 12px',
+              borderRadius: 10,
+              border: '1px solid var(--theme-border-subtle)',
+            }}
+          >
+            📋 {ex.questions.length} សំណួរ
+            {ex.timeLimitMinutes ? ` · ⏱ រយៈពេល ${ex.timeLimitMinutes} នាទី (នាឡិកានឹងចាប់ផ្ដើមពេលចុច ចាប់ផ្ដើម)` : ''}
           </div>
+
           <div>
-            <label>
-              ឈ្មោះរបស់អ្នក {studentLocked ? '(ចាក់សោតាមបញ្ជីឈ្មោះ)' : ''}
+            <label style={{ display: 'block', fontWeight: 700, marginBottom: 6, fontSize: '0.92rem', color: 'var(--theme-navy)' }}>
+              ឈ្មោះរបស់អ្នក {studentLocked ? '(ចាក់សោតាមបញ្ជីឈ្មោះ)' : ''} *
             </label>
             <input
               value={name}
               onChange={(e) => !studentLocked && setName(e.target.value)}
               maxLength={80}
               placeholder="បញ្ចូលឈ្មោះរបស់អ្នក..."
-              autoFocus={!studentLocked}
+              autoFocus={!studentLocked && !name}
               readOnly={studentLocked}
-              style={
-                studentLocked
-                  ? {
-                      backgroundColor: 'var(--theme-border-subtle, #f0f2f6)',
-                      color: 'var(--theme-navy, #1b2240)',
-                      cursor: 'not-allowed',
-                      fontWeight: 600,
-                    }
-                  : {}
-              }
+              style={{
+                fontSize: '1.05rem',
+                fontWeight: 600,
+                padding: '11px 14px',
+                borderRadius: 12,
+                backgroundColor: studentLocked ? 'var(--theme-page-bg)' : 'var(--theme-card-bg)',
+                color: 'var(--theme-navy)',
+                border: '1.5px solid var(--theme-border)',
+                cursor: studentLocked ? 'not-allowed' : 'text',
+              }}
               required
             />
             {studentLocked && (
@@ -304,11 +501,139 @@ export default function StudentPage() {
               </span>
             )}
           </div>
+
+          <div>
+            <label style={{ display: 'block', fontWeight: 700, marginBottom: 6, fontSize: '0.92rem', color: 'var(--theme-navy)' }}>
+              Class / ថ្នាក់ (ស្រេចចិត្ត)
+            </label>
+            <input
+              value={className}
+              onChange={(e) => setClassName(e.target.value)}
+              maxLength={40}
+              placeholder="ឧទាហរណ៍៖ 7A, 9B..."
+              style={{
+                fontSize: '1.05rem',
+                fontWeight: 600,
+                padding: '11px 14px',
+                borderRadius: 12,
+                backgroundColor: 'var(--theme-card-bg)',
+                color: 'var(--theme-navy)',
+                border: '1.5px solid var(--theme-border)',
+              }}
+            />
+          </div>
+
+          {savedParentLink && (
+            <div style={{ textAlign: 'center', paddingTop: 4 }}>
+              <button
+                type="button"
+                onClick={() => setShowSavedParentModal(true)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--theme-primary)',
+                  fontWeight: 700,
+                  fontSize: '0.88rem',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                <span>📱 តំណឪពុកម្តាយរបស់ខ្ញុំ (My parent link)</span>
+              </button>
+            </div>
+          )}
+
           {error && <div className="error">{error}</div>}
-          <button className="btn" type="submit" disabled={busy || !name.trim()}>
+
+          <button
+            className="btn"
+            type="submit"
+            disabled={busy || !name.trim()}
+            style={{
+              padding: '13px 20px',
+              fontSize: '1.05rem',
+              fontWeight: 800,
+              borderRadius: 12,
+              backgroundColor: 'var(--theme-primary)',
+              borderColor: 'var(--theme-primary)',
+              color: '#ffffff',
+              boxShadow: '0 4px 14px rgba(37,99,235,0.25)',
+              marginTop: 6,
+              cursor: busy || !name.trim() ? 'not-allowed' : 'pointer',
+            }}
+          >
             {busy ? 'កំពុងចាប់ផ្ដើម…' : 'ចាប់ផ្ដើមធ្វើលំហាត់'}
           </button>
         </form>
+
+        {/* Saved Parent Link Modal on Name Screen */}
+        {showSavedParentModal && savedParentLink && (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              backgroundColor: 'rgba(0,0,0,0.5)',
+              backdropFilter: 'blur(3px)',
+              zIndex: 999,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 16,
+            }}
+            onClick={() => setShowSavedParentModal(false)}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                backgroundColor: '#ffffff',
+                borderRadius: 20,
+                padding: '24px 20px',
+                maxWidth: 400,
+                width: '100%',
+                textAlign: 'center',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 12,
+              }}
+            >
+              <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: '#0f172a' }}>
+                តំណឪពុកម្តាយរបស់អ្នក
+              </h3>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>
+                ឪពុកម្តាយអាចស្កេន ឬបើកតំណនេះដើម្បីតាមដានលទ្ធផលលំហាត់របស់អ្នក។
+              </p>
+              <div style={{ padding: 12, backgroundColor: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
+                <QRCodeSVG value={savedParentLink} size={150} />
+              </div>
+              <div style={{ display: 'flex', gap: 8, width: '100%', marginTop: 6 }}>
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={() => {
+                    navigator.clipboard.writeText(savedParentLink);
+                    setCopiedParentLink(true);
+                    setTimeout(() => setCopiedParentLink(false), 2000);
+                  }}
+                  style={{ flex: 1, borderRadius: 10, fontSize: '0.88rem' }}
+                >
+                  {copiedParentLink ? '✓ បានចម្លង!' : 'ចម្លងតំណភ្ជាប់'}
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => setShowSavedParentModal(false)}
+                  style={{ borderRadius: 10, fontSize: '0.88rem' }}
+                >
+                  បិទ
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
 
@@ -327,304 +652,634 @@ export default function StudentPage() {
       });
 
     return (
-      <div className="wrap stack" style={{ maxWidth: 580, padding: '10px 10px 60px' }}>
+      <div className="wrap stack" style={{ maxWidth: 600, padding: '16px 12px 60px' }}>
         {/* Score summary card */}
-        <div className="card" style={{ padding: '16px 14px', borderRadius: 12 }}>
-          <div className="row spread" style={{ alignItems: 'center', marginBottom: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div
+          className="card"
+          style={{
+            padding: '18px 20px',
+            borderRadius: 18,
+            backgroundColor: 'var(--theme-card-bg)',
+            border: '1px solid var(--theme-border)',
+            boxShadow: 'var(--theme-shadow)',
+          }}
+        >
+          <div className="row spread" style={{ alignItems: 'center', marginBottom: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <img
                 src="/logo.png"
                 alt="Math Logo"
-                style={{ height: 42, width: 'auto', objectFit: 'contain' }}
+                style={{ height: 44, width: 'auto', objectFit: 'contain' }}
               />
               <div>
-                <h1 style={{ margin: 0, fontSize: '1.2rem', lineHeight: 1.3 }}>
+                <h1 style={{ margin: 0, fontSize: '1.25rem', lineHeight: 1.3, fontWeight: 800, color: 'var(--theme-navy)' }}>
                   លទ្ធផល{attempt?.name ? `: ${attempt.name}` : ''}
                 </h1>
-                <div className="muted" style={{ fontSize: '0.85rem' }}>
+                <div style={{ fontSize: '0.85rem', color: 'var(--theme-muted)' }}>
                   បានបញ្ចប់ការធ្វើតេស្ត
                 </div>
               </div>
             </div>
-            <div style={{ textAlign: 'right' }}>
-              <span style={{ fontSize: '1.7rem', fontWeight: 800, color: percentage >= 50 ? '#059669' : '#dc2626' }}>
-                {result.score}/{result.total}
-              </span>
-              <span style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--muted)', marginLeft: 4 }}>
-                ({percentage}%)
-              </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ textAlign: 'right' }}>
+                <span style={{ fontSize: '1.8rem', fontWeight: 800, color: percentage >= 50 ? (theme === 'dark' ? '#34d399' : '#059669') : (theme === 'dark' ? '#f87171' : '#dc2626') }}>
+                  {result.score}/{result.total}
+                </span>
+                <span style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--theme-muted)', marginLeft: 4 }}>
+                  ({percentage}%)
+                </span>
+              </div>
+              {ThemeToggle}
             </div>
           </div>
 
           {result.late && (
-            <div className="notice" style={{ padding: '6px 10px', fontSize: '0.85rem', marginBottom: 10 }}>
+            <div
+              className="notice"
+              style={{
+                padding: '8px 12px',
+                fontSize: '0.88rem',
+                marginBottom: 10,
+                borderRadius: 10,
+                backgroundColor: theme === 'dark' ? 'rgba(217, 119, 6, 0.18)' : '#fffbeb',
+                color: theme === 'dark' ? '#fbbf24' : '#b45309',
+                border: theme === 'dark' ? '1px solid rgba(217, 119, 6, 0.35)' : '1px solid #fde68a',
+              }}
+            >
               ⚠️ អ្នកបានបញ្ជូនចម្លើយហួសកំណត់ពេលវេលា។
             </div>
           )}
 
           {/* Correct vs Incorrect Quick Stats in 1 row */}
-          <div className="row" style={{ gap: 8, marginTop: 4 }}>
+          <div className="row" style={{ gap: 10, marginTop: 4 }}>
             <div
               style={{
                 flex: 1,
-                background: '#ecfdf5',
-                border: '1px solid #a7f3d0',
-                borderRadius: 8,
-                padding: '6px 10px',
+                background: theme === 'dark' ? 'rgba(5, 150, 105, 0.18)' : '#ecfdf5',
+                border: theme === 'dark' ? '1px solid rgba(5, 150, 105, 0.35)' : '1px solid #a7f3d0',
+                borderRadius: 10,
+                padding: '8px 12px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
               }}
             >
-              <span style={{ fontSize: '0.82rem', color: '#065f46', fontWeight: 600 }}>✓ ត្រឹមត្រូវ</span>
-              <strong style={{ fontSize: '1.15rem', color: '#047857' }}>{correctCount}</strong>
+              <span style={{ fontSize: '0.85rem', color: theme === 'dark' ? '#6ee7b7' : '#065f46', fontWeight: 700 }}>✓ ត្រឹមត្រូវ</span>
+              <strong style={{ fontSize: '1.2rem', color: theme === 'dark' ? '#34d399' : '#047857' }}>{correctCount}</strong>
             </div>
             <div
               style={{
                 flex: 1,
-                background: '#fef2f2',
-                border: '1px solid #fecaca',
-                borderRadius: 8,
-                padding: '6px 10px',
+                background: theme === 'dark' ? 'rgba(220, 38, 38, 0.18)' : '#fef2f2',
+                border: theme === 'dark' ? '1px solid rgba(220, 38, 38, 0.35)' : '1px solid #fecaca',
+                borderRadius: 10,
+                padding: '8px 12px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
               }}
             >
-              <span style={{ fontSize: '0.82rem', color: '#991b1b', fontWeight: 600 }}>✗ មិនត្រឹមត្រូវ</span>
-              <strong style={{ fontSize: '1.15rem', color: '#b91c1c' }}>{incorrectCount}</strong>
+              <span style={{ fontSize: '0.85rem', color: theme === 'dark' ? '#fca5a5' : '#991b1b', fontWeight: 700 }}>✗ មិនត្រឹមត្រូវ</span>
+              <strong style={{ fontSize: '1.2rem', color: theme === 'dark' ? '#f87171' : '#b91c1c' }}>{incorrectCount}</strong>
             </div>
           </div>
         </div>
 
+        {/* 2. SEND TO PARENT CARD (only if device is verified owner and parentLink returned) */}
+        {result.parentLink && (
+          <div
+            className="card"
+            style={{
+              padding: '22px 20px',
+              borderRadius: 18,
+              backgroundColor: theme === 'dark' ? 'rgba(37, 99, 235, 0.14)' : '#eff6ff',
+              border: theme === 'dark' ? '2px solid rgba(59, 130, 246, 0.4)' : '2px solid #bfdbfe',
+              textAlign: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 14,
+              boxShadow: 'var(--theme-shadow)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: theme === 'dark' ? '#93c5fd' : '#1e40af' }}>
+              <span style={{ fontSize: '1.5rem' }}>👨‍👩‍👧‍👦</span>
+              <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800 }}>
+                ផ្ញើលទ្ធផលទៅឪពុកម្តាយ
+              </h3>
+            </div>
+
+            <p style={{ margin: 0, fontSize: '0.92rem', color: theme === 'dark' ? '#bfdbfe' : '#1e3a8a', maxWidth: 440, lineHeight: 1.5 }}>
+              ឪពុកម្តាយអាចតាមដានលទ្ធផលទាំងអស់របស់កូនបានភ្លាមៗ ដោយមិនបាច់ចុះឈ្មោះ ឬប្រើអ៊ីមែលឡើយ។
+            </p>
+
+            {/* Primary Share Button */}
+            <button
+              type="button"
+              className="btn"
+              onClick={handleShareToParent}
+              style={{
+                width: '100%',
+                maxWidth: 380,
+                backgroundColor: 'var(--theme-primary)',
+                borderColor: 'var(--theme-primary)',
+                borderRadius: 12,
+                padding: '12px 18px',
+                fontSize: '1.05rem',
+                fontWeight: 800,
+                color: '#ffffff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                cursor: 'pointer',
+                boxShadow: '0 4px 14px rgba(37,99,235,0.25)',
+              }}
+            >
+              <span>📤</span>
+              <span>ផ្ញើទៅឪពុកម្តាយ (Share to Parents)</span>
+            </button>
+
+            {/* Companion buttons: Copy Link & Show QR */}
+            <div style={{ display: 'flex', gap: 10, width: '100%', maxWidth: 380, justifyContent: 'center' }}>
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={handleCopyParentLink}
+                style={{
+                  flex: 1,
+                  borderRadius: 10,
+                  padding: '9px 12px',
+                  fontSize: '0.88rem',
+                  fontWeight: 700,
+                  backgroundColor: 'var(--theme-card-bg)',
+                  borderColor: 'var(--theme-border)',
+                  color: 'var(--theme-navy)',
+                }}
+              >
+                {copiedParentLink ? '✓ បានចម្លង!' : '📋 ចម្លងតំណ (Copy link)'}
+              </button>
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={() => setShowResultQr(!showResultQr)}
+                style={{
+                  borderRadius: 10,
+                  padding: '9px 12px',
+                  fontSize: '0.88rem',
+                  fontWeight: 700,
+                  backgroundColor: 'var(--theme-card-bg)',
+                  borderColor: 'var(--theme-border)',
+                  color: 'var(--theme-navy)',
+                }}
+              >
+                📷 {showResultQr ? 'លាក់ QR' : 'បង្ហាញ QR Code'}
+              </button>
+            </div>
+
+            {/* Expandable QR Code */}
+            {showResultQr && (
+              <div
+                style={{
+                  padding: 16,
+                  backgroundColor: '#ffffff',
+                  borderRadius: 14,
+                  border: '1px solid #cbd5e1',
+                  marginTop: 6,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 8,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                }}
+              >
+                <QRCodeSVG value={result.parentLink} size={150} />
+                <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>
+                  ស្កេនពីអេក្រង់នេះដើម្បីបើកមើលលទ្ធផល
+                </span>
+              </div>
+            )}
+
+            <div style={{ fontSize: '0.8rem', color: 'var(--theme-muted)', fontStyle: 'italic', marginTop: 2 }}>
+              🔒 កុំចែករំលែកតំណនេះជាមួយអ្នកផ្សេង (Do not share this private link)
+            </div>
+          </div>
+        )}
+
         {/* Tab Filters */}
-        <div className="row" style={{ gap: 6 }}>
+        <div className="row" style={{ gap: 8 }}>
           <button
             type="button"
             className={`result-tab-btn ${resultTab === 'all' ? 'active' : ''}`}
             onClick={() => setResultTab('all')}
+            style={{
+              padding: '8px 14px',
+              borderRadius: 10,
+              fontSize: '0.88rem',
+              fontWeight: 700,
+              border: '1px solid var(--theme-border)',
+              backgroundColor: resultTab === 'all' ? 'var(--theme-primary)' : 'var(--theme-card-bg)',
+              color: resultTab === 'all' ? '#ffffff' : 'var(--theme-navy)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
           >
             <span>ទាំងអស់</span>
             <span style={{ fontSize: '0.8rem', opacity: 0.85 }}>({result.details.length})</span>
           </button>
           <button
             type="button"
-            className={`result-tab-btn ${resultTab === 'incorrect' ? 'active' : ''}`}
             onClick={() => setResultTab('incorrect')}
-            style={resultTab === 'incorrect' ? { background: '#dc2626', borderColor: '#dc2626' } : {}}
+            style={{
+              padding: '8px 14px',
+              borderRadius: 10,
+              fontSize: '0.88rem',
+              fontWeight: 700,
+              border: resultTab === 'incorrect' ? '1px solid #dc2626' : '1px solid var(--theme-border)',
+              backgroundColor: resultTab === 'incorrect' ? '#dc2626' : 'var(--theme-card-bg)',
+              color: resultTab === 'incorrect' ? '#ffffff' : 'var(--theme-navy)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
           >
             <span>មិនត្រូវ</span>
-            <span className={`result-badge ${resultTab === 'incorrect' ? '' : 'bad'}`} style={resultTab === 'incorrect' ? { background: '#fff', color: '#dc2626' } : {}}>
+            <span
+              style={{
+                fontSize: '0.8rem',
+                padding: '2px 6px',
+                borderRadius: 999,
+                backgroundColor: resultTab === 'incorrect' ? '#ffffff' : (theme === 'dark' ? 'rgba(220,38,38,0.2)' : '#fee2e2'),
+                color: resultTab === 'incorrect' ? '#dc2626' : '#dc2626',
+                fontWeight: 800,
+              }}
+            >
               {incorrectCount}
             </span>
           </button>
           <button
             type="button"
-            className={`result-tab-btn ${resultTab === 'correct' ? 'active' : ''}`}
             onClick={() => setResultTab('correct')}
-            style={resultTab === 'correct' ? { background: '#059669', borderColor: '#059669' } : {}}
+            style={{
+              padding: '8px 14px',
+              borderRadius: 10,
+              fontSize: '0.88rem',
+              fontWeight: 700,
+              border: resultTab === 'correct' ? '1px solid #059669' : '1px solid var(--theme-border)',
+              backgroundColor: resultTab === 'correct' ? '#059669' : 'var(--theme-card-bg)',
+              color: resultTab === 'correct' ? '#ffffff' : 'var(--theme-navy)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
           >
-            <span>ត្រូវ</span>
-            <span className={`result-badge ${resultTab === 'correct' ? '' : 'good'}`} style={resultTab === 'correct' ? { background: '#fff', color: '#059669' } : {}}>
+            <span>ត្រឹមត្រូវ</span>
+            <span
+              style={{
+                fontSize: '0.8rem',
+                padding: '2px 6px',
+                borderRadius: 999,
+                backgroundColor: resultTab === 'correct' ? '#ffffff' : (theme === 'dark' ? 'rgba(5,150,105,0.2)' : '#d1fae5'),
+                color: resultTab === 'correct' ? '#059669' : '#059669',
+                fontWeight: 800,
+              }}
+            >
               {correctCount}
             </span>
           </button>
         </div>
 
-        {/* List of answers */}
-        {displayedQuestions.length === 0 ? (
-          <div className="card muted" style={{ textAlign: 'center', padding: 20, fontSize: '0.9rem' }}>
-            មិនមានសំណួរក្នុងផ្នែកនេះទេ។
-          </div>
-        ) : (
-          displayedQuestions.map(({ q, originalIndex, detail: d }) => {
-            if (!d) return null;
-            const isCorrect = d.correct;
+        {/* Questions list */}
+        {displayedQuestions.map(({ q, originalIndex, detail }) => {
+          if (!detail) return null;
+          const isCorrect = detail.correct;
 
-            return (
-              <div
-                key={q.id}
-                className="card q-card"
-                style={{
-                  borderLeft: isCorrect ? '4px solid #10b981' : '4px solid #ef4444',
-                  background: isCorrect ? '#fafffc' : '#fff9f9',
-                  padding: '10px 12px',
-                }}
-              >
-                {/* Header line: Question number + prompt in single compact header */}
-                <div className="row spread" style={{ alignItems: 'flex-start', gap: 6, marginBottom: 4 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ fontWeight: 700, fontSize: '1.02rem', marginRight: 6 }}>
-                      {originalIndex}.
-                    </span>
-                    <span className="q-title" style={{ fontSize: '1.02rem', fontWeight: 600 }}>
-                      <MathText text={q.prompt} />
-                    </span>
-                  </div>
-                  <span className={`result-badge ${isCorrect ? 'good' : 'bad'}`} style={{ flex: 'none', marginTop: 2 }}>
-                    {isCorrect ? '✓ ត្រូវ' : '✗ ខុស'}
-                  </span>
+          return (
+            <div
+              key={q.id}
+              className="card stack"
+              style={{
+                padding: '16px 18px',
+                borderRadius: 14,
+                backgroundColor: 'var(--theme-card-bg)',
+                border: '1px solid var(--theme-border)',
+                borderLeft: `5px solid ${isCorrect ? (theme === 'dark' ? '#34d399' : '#059669') : (theme === 'dark' ? '#f87171' : '#dc2626')}`,
+                boxShadow: 'var(--theme-shadow)',
+              }}
+            >
+              <div className="row spread" style={{ alignItems: 'flex-start' }}>
+                <span style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--theme-navy)' }}>
+                  សំណួរទី {originalIndex}
+                </span>
+                <span
+                  style={{
+                    fontSize: '0.82rem',
+                    fontWeight: 700,
+                    padding: '3px 10px',
+                    borderRadius: 999,
+                    backgroundColor: isCorrect
+                      ? (theme === 'dark' ? 'rgba(5, 150, 105, 0.2)' : '#ecfdf5')
+                      : (theme === 'dark' ? 'rgba(220, 38, 38, 0.2)' : '#fef2f2'),
+                    color: isCorrect
+                      ? (theme === 'dark' ? '#34d399' : '#047857')
+                      : (theme === 'dark' ? '#f87171' : '#b91c1c'),
+                  }}
+                >
+                  {detail.earned} / {q.points} ពិន្ទុ
+                </span>
+              </div>
+
+              <div style={{ fontSize: '1.1rem', lineHeight: 1.6, color: 'var(--theme-navy)', marginTop: 4 }}>
+                <MathText text={q.prompt} />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: '0.95rem', marginTop: 6 }}>
+                <div>
+                  <span style={{ color: 'var(--theme-muted)' }}>ចម្លើយរបស់អ្នក៖ </span>
+                  <strong style={{ color: isCorrect ? (theme === 'dark' ? '#34d399' : '#047857') : (theme === 'dark' ? '#f87171' : '#b91c1c') }}>
+                    <MathText text={detail.given || '(មិនបានឆ្លើយ)'} />
+                  </strong>
                 </div>
 
-                {/* Answers comparison row */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: '0.92rem', marginTop: 4 }}>
-                  <div className="row" style={{ gap: 6, alignItems: 'baseline' }}>
-                    <span className="muted" style={{ fontSize: '0.85rem' }}>ចម្លើយអ្នក:</span>
-                    <strong style={{ color: isCorrect ? '#047857' : '#b91c1c' }}>
-                      {d.given ? <MathText text={d.given} /> : <span style={{ fontStyle: 'italic', color: '#999' }}>(មិនឆ្លើយ)</span>}
+                {!isCorrect && detail.correctAnswer && (
+                  <div>
+                    <span style={{ color: 'var(--theme-muted)' }}>ចម្លើយត្រឹមត្រូវ៖ </span>
+                    <strong style={{ color: theme === 'dark' ? '#34d399' : '#047857' }}>
+                      <MathText text={detail.correctAnswer} />
                     </strong>
-                  </div>
-
-                  {!isCorrect && (
-                    <div className="row" style={{ gap: 6, alignItems: 'baseline' }}>
-                      <span className="muted" style={{ fontSize: '0.85rem' }}>ចម្លើយត្រូវ:</span>
-                      <strong style={{ color: '#047857' }}>
-                        <MathText text={d.correctAnswer ?? ''} />
-                      </strong>
-                    </div>
-                  )}
-                </div>
-
-                {/* Explanation / Why it is incorrect */}
-                {!isCorrect && (
-                  <div className="explanation-box" style={{ marginTop: 6, padding: '8px 10px' }}>
-                    <div className="explanation-title" style={{ fontSize: '0.88rem', marginBottom: 2 }}>
-                      <span>💡 ពន្យល់:</span>
-                    </div>
-                    {d.explanation ? (
-                      <div style={{ color: '#78350f', fontSize: '0.9rem', lineHeight: 1.45 }}>
-                        <MathText text={d.explanation} />
-                      </div>
-                    ) : (
-                      <div style={{ color: '#78350f', fontSize: '0.88rem', lineHeight: 1.45 }}>
-                        ចម្លើយត្រឹមត្រូវគឺ <strong><MathText text={d.correctAnswer ?? ''} /></strong>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* If correct and has explanation */}
-                {isCorrect && d.explanation && (
-                  <div
-                    style={{
-                      background: '#ecfdf5',
-                      borderLeft: '3px solid #10b981',
-                      borderRadius: 6,
-                      padding: '6px 10px',
-                      marginTop: 6,
-                    }}
-                  >
-                    <div style={{ color: '#065f46', fontWeight: 700, fontSize: '0.85rem', marginBottom: 2 }}>
-                      💡 ពន្យល់:
-                    </div>
-                    <div style={{ color: '#047857', fontSize: '0.88rem', lineHeight: 1.45 }}>
-                      <MathText text={d.explanation} />
-                    </div>
                   </div>
                 )}
               </div>
-            );
-          })
-        )}
+
+              {detail.explanation && (
+                <div
+                  style={{
+                    marginTop: 8,
+                    padding: '10px 14px',
+                    borderRadius: 10,
+                    backgroundColor: 'var(--theme-page-bg)',
+                    border: '1px solid var(--theme-border)',
+                    fontSize: '0.92rem',
+                    color: 'var(--theme-navy)',
+                    lineHeight: 1.5,
+                  }}
+                >
+                  <div style={{ fontWeight: 800, color: 'var(--theme-primary)', marginBottom: 4 }}>
+                    ការពន្យល់៖
+                  </div>
+                  <MathText text={detail.explanation} />
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     );
   }
 
-  // taking
-  const answered = questions.filter((q) => (attempt?.answers[q.id] ?? '').trim()).length;
+  // Phase === 'taking'
   return (
     <>
-      <ScreenGuard studentName={attempt?.name ?? ''} />
-      <div className="timer row spread">
-        <div>
-          <strong>{ex.title}</strong>
-          <span className="muted"> · {attempt?.name}</span>
-        </div>
-        <div className="row">
-          <span className="muted">
-            ឆ្លើយបាន {answered}/{questions.length}
-          </span>
-          {remaining !== null && <span className={`t ${remaining < 60_000 ? 'low' : ''}`}>{fmt(remaining)}</span>}
-        </div>
-      </div>
-
-      <div className="wrap stack" style={{ gap: 10 }}>
-        {questions.map((q, i) => (
-          <div className="card q-card" key={q.id}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
-              <div className="q-title" style={{ fontSize: '1.2rem', fontWeight: 600, color: '#111827', lineHeight: 1.3 }}>
-                <span style={{ marginRight: 6 }}>{i + 1}.</span>
-                <MathText text={q.prompt} />
-              </div>
-              <span className="muted" style={{ fontSize: '0.78rem', marginLeft: 10, flexShrink: 0 }}>
-                {q.points} {q.points === 1 ? 'ពិន្ទុ' : 'ពិន្ទុ'}
-              </span>
+      <ScreenGuard studentName={attempt?.name || name || 'Student'} />
+      <div className="wrap stack" style={{ maxWidth: 680, padding: '14px 14px 80px' }}>
+        {/* Sticky Header with Timer, Theme Toggle & Submit button */}
+        <div
+          style={{
+            position: 'sticky',
+            top: 8,
+            zIndex: 40,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '12px 18px',
+            borderRadius: 16,
+            backgroundColor: 'var(--theme-card-bg)',
+            border: '1px solid var(--theme-border)',
+            boxShadow: 'var(--theme-shadow)',
+            backdropFilter: 'blur(8px)',
+            gap: 12,
+          }}
+        >
+          <div>
+            <div style={{ fontSize: '0.84rem', color: 'var(--theme-muted)', fontWeight: 600 }}>
+              សិស្ស៖ <strong style={{ color: 'var(--theme-navy)' }}>{attempt?.name}</strong> {attempt?.className ? `(${attempt.className})` : ''}
             </div>
-
-            {q.kind === 'choice' ? (
-              <div className="stack" role="radiogroup">
-                {(q.choices ?? []).map((c, k) => {
-                  const selected = attempt?.answers[q.id] === String(k);
-                  return (
-                    <label key={k} className={`choice ${selected ? 'selected' : ''}`}>
-                      <input
-                        type="radio"
-                        name={`q-${q.id}`}
-                        checked={selected}
-                        onChange={() => setAnswer(q.id, String(k))}
-                      />
-                      <MathText text={c} />
-                    </label>
-                  );
-                })}
+            {remaining !== null && (
+              <div
+                style={{
+                  fontSize: '1.25rem',
+                  fontWeight: 800,
+                  fontVariantNumeric: 'tabular-nums',
+                  color: remaining < 60_000 ? '#ef4444' : 'var(--theme-navy)',
+                }}
+              >
+                ⏱ {fmt(remaining)}
               </div>
-            ) : (
-              <>
-                <input
-                  ref={(el) => {
-                    inputs.current[q.id] = el;
-                  }}
-                  value={attempt?.answers[q.id] ?? ''}
-                  onChange={(e) => setAnswer(q.id, e.target.value)}
-                  placeholder={q.kind === 'number' ? 'ចម្លើយរបស់អ្នក (ឧ. -5 ឬ 3/4)' : 'ចម្លើយរបស់អ្នក (ប្រើ * សម្រាប់ ×, ^ សម្រាប់ស្វ័យគុណ)'}
-                  autoComplete="off"
-                />
-                {(attempt?.answers[q.id] ?? '').trim() && (
-                  <div className="preview" style={{ marginTop: 6, minHeight: 36 }}>
-                    <MathText text={attempt!.answers[q.id]} />
-                  </div>
-                )}
-                <div className="row" style={{ marginTop: 8, gap: 6 }}>
-                  {SYMBOLS.map((s) => (
-                    <button key={s} type="button" className="sym" onClick={() => insertSymbol(q.id, s)}>
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              </>
             )}
           </div>
-        ))}
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {ThemeToggle}
+            <button
+              type="button"
+              className="btn small"
+              disabled={busy}
+              onClick={() => attempt && submit(attempt)}
+              style={{
+                padding: '9px 18px',
+                borderRadius: 10,
+                fontWeight: 800,
+                fontSize: '0.95rem',
+                backgroundColor: 'var(--theme-primary)',
+                borderColor: 'var(--theme-primary)',
+                color: '#ffffff',
+                cursor: 'pointer',
+              }}
+            >
+              {busy ? 'កំពុងបញ្ជូន…' : 'បញ្ជូនចម្លើយ'}
+            </button>
+          </div>
+        </div>
+
+        <h1 style={{ margin: '14px 0 4px', fontSize: '1.5rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
+          {ex.title}
+        </h1>
+        {ex.description && (
+          <div style={{ color: 'var(--theme-muted)', fontSize: '1.02rem', lineHeight: 1.5 }}>
+            <MathText text={ex.description} />
+          </div>
+        )}
 
         {error && <div className="error">{error}</div>}
 
-        <div className="row spread" style={{ marginTop: 6 }}>
-          <span className="muted" style={{ fontSize: '0.85rem' }}>ចម្លើយត្រូវបានរក្សាទុកដោយស្វ័យប្រវត្តិក្នងឧបករណ៍នេះ។</span>
+        {/* Questions list */}
+        {questions.map((q, idx) => {
+          const val = attempt?.answers[q.id] ?? '';
+
+          return (
+            <div
+              key={q.id}
+              className="card stack"
+              style={{
+                padding: '22px 20px',
+                borderRadius: 16,
+                backgroundColor: 'var(--theme-card-bg)',
+                border: '1px solid var(--theme-border)',
+                boxShadow: 'var(--theme-shadow)',
+              }}
+            >
+              <div className="row spread" style={{ alignItems: 'baseline' }}>
+                <span
+                  style={{
+                    fontSize: '0.85rem',
+                    fontWeight: 700,
+                    padding: '3px 12px',
+                    borderRadius: 999,
+                    backgroundColor: 'var(--theme-page-bg)',
+                    border: '1px solid var(--theme-border)',
+                    color: 'var(--theme-navy)',
+                  }}
+                >
+                  សំណួរទី {idx + 1}
+                </span>
+                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--theme-muted)' }}>
+                  {q.points} ពិន្ទុ
+                </span>
+              </div>
+
+              <div
+                style={{
+                  fontSize: '1.2rem',
+                  fontWeight: 600,
+                  lineHeight: 1.6,
+                  color: 'var(--theme-navy)',
+                  marginTop: 6,
+                }}
+              >
+                <MathText text={q.prompt} />
+              </div>
+
+              {q.kind === 'choice' && q.choices ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
+                  {q.choices.map((c, cIdx) => {
+                    const checked = val === String(cIdx);
+                    return (
+                      <label
+                        key={cIdx}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 12,
+                          padding: '12px 16px',
+                          borderRadius: 12,
+                          border: `2px solid ${checked ? 'var(--theme-primary)' : 'var(--theme-border)'}`,
+                          backgroundColor: checked
+                            ? theme === 'dark'
+                              ? 'rgba(59, 130, 246, 0.18)'
+                              : 'rgba(37, 99, 235, 0.08)'
+                            : 'var(--theme-card-bg)',
+                          color: 'var(--theme-navy)',
+                          fontSize: '1.1rem',
+                          lineHeight: 1.5,
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
+                          boxShadow: checked ? '0 2px 8px rgba(37,99,235,0.15)' : 'none',
+                        }}
+                      >
+                        <input
+                          type="radio"
+                          name={`q_${q.id}`}
+                          value={String(cIdx)}
+                          checked={checked}
+                          onChange={() => setAnswer(q.id, String(cIdx))}
+                          style={{
+                            width: 20,
+                            height: 20,
+                            accentColor: 'var(--theme-primary)',
+                            cursor: 'pointer',
+                            flexShrink: 0,
+                          }}
+                        />
+                        <div style={{ flex: 1, color: 'var(--theme-navy)' }}>
+                          <MathText text={c} />
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+                  {/* Symbol Quick Bar */}
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {SYMBOLS.map((sym) => (
+                      <button
+                        key={sym}
+                        type="button"
+                        onClick={() => insertSymbol(q.id, sym)}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: 8,
+                          border: '1px solid var(--theme-border)',
+                          backgroundColor: 'var(--theme-page-bg)',
+                          color: 'var(--theme-navy)',
+                          fontSize: '1.1rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        {sym}
+                      </button>
+                    ))}
+                  </div>
+
+                  <input
+                    ref={(el) => {
+                      inputs.current[q.id] = el;
+                    }}
+                    value={val}
+                    onChange={(e) => setAnswer(q.id, e.target.value)}
+                    placeholder="បញ្ចូលចម្លើយរបស់អ្នក..."
+                    style={{
+                      fontSize: '1.18rem',
+                      fontWeight: 600,
+                      padding: '12px 14px',
+                      borderRadius: 12,
+                      backgroundColor: 'var(--theme-card-bg)',
+                      color: 'var(--theme-navy)',
+                      border: '1.5px solid var(--theme-border)',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        <div style={{ textAlign: 'center', marginTop: 18 }}>
           <button
+            type="button"
             className="btn"
             disabled={busy}
-            onClick={() => {
-              if (!attempt) return;
-              const blanks = questions.length - answered;
-              if (
-                blanks > 0 &&
-                !withGuardPaused(() => confirm(`នៅសល់ ${blanks} សំណួរមិនទាន់ឆ្លើយ។ តើអ្នកពិតជាចង់បញ្ជូនចម្លើយមែនទេ?`))
-              )
-                return;
-              submit(attempt);
+            onClick={() => attempt && submit(attempt)}
+            style={{
+              padding: '14px 38px',
+              fontSize: '1.12rem',
+              fontWeight: 800,
+              backgroundColor: 'var(--theme-primary)',
+              borderColor: 'var(--theme-primary)',
+              color: '#ffffff',
+              borderRadius: 12,
+              boxShadow: '0 4px 14px rgba(37,99,235,0.25)',
+              cursor: busy ? 'not-allowed' : 'pointer',
             }}
           >
-            {busy ? 'កំពុងបញ្ជូន…' : 'បញ្ជូនចម្លើយ (Submit)'}
+            {busy ? 'កំពុងបញ្ជូន…' : 'បញ្ជូនចម្លើយទាំងអស់'}
           </button>
         </div>
       </div>

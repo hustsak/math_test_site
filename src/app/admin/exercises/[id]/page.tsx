@@ -30,6 +30,10 @@ const blankExercise = (): Exercise => ({
   published: false,
   oneAttemptPerName: false,
   shuffleQuestions: false,
+  gradeLevels: [7, 8, 9, 10, 11, 12],
+  publicationMode: 'instant',
+  scheduledPublishAt: null,
+  timezone: 'Asia/Phnom_Penh',
   questions: [blankQuestion()],
   createdAt: Date.now(),
   updatedAt: Date.now(),
@@ -222,9 +226,17 @@ export default function EditExercise() {
     }
     setSaving(true);
     try {
+      const isDraft = ex.publicationMode === 'draft';
+      const willPublish = publish !== undefined ? publish : (isDraft ? false : ex.published);
+      const finalPubMode = !willPublish ? 'draft' : (ex.publicationMode || 'instant');
+
       const data: Exercise = {
         ...ex,
-        published: publish ?? ex.published,
+        gradeLevels: ex.gradeLevels && ex.gradeLevels.length > 0 ? ex.gradeLevels : [7, 8, 9, 10, 11, 12],
+        publicationMode: finalPubMode,
+        scheduledPublishAt: finalPubMode === 'scheduled' ? ex.scheduledPublishAt : null,
+        timezone: 'Asia/Phnom_Penh',
+        published: willPublish,
         timeLimitMinutes: Math.max(0, Number(ex.timeLimitMinutes) || 0),
         questions: ex.questions.map((q) => {
           const { choices, ...rest } = q;
@@ -271,16 +283,221 @@ export default function EditExercise() {
             {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
             <span>{theme === 'dark' ? 'Light' : 'Dark'}</span>
           </button>
-          <span className={`badge ${ex.published ? 'live' : 'warn'}`}>{ex.published ? 'Published' : 'Draft'}</span>
+          {(() => {
+            const isScheduled = ex.published && ex.publicationMode === 'scheduled' && ex.scheduledPublishAt && new Date(ex.scheduledPublishAt).getTime() > Date.now();
+            if (isScheduled) return <span className="badge info" style={{ backgroundColor: 'rgba(59, 130, 246, 0.15)', color: '#2563eb' }}>⏰ Scheduled</span>;
+            if (ex.published) return <span className="badge live">Published</span>;
+            return <span className="badge warn">Draft</span>;
+          })()}
         </div>
       </div>
 
       <div className="card stack">
         <h1>{id === 'new' ? 'New exercise' : 'Edit exercise'}</h1>
         <div>
-          <label>Title</label>
-          <input value={ex.title} onChange={(e) => set({ title: e.target.value })} />
+          <label>ចំណងជើងលំហាត់ (Title)</label>
+          <input value={ex.title} onChange={(e) => set({ title: e.target.value })} placeholder="e.g. លំហាត់ប្រភាគ និងសមីការ" />
         </div>
+        <div>
+          <label>សេចក្ដីណែនាំសង្ខេប (Description - Optional)</label>
+          <textarea
+            value={ex.description || ''}
+            onChange={(e) => set({ description: e.target.value })}
+            placeholder="ការណែនាំដល់សិស្សមុនពេលចាប់ផ្ដើម..."
+            rows={2}
+          />
+        </div>
+
+        {/* Target Grades (7-12) */}
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <label style={{ margin: 0, fontWeight: 700 }}>
+              កម្រិតថ្នាក់គោលដៅ (Target Grades 7–12)
+            </label>
+            <button
+              type="button"
+              className="btn secondary small"
+              style={{ fontSize: '0.78rem', padding: '3px 8px' }}
+              onClick={() => {
+                const current = ex.gradeLevels || [];
+                if (current.length === 6) {
+                  set({ gradeLevels: [7] });
+                } else {
+                  set({ gradeLevels: [7, 8, 9, 10, 11, 12] });
+                }
+              }}
+            >
+              {(ex.gradeLevels?.length ?? 6) === 6 ? 'ជ្រើសរើសថ្នាក់តែមួយ' : 'គ្រប់កម្រិតថ្នាក់ (7–12)'}
+            </button>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {[7, 8, 9, 10, 11, 12].map((g) => {
+              const selected = (ex.gradeLevels && ex.gradeLevels.length > 0) ? ex.gradeLevels.includes(g) : true;
+              return (
+                <label
+                  key={g}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '6px 12px',
+                    borderRadius: 8,
+                    border: selected ? '1.5px solid var(--brand)' : '1px solid var(--line)',
+                    background: selected ? 'rgba(74, 103, 214, 0.12)' : 'var(--card)',
+                    color: selected ? 'var(--brand)' : 'var(--ink)',
+                    fontWeight: selected ? 700 : 500,
+                    cursor: 'pointer',
+                    fontSize: '0.88rem',
+                    userSelect: 'none',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selected}
+                    onChange={(e) => {
+                      const current = ex.gradeLevels && ex.gradeLevels.length > 0 ? [...ex.gradeLevels] : [7, 8, 9, 10, 11, 12];
+                      if (e.target.checked) {
+                        if (!current.includes(g)) current.push(g);
+                      } else {
+                        const idx = current.indexOf(g);
+                        if (idx >= 0 && current.length > 1) current.splice(idx, 1);
+                      }
+                      set({ gradeLevels: current.sort((a, b) => a - b) });
+                    }}
+                    style={{ accentColor: 'var(--brand)' }}
+                  />
+                  <span>ថ្នាក់ទី {g} (Grade {g})</span>
+                </label>
+              );
+            })}
+          </div>
+          <span style={{ fontSize: '0.78rem', color: 'var(--muted)', marginTop: 4, display: 'block' }}>
+            មានតែសិស្សក្នុងកម្រិតថ្នាក់ដែលបានជ្រើសរើសប៉ុណ្ណោះ ទើបអាចមើលឃើញ និងធ្វើលំហាត់នេះក្នុង Student Portal
+          </span>
+        </div>
+
+        {/* Publication Mode & Auto-scheduling in Asia/Phnom_Penh */}
+        <div style={{ borderTop: '1px solid var(--line)', paddingTop: 14 }}>
+          <label style={{ fontWeight: 700, marginBottom: 8, display: 'block' }}>
+            ស្ថានភាពផ្សាយ &amp; កាលវិភាគ (Publication &amp; Scheduling)
+          </label>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginBottom: 12 }}>
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 8,
+                padding: '10px 12px',
+                borderRadius: 8,
+                border: (ex.publicationMode || 'instant') === 'instant' ? '1.5px solid var(--brand)' : '1px solid var(--line)',
+                background: (ex.publicationMode || 'instant') === 'instant' ? 'rgba(74, 103, 214, 0.12)' : 'var(--card)',
+                cursor: 'pointer',
+              }}
+            >
+              <input
+                type="radio"
+                name="publicationMode"
+                value="instant"
+                checked={(ex.publicationMode || 'instant') === 'instant'}
+                onChange={() => set({ publicationMode: 'instant', scheduledPublishAt: null })}
+                style={{ marginTop: 2, accentColor: 'var(--brand)' }}
+              />
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>ផ្សាយភ្លាមៗ (Instant)</div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>
+                  សិស្សអាចធ្វើបានភ្លាមៗពេលចុច Save &amp; Publish
+                </div>
+              </div>
+            </label>
+
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 8,
+                padding: '10px 12px',
+                borderRadius: 8,
+                border: ex.publicationMode === 'scheduled' ? '1.5px solid var(--brand)' : '1px solid var(--line)',
+                background: ex.publicationMode === 'scheduled' ? 'rgba(74, 103, 214, 0.12)' : 'var(--card)',
+                cursor: 'pointer',
+              }}
+            >
+              <input
+                type="radio"
+                name="publicationMode"
+                value="scheduled"
+                checked={ex.publicationMode === 'scheduled'}
+                onChange={() => {
+                  const now = new Date();
+                  now.setHours(now.getHours() + 1, 0, 0, 0);
+                  set({
+                    publicationMode: 'scheduled',
+                    scheduledPublishAt: ex.scheduledPublishAt || now.toISOString(),
+                    timezone: 'Asia/Phnom_Penh',
+                  });
+                }}
+                style={{ marginTop: 2, accentColor: 'var(--brand)' }}
+              />
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>កំណត់ពេលផ្សាយស្វ័យប្រវត្តិ (Schedule)</div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>
+                  ផ្សាយស្វ័យប្រវត្តិតាមម៉ោងកំណត់ (Asia/Phnom_Penh)
+                </div>
+              </div>
+            </label>
+
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 8,
+                padding: '10px 12px',
+                borderRadius: 8,
+                border: ex.publicationMode === 'draft' ? '1.5px solid var(--brand)' : '1px solid var(--line)',
+                background: ex.publicationMode === 'draft' ? 'rgba(74, 103, 214, 0.12)' : 'var(--card)',
+                cursor: 'pointer',
+              }}
+            >
+              <input
+                type="radio"
+                name="publicationMode"
+                value="draft"
+                checked={ex.publicationMode === 'draft'}
+                onChange={() => set({ publicationMode: 'draft', published: false })}
+                style={{ marginTop: 2, accentColor: 'var(--brand)' }}
+              />
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>សេចក្ដីព្រាង (Draft)</div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>
+                  រក្សាទុកតែក្នុង admin, សិស្សមិនទាន់មើលឃើញ
+                </div>
+              </div>
+            </label>
+          </div>
+
+          {ex.publicationMode === 'scheduled' && (
+            <div style={{ padding: '12px 14px', borderRadius: 8, background: 'var(--card)', border: '1px solid var(--line)', marginBottom: 10 }}>
+              <label style={{ fontWeight: 600, display: 'block', marginBottom: 4 }}>
+                កាលបរិច្ឆេទ &amp; ម៉ោងផ្សាយស្វ័យប្រវត្តិ (Auto-Publish Date &amp; Time - Asia/Phnom_Penh)
+              </label>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <input
+                  type="datetime-local"
+                  value={toLocalInput(typeof ex.scheduledPublishAt === 'string' ? ex.scheduledPublishAt : ex.scheduledPublishAt ? new Date(ex.scheduledPublishAt).toISOString() : null)}
+                  onChange={(e) => set({ scheduledPublishAt: e.target.value ? new Date(e.target.value).toISOString() : null, timezone: 'Asia/Phnom_Penh' })}
+                  style={{ maxWidth: 280 }}
+                />
+                <span style={{ fontSize: '0.82rem', color: 'var(--muted)' }}>
+                  🇰🇭 ម៉ោងនៅកម្ពុជា (UTC+7)
+                </span>
+              </div>
+              <span style={{ fontSize: '0.78rem', color: 'var(--muted)', marginTop: 4, display: 'block' }}>
+                លំហាត់នឹងបង្ហាញស្វ័យប្រវត្តិទៅសិស្សនៅពេលដល់ម៉ោងនេះ ដោយមិនចាំបាច់មាន Cron Job ឬធ្វើអ្វីដោយដៃឡើយ។
+              </span>
+            </div>
+          )}
+        </div>
+
         <div className="row">
           <div className="grow">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
@@ -654,21 +871,49 @@ export default function EditExercise() {
 
       {error && <div className="error">{error}</div>}
 
-      <div className="card row spread">
+      <div className="card row spread" style={{ alignItems: 'center' }}>
         <span className="muted">
           {ex.questions.length} questions · {total} points total
         </span>
-        <div className="row">
+        <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+          {id !== 'new' && (
+            <button
+              type="button"
+              className="btn secondary"
+              disabled={saving}
+              onClick={async () => {
+                if (!ex) return;
+                setSaving(true);
+                try {
+                  const copyData: Exercise = {
+                    ...ex,
+                    title: `${ex.title} (ចម្លង/Copy)`,
+                    published: false,
+                    publicationMode: 'draft',
+                    createdAt: Date.now(),
+                    updatedAt: Date.now(),
+                  };
+                  const ref = await addDoc(collection(getDb(), 'exercises'), copyData);
+                  router.push(`/admin/exercises/${ref.id}`);
+                } catch (e: any) {
+                  setError(e?.message || 'Failed to duplicate.');
+                  setSaving(false);
+                }
+              }}
+            >
+              Duplicate (ចម្លង)
+            </button>
+          )}
           <button className="btn secondary" disabled={saving} onClick={() => save()}>
-            Save
+            {ex.publicationMode === 'draft' ? 'Save Draft (រក្សាទុក)' : 'Save (រក្សាទុក)'}
           </button>
           {ex.published ? (
             <button className="btn danger" disabled={saving} onClick={() => save(false)}>
-              Unpublish
+              Unpublish (ដកចេញ)
             </button>
           ) : (
             <button className="btn" disabled={saving} onClick={() => save(true)}>
-              Save &amp; publish
+              {ex.publicationMode === 'scheduled' ? 'Save & Schedule (កំណត់ពេល)' : 'Save & Publish (ផ្សាយ)'}
             </button>
           )}
         </div>
