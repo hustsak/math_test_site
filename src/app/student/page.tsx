@@ -301,7 +301,20 @@ export default function StudentPortalPage() {
                     lineHeight: 1.5,
                   }}
                 >
-                  {error}
+                  <div>{error}</div>
+                  <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px solid rgba(239, 68, 68, 0.2)' }}>
+                    <Link
+                      href="/register"
+                      style={{
+                        color: '#b91c1c',
+                        fontWeight: 800,
+                        fontSize: '0.86rem',
+                        textDecoration: 'underline',
+                      }}
+                    >
+                      👉 ចុចទីនេះដើម្បីចុះឈ្មោះថ្មី (Click here to register)
+                    </Link>
+                  </div>
                 </div>
               )}
 
@@ -372,6 +385,39 @@ export default function StudentPortalPage() {
                 {loading ? 'កំពុងផ្ទៀងផ្ទាត់…' : 'ចូលរៀន (Enter Portal)'}
               </button>
             </form>
+
+            <div
+              style={{
+                marginTop: 20,
+                paddingTop: 16,
+                borderTop: '1px solid var(--theme-border)',
+                textAlign: 'center',
+              }}
+            >
+              <div style={{ fontSize: '0.86rem', color: 'var(--theme-muted)', marginBottom: 8 }}>
+                សិស្សថ្មីមិនទាន់បានចុះឈ្មោះ?
+              </div>
+              <Link
+                href="/register"
+                className="btn secondary"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  borderRadius: 12,
+                  padding: '9px 18px',
+                  fontWeight: 800,
+                  fontSize: '0.88rem',
+                  color: 'var(--brand)',
+                  borderColor: 'var(--brand)',
+                  backgroundColor: 'rgba(74, 103, 214, 0.08)',
+                  textDecoration: 'none',
+                }}
+              >
+                <Sparkles size={16} />
+                <span>ចុះឈ្មោះឈ្មោះ និងថ្នាក់នៅទីនេះ (New Student Register)</span>
+              </Link>
+            </div>
           </div>
         )}
 

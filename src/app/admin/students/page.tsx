@@ -1069,6 +1069,34 @@ export default function AdminStudentsPage() {
                 </select>
               </div>
 
+              {/* Copy Student Registration Link */}
+              <button
+                type="button"
+                onClick={() => {
+                  const regUrl = `${window.location.origin}/register`;
+                  navigator.clipboard.writeText(regUrl);
+                  showToast(lang === 'KH' ? 'បានចម្លងតំណចុះឈ្មោះសិស្សថ្មី!' : 'Copied Student Registration Link!');
+                }}
+                className="btn"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '9px 16px',
+                  borderRadius: 12,
+                  backgroundColor: 'var(--theme-card-bg)',
+                  color: 'var(--theme-navy)',
+                  fontWeight: 700,
+                  fontSize: '0.88rem',
+                  border: '1.5px solid var(--theme-border)',
+                  cursor: 'pointer',
+                }}
+                title={lang === 'KH' ? 'ចម្លងតំណផ្ញើជូនសិស្សចុះឈ្មោះ' : 'Copy link to send to students'}
+              >
+                <Copy size={16} color="var(--theme-primary)" />
+                <span>{lang === 'KH' ? 'តំណចុះឈ្មោះសិស្ស' : 'Student Register Link'}</span>
+              </button>
+
               {/* Add Student Button */}
               <button
                 type="button"

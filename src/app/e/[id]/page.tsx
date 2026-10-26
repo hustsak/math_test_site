@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
+import Link from 'next/link';
 import { QRCodeSVG } from 'qrcode.react';
 import { Sun, Moon } from 'lucide-react';
 import MathText from '@/components/MathText';
@@ -546,7 +547,19 @@ export default function StudentPage() {
             </div>
           )}
 
-          {error && <div className="error">{error}</div>}
+          {error && (
+            <div className="error" style={{ marginBottom: 12 }}>
+              <div>{error}</div>
+              <div style={{ marginTop: 8, fontSize: '0.86rem' }}>
+                <Link
+                  href={`/register?exerciseId=${id}`}
+                  style={{ color: '#b91c1c', fontWeight: 800, textDecoration: 'underline' }}
+                >
+                  👉 ចុចទីនេះដើម្បីចុះឈ្មោះឈ្មោះ និងថ្នាក់ (Click here to register)
+                </Link>
+              </div>
+            </div>
+          )}
 
           <button
             className="btn"
@@ -567,6 +580,23 @@ export default function StudentPage() {
           >
             {busy ? 'កំពុងចាប់ផ្ដើម…' : 'ចាប់ផ្ដើមធ្វើលំហាត់'}
           </button>
+
+          <div style={{ textAlign: 'center', marginTop: 14 }}>
+            <Link
+              href={`/register?exerciseId=${id}`}
+              style={{
+                color: 'var(--theme-primary)',
+                fontWeight: 700,
+                fontSize: '0.88rem',
+                textDecoration: 'none',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              <span>✨ សិស្សថ្មីមិនទាន់បានចុះឈ្មោះ? ចុះឈ្មោះឈ្មោះ និងថ្នាក់ទីនេះ</span>
+            </Link>
+          </div>
         </form>
 
         {/* Saved Parent Link Modal on Name Screen */}
