@@ -20,8 +20,6 @@ import { QRCodeSVG } from 'qrcode.react';
 import {
   LayoutDashboard,
   BookOpen,
-  BarChart3,
-  Database,
   Users,
   Settings,
   LogOut,
@@ -42,7 +40,6 @@ import {
   FileText,
   UserPlus,
   Check,
-  Radio,
   ArrowRight,
   TrendingUp,
   X,
@@ -92,7 +89,6 @@ export default function AdminHome() {
   // UI Filter / Search
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'published' | 'draft'>('all');
-  const [selectedMonth, setSelectedMonth] = useState('All');
 
   // Modals & Popups
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
@@ -116,7 +112,7 @@ export default function AdminHome() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
-  const [activeSection, setActiveSection] = useState<'dashboard' | 'exercises' | 'performance' | 'accuracy' | 'live'>('dashboard');
+  const [activeSection, setActiveSection] = useState<'dashboard' | 'exercises'>('dashboard');
 
   function scrollToSection(sectionId: string, sectionKey?: typeof activeSection) {
     if (sectionKey) setActiveSection(sectionKey);
@@ -381,116 +377,6 @@ export default function AdminHome() {
     }
     return map;
   }, [exercises, submissions]);
-
-  // 6 Most Recent Exercises for Bar Chart
-  const recentExercisesForChart = useMemo(() => {
-    return (exercises || []).slice(0, 6).map((ex) => {
-      const stats = exStats.get(ex.id);
-      return {
-        id: ex.id,
-        title: ex.title || 'Untitled',
-        avg: stats ? Math.round(stats.avg) : 0,
-        submissions: stats ? stats.count : 0,
-      };
-    });
-  }, [exercises, exStats]);
-
-  // Per-Question Accuracy Rings (up to 6 questions from recent active exercises)
-  const accuracyRings = useMemo(() => {
-    const questions: { id: string; label: string; pct: number }[] = [];
-    if (!exercises || !exercises.length) return questions;
-
-    // Pick questions from the most recent exercise with submissions, or across exercises
-    for (const ex of exercises) {
-      const subs = (submissions || []).filter((s) => s.exerciseId === ex.id && s.status === 'submitted');
-      if (subs.length > 0 && ex.questions && ex.questions.length > 0) {
-        for (let i = 0; i < ex.questions.length && questions.length < 6; i++) {
-          const q = ex.questions[i];
-          const answers = subs.map((s) => s.details?.find((d) => d.id === q.id)).filter(Boolean);
-          const right = answers.filter((d) => d!.correct).length;
-          const pct = answers.length ? Math.round((right / answers.length) * 100) : 0;
-          questions.push({
-            id: `${ex.id}-${q.id}`,
-            label: `Q${i + 1}: ${(ex.title || 'Math').slice(0, 12)}`,
-            pct,
-          });
-        }
-      }
-      if (questions.length >= 6) break;
-    }
-
-    // Fallback placeholders if not enough submission details yet
-    if (questions.length === 0 && exercises.length > 0) {
-      exercises.slice(0, 6).forEach((ex, i) => {
-        const stats = exStats.get(ex.id);
-        questions.push({
-          id: ex.id,
-          label: (ex.title || `Ex ${i + 1}`).slice(0, 12),
-          pct: stats ? Math.round(stats.avg) : 0,
-        });
-      });
-    }
-
-    return questions;
-  }, [exercises, submissions, exStats]);
-
-  // Live Now Timeline (Students started within time limit + recent submissions)
-  const liveNowList = useMemo(() => {
-    const now = Date.now();
-    const items: {
-      id: string;
-      studentName: string;
-      exerciseTitle: string;
-      scoreText: string;
-      timeAgo: string;
-      isLive: boolean;
-    }[] = [];
-
-    // Find started students
-    const started = (submissions || []).filter((s) => {
-      if (s.status === 'submitted') return false;
-      const ex = exercises?.find((e) => e.id === s.exerciseId);
-      const limitMs = (ex?.timeLimitMinutes || 60) * 60 * 1000;
-      return now - s.startedAt < limitMs;
-    });
-
-    for (const s of started) {
-      const ex = exercises?.find((e) => e.id === s.exerciseId);
-      const mins = Math.max(1, Math.round((now - s.startedAt) / 60000));
-      items.push({
-        id: s.id,
-        studentName: s.studentName,
-        exerciseTitle: ex?.title || 'Exercise',
-        scoreText: 'Taking test…',
-        timeAgo: `${mins}m ago`,
-        isLive: true,
-      });
-    }
-
-    // Add recent completed submissions
-    const recent = [...(submittedList || [])]
-      .sort((a, b) => (b.submittedAt ?? 0) - (a.submittedAt ?? 0))
-      .slice(0, 6 - items.length);
-
-    for (const s of recent) {
-      const ex = exercises?.find((e) => e.id === s.exerciseId);
-      const diffMs = now - (s.submittedAt ?? s.startedAt);
-      const mins = Math.max(1, Math.round(diffMs / 60000));
-      const hours = Math.floor(mins / 60);
-      const timeAgo = hours > 0 ? `${hours}h ago` : `${mins}m ago`;
-
-      items.push({
-        id: s.id,
-        studentName: s.studentName,
-        exerciseTitle: ex?.title || 'Exercise',
-        scoreText: `${s.score} / ${s.total}`,
-        timeAgo,
-        isLive: false,
-      });
-    }
-
-    return items;
-  }, [submissions, exercises, submittedList]);
 
   // Upcoming Deadlines
   const upcomingDeadlines = useMemo(() => {
@@ -1052,72 +938,6 @@ export default function AdminHome() {
 
               <button
                 type="button"
-                onClick={() => scrollToSection('performance-section', 'performance')}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  padding: '12px 14px',
-                  borderRadius: 12,
-                  border: 'none',
-                  backgroundColor: activeSection === 'performance' ? 'rgba(74, 103, 214, 0.12)' : 'transparent',
-                  color: activeSection === 'performance' ? 'var(--theme-primary)' : 'var(--theme-navy)',
-                  fontWeight: activeSection === 'performance' ? 700 : 600,
-                  fontSize: '0.92rem',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                }}
-              >
-                <BarChart3 size={18} />
-                <span>Performance & Results</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => scrollToSection('accuracy-section', 'accuracy')}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  padding: '12px 14px',
-                  borderRadius: 12,
-                  border: 'none',
-                  backgroundColor: activeSection === 'accuracy' ? 'rgba(74, 103, 214, 0.12)' : 'transparent',
-                  color: activeSection === 'accuracy' ? 'var(--theme-primary)' : 'var(--theme-navy)',
-                  fontWeight: activeSection === 'accuracy' ? 700 : 600,
-                  fontSize: '0.92rem',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                }}
-              >
-                <Database size={18} />
-                <span>Per-Question Accuracy</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => scrollToSection('live-now-section', 'live')}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  padding: '12px 14px',
-                  borderRadius: 12,
-                  border: 'none',
-                  backgroundColor: activeSection === 'live' ? 'rgba(74, 103, 214, 0.12)' : 'transparent',
-                  color: activeSection === 'live' ? 'var(--theme-primary)' : 'var(--theme-navy)',
-                  fontWeight: activeSection === 'live' ? 700 : 600,
-                  fontSize: '0.92rem',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                }}
-              >
-                <Users size={18} />
-                <span>Live Student Submissions</span>
-              </button>
-
-              <button
-                type="button"
                 onClick={() => {
                   setMobileMenuOpen(false);
                   setShowAddTeacherModal(true);
@@ -1272,26 +1092,6 @@ export default function AdminHome() {
             title="Exercises"
           >
             <BookOpen size={20} />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => scrollToSection('performance-section', 'performance')}
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 14,
-              backgroundColor: activeSection === 'performance' ? '#ffffff' : 'transparent',
-              color: activeSection === 'performance' ? 'var(--theme-primary)' : 'rgba(255, 255, 255, 0.8)',
-              border: 'none',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-            title="Performance"
-          >
-            <BarChart3 size={20} />
           </button>
 
           <button
@@ -1495,78 +1295,6 @@ export default function AdminHome() {
             >
               <BookOpen size={18} />
               <span>Exercises</span>
-            </button>
-
-            <button
-              type="button"
-              className={activeSection === 'performance' ? 'sidebar-tab-active' : ''}
-              onClick={() => scrollToSection('performance-section', 'performance')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                padding: '13px 18px',
-                border: 'none',
-                background: activeSection === 'performance' ? 'var(--theme-page-bg)' : 'transparent',
-                color: activeSection === 'performance' ? 'var(--theme-primary)' : 'rgba(255, 255, 255, 0.85)',
-                borderRadius: activeSection === 'performance' ? '18px 0 0 18px' : '16px 0 0 16px',
-                cursor: 'pointer',
-                fontSize: '0.94rem',
-                fontWeight: activeSection === 'performance' ? 700 : 600,
-                textAlign: 'left',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              <BarChart3 size={18} />
-              <span>Results</span>
-            </button>
-
-            <button
-              type="button"
-              className={activeSection === 'accuracy' ? 'sidebar-tab-active' : ''}
-              onClick={() => scrollToSection('accuracy-section', 'accuracy')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                padding: '13px 18px',
-                border: 'none',
-                background: activeSection === 'accuracy' ? 'var(--theme-page-bg)' : 'transparent',
-                color: activeSection === 'accuracy' ? 'var(--theme-primary)' : 'rgba(255, 255, 255, 0.85)',
-                borderRadius: activeSection === 'accuracy' ? '18px 0 0 18px' : '16px 0 0 16px',
-                cursor: 'pointer',
-                fontSize: '0.94rem',
-                fontWeight: activeSection === 'accuracy' ? 700 : 600,
-                textAlign: 'left',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              <Database size={18} />
-              <span>Question Bank</span>
-            </button>
-
-            <button
-              type="button"
-              className={activeSection === 'live' ? 'sidebar-tab-active' : ''}
-              onClick={() => scrollToSection('live-now-section', 'live')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                padding: '13px 18px',
-                border: 'none',
-                background: activeSection === 'live' ? 'var(--theme-page-bg)' : 'transparent',
-                color: activeSection === 'live' ? 'var(--theme-primary)' : 'rgba(255, 255, 255, 0.85)',
-                borderRadius: activeSection === 'live' ? '18px 0 0 18px' : '16px 0 0 16px',
-                cursor: 'pointer',
-                fontSize: '0.94rem',
-                fontWeight: activeSection === 'live' ? 700 : 600,
-                textAlign: 'left',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              <Users size={18} />
-              <span>Students</span>
             </button>
 
             <button
@@ -2310,268 +2038,6 @@ export default function AdminHome() {
                 </div>
               </div>
 
-              {/* 2. Performance Card */}
-              <div
-                id="performance-section"
-                style={{
-                  backgroundColor: 'var(--theme-card-bg)',
-                  borderRadius: 20,
-                  padding: '24px 28px',
-                  boxShadow: 'var(--theme-shadow)',
-                  border: '1px solid var(--theme-border-subtle)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 20,
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-                  <div>
-                    <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
-                      Performance
-                    </h3>
-                    <span style={{ fontSize: '0.82rem', color: 'var(--theme-muted)' }}>
-                      Average student score across recent exercises
-                    </span>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <select
-                      value={selectedMonth}
-                      onChange={(e) => setSelectedMonth(e.target.value)}
-                      style={{
-                        padding: '6px 12px',
-                        borderRadius: 10,
-                        backgroundColor: 'var(--theme-page-bg)',
-                        borderColor: 'var(--theme-border)',
-                        fontSize: '0.84rem',
-                        fontWeight: 600,
-                        width: 'auto',
-                      }}
-                    >
-                      <option value="All">All Time</option>
-                      <option value="October 2026">October 2026</option>
-                      <option value="September 2026">September 2026</option>
-                    </select>
-
-                    <button
-                      type="button"
-                      className="btn small secondary"
-                      style={{ borderRadius: 10, fontSize: '0.82rem', fontWeight: 700 }}
-                    >
-                      All Exercises
-                    </button>
-                  </div>
-                </div>
-
-                {/* Score Summary + Bar Chart */}
-                <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                      <span style={{ fontSize: '2.5rem', fontWeight: 900, color: 'var(--theme-navy)', letterSpacing: '-0.03em' }}>
-                        {overallAvgScore}%
-                      </span>
-                      <TrendingUp size={20} color="var(--theme-success)" />
-                    </div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--theme-muted)', marginTop: 2 }}>
-                      {exercises?.[0]?.title ? `Latest: ${exercises[0].title}` : 'Average across tests'}
-                    </div>
-                  </div>
-
-                  {/* Two-tone Bar Chart of 6 Recent Exercises */}
-                  <div
-                    className="chart-container-mobile chart-bars-wrap"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'flex-end',
-                      gap: 12,
-                      height: 140,
-                      flex: 1,
-                      justifyContent: 'flex-end',
-                      minWidth: 180,
-                      maxWidth: 440,
-                    }}
-                  >
-                    {recentExercisesForChart.length === 0 ? (
-                      <div style={{ color: 'var(--theme-muted)', fontSize: '0.85rem' }}>No exercise data yet.</div>
-                    ) : (
-                      recentExercisesForChart.map((item, idx) => {
-                        const heightPct = Math.max(18, item.avg);
-                        return (
-                          <div
-                            key={item.id}
-                            className="chart-bar-item"
-                            style={{
-                              display: 'flex',
-                              flexDirection: 'column',
-                              alignItems: 'center',
-                              gap: 6,
-                              flex: 1,
-                              maxWidth: 38,
-                              minWidth: 18,
-                            }}
-                          >
-                            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--theme-muted)' }}>
-                              {item.avg}%
-                            </span>
-                            <div
-                              style={{
-                                width: '100%',
-                                height: 90,
-                                backgroundColor: 'rgba(74, 103, 214, 0.08)',
-                                borderRadius: 8,
-                                display: 'flex',
-                                alignItems: 'flex-end',
-                                overflow: 'hidden',
-                              }}
-                            >
-                              <div
-                                style={{
-                                  width: '100%',
-                                  height: `${heightPct}%`,
-                                  background: idx % 2 === 0
-                                    ? 'linear-gradient(180deg, #4a67d6 0%, #3d56a6 100%)'
-                                    : 'linear-gradient(180deg, #5b7bdc 0%, #4a67d6 100%)',
-                                  borderRadius: 8,
-                                  transition: 'height 0.3s ease',
-                                }}
-                              />
-                            </div>
-                            <span
-                              style={{
-                                fontSize: '0.72rem',
-                                color: 'var(--theme-muted)',
-                                maxWidth: 44,
-                                textAlign: 'center',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                              }}
-                              title={item.title}
-                            >
-                              {item.title.slice(0, 5)}
-                            </span>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* 3. Per-Question Accuracy (Grid of Donut Rings: 2 cols x 3 rows) */}
-              <div
-                id="accuracy-section"
-                style={{
-                  backgroundColor: 'var(--theme-card-bg)',
-                  borderRadius: 20,
-                  padding: '24px 28px',
-                  boxShadow: 'var(--theme-shadow)',
-                  border: '1px solid var(--theme-border-subtle)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 16,
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
-                      Per-Question Accuracy
-                    </h3>
-                    <span style={{ fontSize: '0.82rem', color: 'var(--theme-muted)' }}>
-                      Accuracy rings under 50% are red (needs review), 50%+ are blue
-                    </span>
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(3, 1fr)',
-                    gap: 16,
-                  }}
-                  className="accuracy-grid"
-                >
-                  {accuracyRings.map((item) => {
-                    const radius = 32;
-                    const circumference = 2 * Math.PI * radius;
-                    const strokeOffset = circumference - (item.pct / 100) * circumference;
-                    const isLow = item.pct < 50;
-                    const ringColor = isLow ? 'var(--theme-danger)' : 'var(--theme-primary)';
-
-                    return (
-                      <div
-                        key={item.id}
-                        style={{
-                          backgroundColor: 'var(--theme-page-bg)',
-                          borderRadius: 16,
-                          padding: '16px 12px',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          gap: 10,
-                          textAlign: 'center',
-                        }}
-                      >
-                        {/* SVG Donut Ring */}
-                        <div style={{ position: 'relative', width: 78, height: 78 }}>
-                          <svg width="78" height="78" viewBox="0 0 78 78">
-                            <circle
-                              cx="39"
-                              cy="39"
-                              r={radius}
-                              fill="none"
-                              stroke="var(--theme-border)"
-                              strokeWidth="7"
-                            />
-                            <circle
-                              cx="39"
-                              cy="39"
-                              r={radius}
-                              fill="none"
-                              stroke={ringColor}
-                              strokeWidth="7"
-                              strokeDasharray={circumference}
-                              strokeDashoffset={strokeOffset}
-                              strokeLinecap="round"
-                              transform="rotate(-90 39 39)"
-                              style={{ transition: 'stroke-dashoffset 0.4s ease' }}
-                            />
-                          </svg>
-                          <div
-                            style={{
-                              position: 'absolute',
-                              inset: 0,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontWeight: 800,
-                              fontSize: '0.95rem',
-                              color: ringColor,
-                            }}
-                          >
-                            {item.pct}%
-                          </div>
-                        </div>
-
-                        <span
-                          style={{
-                            fontSize: '0.82rem',
-                            fontWeight: 700,
-                            color: 'var(--theme-navy)',
-                            maxWidth: 120,
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {item.label}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
               {/* 4. My Exercises List (Replaces Linked Teachers) */}
               <div
                 id="my-exercises-section"
@@ -2932,117 +2398,6 @@ export default function AdminHome() {
               }}
               className="right-column-span"
             >
-              {/* 5. Right Column: "Live Now" Card (Replaces Calendar) */}
-              <div
-                id="live-now-section"
-                style={{
-                  backgroundColor: 'var(--theme-card-bg)',
-                  borderRadius: 20,
-                  padding: '24px 22px',
-                  boxShadow: 'var(--theme-shadow)',
-                  border: '1px solid var(--theme-border-subtle)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 16,
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div
-                      style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: '50%',
-                        backgroundColor: 'var(--theme-danger)',
-                        boxShadow: '0 0 0 4px rgba(217, 68, 60, 0.2)',
-                      }}
-                    />
-                    <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
-                      Live Now
-                    </h3>
-                  </div>
-                  <span style={{ fontSize: '0.78rem', color: 'var(--theme-muted)' }}>
-                    Real-time activity
-                  </span>
-                </div>
-
-                {liveNowList.length === 0 ? (
-                  <div
-                    style={{
-                      textAlign: 'center',
-                      padding: '24px 12px',
-                      color: 'var(--theme-muted)',
-                      fontSize: '0.86rem',
-                      backgroundColor: 'var(--theme-page-bg)',
-                      borderRadius: 14,
-                    }}
-                  >
-                    No students taking tests right now.
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {liveNowList.map((item, idx) => {
-                      // Most recent item highlighted in solid royal blue with white text!
-                      const isHighlighted = idx === 0;
-
-                      return (
-                        <div
-                          key={item.id}
-                          style={{
-                            padding: '14px 16px',
-                            borderRadius: 14,
-                            backgroundColor: isHighlighted ? 'var(--theme-primary)' : 'var(--theme-page-bg)',
-                            color: isHighlighted ? '#ffffff' : 'var(--theme-navy)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: 12,
-                            boxShadow: isHighlighted ? '0 6px 20px rgba(74, 103, 214, 0.35)' : 'none',
-                          }}
-                        >
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontWeight: 800, fontSize: '0.92rem', marginBottom: 2 }}>
-                              {item.studentName}
-                            </div>
-                            <div
-                              style={{
-                                fontSize: '0.78rem',
-                                color: isHighlighted ? 'rgba(255,255,255,0.85)' : 'var(--theme-muted)',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              {item.exerciseTitle}
-                            </div>
-                          </div>
-
-                          <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                            <div
-                              style={{
-                                fontWeight: 800,
-                                fontSize: '0.88rem',
-                                color: isHighlighted ? '#ffffff' : 'var(--theme-navy)',
-                              }}
-                            >
-                              {item.scoreText}
-                            </div>
-                            <span
-                              style={{
-                                fontSize: '0.72rem',
-                                color: isHighlighted ? 'rgba(255,255,255,0.7)' : 'var(--theme-muted)',
-                              }}
-                            >
-                              {item.timeAgo}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
               {/* 6. Right Column: "Upcoming Deadlines" Card */}
               <div
                 style={{
@@ -3560,22 +2915,14 @@ export default function AdminHome() {
           <BookOpen size={20} />
           <span>Tests</span>
         </button>
-        <button
-          type="button"
-          className={`mobile-nav-btn ${activeSection === 'performance' ? 'active' : ''}`}
-          onClick={() => scrollToSection('performance-section', 'performance')}
+        <Link
+          href="/admin/exercises/new"
+          className="mobile-nav-btn"
+          style={{ textDecoration: 'none' }}
         >
-          <BarChart3 size={20} />
-          <span>Stats</span>
-        </button>
-        <button
-          type="button"
-          className={`mobile-nav-btn ${activeSection === 'live' ? 'active' : ''}`}
-          onClick={() => scrollToSection('live-now-section', 'live')}
-        >
-          <Users size={20} />
-          <span>Live</span>
-        </button>
+          <Plus size={20} />
+          <span>New</span>
+        </Link>
         <button
           type="button"
           className="mobile-nav-btn"
