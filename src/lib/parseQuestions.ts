@@ -129,6 +129,18 @@ function parseJsonQuestions(text: string): ParsedExerciseData | null {
   const mdMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
   if (mdMatch) {
     jsonStr = mdMatch[1].trim();
+  } else {
+    // Locate outer-most { ... } or [ ... ]
+    const firstBrace = jsonStr.indexOf('{');
+    const lastBrace = jsonStr.lastIndexOf('}');
+    const firstBracket = jsonStr.indexOf('[');
+    const lastBracket = jsonStr.lastIndexOf(']');
+
+    if (firstBrace !== -1 && lastBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+      jsonStr = jsonStr.slice(firstBrace, lastBrace + 1);
+    } else if (firstBracket !== -1 && lastBracket !== -1) {
+      jsonStr = jsonStr.slice(firstBracket, lastBracket + 1);
+    }
   }
 
   if (!jsonStr.startsWith('[') && !jsonStr.startsWith('{')) {
@@ -164,16 +176,28 @@ function parseJsonQuestions(text: string): ParsedExerciseData | null {
 
       let answer = String(item.answer !== undefined ? item.answer : item.correctAnswer || item.correct || '').trim();
 
-      if (kind === 'choice' && choices) {
-        // If answer is letter A, B, C...
-        const letterMatch = answer.match(/^[A-Fa-f]$/);
-        if (letterMatch) {
-          const idx = letterMatch[0].toUpperCase().charCodeAt(0) - 65;
-          answer = String(idx >= 0 && idx < choices.length ? idx : 0);
-        } else if (isNaN(Number(answer))) {
-          // If answer is the choice text itself
-          const idx = choices.findIndex((c) => c.toLowerCase() === answer.toLowerCase());
-          answer = String(idx >= 0 ? idx : 0);
+      if (kind === 'choice' && choices && choices.length > 0) {
+        // Exact choice text match
+        const exactIdx = choices.findIndex((c) => c === answer);
+        if (exactIdx >= 0) {
+          answer = String(exactIdx);
+        } else {
+          // Case-insensitive choice match
+          const caseIdx = choices.findIndex((c) => c.toLowerCase() === answer.toLowerCase());
+          if (caseIdx >= 0) {
+            answer = String(caseIdx);
+          } else {
+            // If answer is letter A, B, C...
+            const letterMatch = answer.match(/^[A-Fa-f]$/);
+            if (letterMatch) {
+              const idx = letterMatch[0].toUpperCase().charCodeAt(0) - 65;
+              answer = String(idx >= 0 && idx < choices.length ? idx : 0);
+            } else if (!isNaN(Number(answer)) && Number(answer) >= 0 && Number(answer) < choices.length) {
+              answer = String(Math.floor(Number(answer)));
+            } else {
+              answer = '0';
+            }
+          }
         }
       } else if (kind !== 'choice' && NUMERIC.test(answer.split('|')[0].trim())) {
         kind = 'number';

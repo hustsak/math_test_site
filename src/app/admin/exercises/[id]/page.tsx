@@ -4,12 +4,14 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { addDoc, collection, doc, getDoc, setDoc } from 'firebase/firestore';
-import { Moon, Sun } from 'lucide-react';
+import { Moon, Sun, Copy, Check, Sparkles } from 'lucide-react';
 import { getDb } from '@/lib/firebaseClient';
 import { useAdmin } from '@/lib/useAdmin';
 import MathText from '@/components/MathText';
 import type { Exercise, Question } from '@/lib/types';
 import { parseExerciseInput } from '@/lib/parseQuestions';
+
+const SAMPLE_AI_PROMPT = `Create a mathematics exercise for Grade [GRADE] about [TOPIC] with [NUMBER] questions. Write in Khmer. Mix easy, medium, and slightly advanced questions: 40% easy, 40% medium, and 20% advanced. Create age-appropriate questions with correct answers, point values, and clear step-by-step explanations so students can understand their mistakes when they answer incorrectly. Include a suitable Khmer exercise title and a short Khmer description. Use valid LaTeX for mathematical formulas. Return ONLY valid JSON compatible with my website's existing exercise schema, including title, description, and questions. Each question must contain id, prompt, kind, answer, points, and explanation. For multiple-choice questions, include choices and ensure the correct answer matches one choice exactly. Do not include Markdown fences or extra text outside the JSON.`;
 
 const newId = () => Math.random().toString(36).slice(2, 10);
 
@@ -65,10 +67,11 @@ export default function EditExercise() {
   const [error, setError] = useState('');
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
-  // Paste-import panel
+  // AI Prompt & Paste-import panel
   const [pasteText, setPasteText] = useState('');
-  const [pasteMsg, setPasteMsg] = useState('');
-  const [pasteTime, setPasteTime] = useState<string>('');
+  const [copiedPrompt, setCopiedPrompt] = useState(false);
+  const [importError, setImportError] = useState('');
+  const [importSuccess, setImportSuccess] = useState('');
   const [viewMode, setViewMode] = useState<'published' | 'edit'>('published');
 
   useEffect(() => {
@@ -189,29 +192,54 @@ export default function EditExercise() {
     setQ(i, { choices, answer: String(ans) });
   }
 
-  function importPasted() {
-    const parsed = parseExerciseInput(pasteText);
-    const qs = parsed.questions;
-    if (qs.length === 0) {
-      setPasteMsg('No questions found. Check the format shown below the box.');
+  const copyPrompt = async () => {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(SAMPLE_AI_PROMPT);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = SAMPLE_AI_PROMPT;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      setCopiedPrompt(true);
+      setTimeout(() => setCopiedPrompt(false), 2000);
+    } catch {
+      setCopiedPrompt(true);
+      setTimeout(() => setCopiedPrompt(false), 2000);
+    }
+  };
+
+  function importExerciseJson() {
+    setImportError('');
+    setImportSuccess('');
+
+    const raw = pasteText.trim();
+    if (!raw) {
+      setImportError('Please paste JSON into the box first.');
       return;
     }
-    const onlyBlank = ex!.questions.length === 1 && !ex!.questions[0].prompt.trim();
+
+    const parsed = parseExerciseInput(raw);
+    const qs = parsed.questions;
+    if (!qs || qs.length === 0) {
+      setImportError('Invalid JSON format: Could not find valid questions. Please ensure your JSON includes a "questions" array with questions.');
+      return;
+    }
 
     const patch: Partial<Exercise> = {
-      questions: [...(onlyBlank ? [] : ex!.questions), ...qs],
+      questions: qs,
     };
 
-    if (parsed.title && (!ex!.title || onlyBlank)) {
+    if (parsed.title) {
       patch.title = parsed.title;
     }
-    if (parsed.description && (!ex!.description || onlyBlank)) {
+    if (parsed.description) {
       patch.description = parsed.description;
     }
-    const parsedTime = pasteTime.trim() !== '' ? parseInt(toAsciiDigits(pasteTime), 10) : undefined;
-    if (parsedTime !== undefined && !isNaN(parsedTime) && parsedTime >= 0) {
-      patch.timeLimitMinutes = parsedTime;
-    } else if (parsed.timeLimitMinutes !== undefined && parsed.timeLimitMinutes > 0) {
+    if (parsed.timeLimitMinutes !== undefined && parsed.timeLimitMinutes > 0) {
       patch.timeLimitMinutes = parsed.timeLimitMinutes;
     }
     if (parsed.shuffleQuestions !== undefined) {
@@ -221,15 +249,10 @@ export default function EditExercise() {
     set(patch);
     setViewMode('published');
 
-    const flagged = qs.filter((q) => q.aiGenerated).length;
-    let msg = `Successfully converted ${qs.length} question${qs.length === 1 ? '' : 's'}!`;
-    const finalTime = patch.timeLimitMinutes ?? ex!.timeLimitMinutes;
-    if (finalTime) msg += ` Set time limit to ${finalTime} min.`;
-    if (parsed.title) msg += ` Title: "${parsed.title}".`;
-    if (flagged) msg += ` (${flagged} marked "Check answer")`;
-    setPasteMsg(msg);
-    setPasteText('');
-    setPasteTime('');
+    let msg = `✓ Successfully imported ${qs.length} question${qs.length === 1 ? '' : 's'}`;
+    if (parsed.title) msg += ` with title "${parsed.title}"`;
+    msg += `! You can now preview and edit all questions below before saving.`;
+    setImportSuccess(msg);
   }
 
   async function save(publish?: boolean) {
@@ -638,39 +661,138 @@ export default function EditExercise() {
         </label>
       </div>
 
-      <div className="card stack">
-        <h2>📋 Paste questions</h2>
+      {/* 1. AI Exercise Prompt Section */}
+      <div className="card stack" style={{ border: '1.5px solid var(--line)', backgroundColor: 'var(--card)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Sparkles size={20} color="var(--brand)" />
+            <div>
+              <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>AI Exercise Prompt</h2>
+              <p style={{ margin: '2px 0 0', fontSize: '0.85rem', color: 'var(--muted)' }}>
+                Copy this prompt into ChatGPT or Claude and replace the grade, topic, and question count yourself.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="btn small"
+            onClick={copyPrompt}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              fontWeight: 700,
+              backgroundColor: copiedPrompt ? 'var(--good)' : 'var(--brand)',
+              transition: 'background-color 0.2s ease',
+            }}
+          >
+            {copiedPrompt ? <Check size={15} /> : <Copy size={15} />}
+            <span>{copiedPrompt ? '✓ Copied!' : 'Copy Prompt'}</span>
+          </button>
+        </div>
+
+        <textarea
+          readOnly
+          value={SAMPLE_AI_PROMPT}
+          rows={5}
+          style={{
+            fontFamily: 'monospace',
+            fontSize: '0.88rem',
+            backgroundColor: 'var(--theme-page-bg, #f8fafc)',
+            color: 'var(--ink)',
+            lineHeight: 1.5,
+            borderRadius: 8,
+            border: '1px solid var(--line)',
+            padding: '10px 12px',
+          }}
+          onClick={(e) => (e.target as HTMLTextAreaElement).select()}
+        />
+      </div>
+
+      {/* 2. Paste AI-Generated Exercise JSON Section */}
+      <div className="card stack" style={{ border: '1.5px solid var(--line)', backgroundColor: 'var(--card)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: '1.4rem' }}>📋</span>
+          <div>
+            <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>Paste AI-Generated Exercise JSON</h2>
+            <p style={{ margin: '2px 0 0', fontSize: '0.85rem', color: 'var(--muted)' }}>
+              Paste the complete JSON returned by ChatGPT or Claude, then click &quot;Import Exercise&quot;.
+            </p>
+          </div>
+        </div>
+
         <textarea
           value={pasteText}
-          onChange={(e) => setPasteText(e.target.value)}
-          rows={7}
-          placeholder={'Paste Google Apps Script, JSON, or plain text here...\n\nExample Apps Script:\nfunction createQuiz() {\n  var form = FormApp.create("Math Quiz");\n  form.setTimeLimit(30);\n  var item = form.addMultipleChoiceItem();\n  item.setTitle("[-7 + 12] * (-3) = ?")\n      .setChoices([item.createChoice("15"), item.createChoice("-15", true)]);\n}'}
+          onChange={(e) => {
+            setPasteText(e.target.value);
+            if (importError) setImportError('');
+          }}
+          rows={8}
+          placeholder={`Paste complete JSON returned by ChatGPT or Claude here...\n\nExample:\n{\n  "title": "លំហាត់ប្រភាគ និងសមីការ",\n  "description": "លំហាត់អនុវត្ត",\n  "questions": [\n    {\n      "id": "q1",\n      "prompt": "គណនា $2/3 + 1/4$",\n      "kind": "choice",\n      "choices": ["11/12", "3/7", "5/12", "7/12"],\n      "answer": "11/12",\n      "points": 1,\n      "explanation": "តម្រូវភាគបែងរួម 12: 8/12 + 3/12 = 11/12"\n    }\n  ]\n}`}
+          style={{
+            fontFamily: 'monospace',
+            fontSize: '0.88rem',
+            lineHeight: 1.45,
+          }}
         />
-        <div className="row" style={{ gap: 12, alignItems: 'flex-end' }}>
-          <div style={{ width: 190 }}>
-            <label style={{ fontSize: '0.85rem' }}>⏱️ Time limit (minutes)</label>
-            <input
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              placeholder="e.g. 30 (0 = none)"
-              value={pasteTime}
-              onChange={(e) => {
-                const ascii = toAsciiDigits(e.target.value).replace(/[^\d]/g, '');
-                setPasteTime(ascii);
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+          <button
+            type="button"
+            className="btn"
+            disabled={!pasteText.trim()}
+            onClick={importExerciseJson}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 700 }}
+          >
+            ⚡ Import Exercise
+          </button>
+
+          {pasteText.trim() && (
+            <button
+              type="button"
+              className="btn secondary small"
+              onClick={() => {
+                setPasteText('');
+                setImportError('');
+                setImportSuccess('');
               }}
-            />
-          </div>
-          <div>
-            <button className="btn" disabled={!pasteText.trim()} onClick={importPasted}>
-              ⚡ Convert to questions
+            >
+              Clear
             </button>
+          )}
+        </div>
+
+        {importError && (
+          <div
+            style={{
+              padding: '12px 14px',
+              borderRadius: 8,
+              backgroundColor: 'var(--bad-bg, #fef2f2)',
+              border: '1.5px solid var(--bad, #ef4444)',
+              color: 'var(--bad, #dc2626)',
+              fontSize: '0.92rem',
+              fontWeight: 600,
+            }}
+          >
+            ⚠️ {importError}
           </div>
-        </div>
-        {pasteMsg && <div className="notice">{pasteMsg}</div>}
-        <div className="muted">
-          Paste <strong>Google Apps Script</strong>, <strong>JSON</strong>, or <strong>plain text</strong>. You can enter or override the time limit above.
-        </div>
+        )}
+
+        {importSuccess && (
+          <div
+            style={{
+              padding: '12px 14px',
+              borderRadius: 8,
+              backgroundColor: 'var(--good-bg, #f0fdf4)',
+              border: '1.5px solid var(--good, #22c55e)',
+              color: 'var(--good, #16a34a)',
+              fontSize: '0.92rem',
+              fontWeight: 600,
+            }}
+          >
+            {importSuccess}
+          </div>
+        )}
       </div>
 
       {/* View Mode Toggle: Published View (clean output as students see) vs Raw Edit View */}
