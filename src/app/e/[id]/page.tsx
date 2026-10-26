@@ -61,6 +61,8 @@ export default function StudentPage() {
   const [ex, setEx] = useState<PublicExercise | null>(null);
   const [error, setError] = useState('');
   const [name, setName] = useState('');
+  const [studentToken, setStudentToken] = useState('');
+  const [studentLocked, setStudentLocked] = useState(false);
   const [busy, setBusy] = useState(false);
   const [attempt, setAttempt] = useState<Attempt | null>(null);
   const [remaining, setRemaining] = useState<number | null>(null);
@@ -68,6 +70,26 @@ export default function StudentPage() {
   const [resultTab, setResultTab] = useState<'all' | 'incorrect' | 'correct'>('all');
   const submittingRef = useRef(false);
   const inputs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  // Check URL query for studentToken to prefill and lock name
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const p = new URLSearchParams(window.location.search);
+      const t = p.get('token') || '';
+      if (t) {
+        setStudentToken(t);
+        fetch(`/api/student/${t}`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d) => {
+            if (d?.student?.name) {
+              setName(d.student.name);
+              setStudentLocked(true);
+            }
+          })
+          .catch(() => {});
+      }
+    }
+  }, []);
 
   // Question order: shuffled per attempt when the teacher enabled it
   const questions: PublicQuestion[] = useMemo(() => {
@@ -164,7 +186,10 @@ export default function StudentPage() {
       const res = await fetch(`/api/exercises/${id}/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentName: name.trim() }),
+        body: JSON.stringify({
+          studentName: name.trim(),
+          ...(studentToken ? { studentToken } : {}),
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Could not start.');
@@ -243,8 +268,41 @@ export default function StudentPage() {
             {ex.timeLimitMinutes ? ` · រយៈពេល ${ex.timeLimitMinutes} នាទី (នាឡិកានឹងចាប់ផ្ដើមពេលចុច ចាប់ផ្ដើម)` : ''}
           </div>
           <div>
-            <label>ឈ្មោះរបស់អ្នក</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder="បញ្ចូលឈ្មោះរបស់អ្នក..." autoFocus required />
+            <label>
+              ឈ្មោះរបស់អ្នក {studentLocked ? '(ចាក់សោតាមបញ្ជីឈ្មោះ)' : ''}
+            </label>
+            <input
+              value={name}
+              onChange={(e) => !studentLocked && setName(e.target.value)}
+              maxLength={80}
+              placeholder="បញ្ចូលឈ្មោះរបស់អ្នក..."
+              autoFocus={!studentLocked}
+              readOnly={studentLocked}
+              style={
+                studentLocked
+                  ? {
+                      backgroundColor: 'var(--theme-border-subtle, #f0f2f6)',
+                      color: 'var(--theme-navy, #1b2240)',
+                      cursor: 'not-allowed',
+                      fontWeight: 600,
+                    }
+                  : {}
+              }
+              required
+            />
+            {studentLocked && (
+              <span
+                style={{
+                  fontSize: '0.82rem',
+                  marginTop: 6,
+                  display: 'block',
+                  color: 'var(--good)',
+                  fontWeight: 600,
+                }}
+              >
+                ✓ ឈ្មោះពីបញ្ជីសិស្ស (ចាក់សោ)
+              </span>
+            )}
           </div>
           {error && <div className="error">{error}</div>}
           <button className="btn" type="submit" disabled={busy || !name.trim()}>

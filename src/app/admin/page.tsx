@@ -12,6 +12,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   orderBy,
   query,
@@ -39,6 +40,9 @@ import {
   AlertTriangle,
   FileText,
   UserPlus,
+  UserX,
+  Sparkles,
+  MessageSquare,
   Check,
   ArrowRight,
   TrendingUp,
@@ -51,7 +55,7 @@ import {
 import { getAuthClient, getDb } from '@/lib/firebaseClient';
 import { useAdmin } from '@/lib/useAdmin';
 import { adminPost } from '@/lib/authFetch';
-import type { Exercise, Submission } from '@/lib/types';
+import type { Exercise, Submission, Student } from '@/lib/types';
 
 type Row = { id: string } & Exercise;
 type SubRow = { id: string } & Submission;
@@ -83,6 +87,8 @@ export default function AdminHome() {
   // Data states
   const [exercises, setExercises] = useState<Row[] | null>(null);
   const [submissions, setSubmissions] = useState<SubRow[] | null>(null);
+  const [rosterStudents, setRosterStudents] = useState<Student[]>([]);
+  const [showClassAverage, setShowClassAverage] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [dataError, setDataError] = useState('');
 
@@ -94,6 +100,7 @@ export default function AdminHome() {
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [qrModalEx, setQrModalEx] = useState<Row | null>(null);
   const [deleteConfirmEx, setDeleteConfirmEx] = useState<Row | null>(null);
+  const [unsubmittedModalEx, setUnsubmittedModalEx] = useState<Row | null>(null);
   const [showAddTeacherModal, setShowAddTeacherModal] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
 
@@ -184,9 +191,11 @@ export default function AdminHome() {
     setLoadingData(true);
     setDataError('');
     try {
-      const [exSnap, subSnap] = await Promise.all([
+      const [exSnap, subSnap, studentSnap, settingsSnap] = await Promise.all([
         getDocs(query(collection(getDb(), 'exercises'), orderBy('updatedAt', 'desc'))),
         getDocs(collection(getDb(), 'submissions')),
+        getDocs(collection(getDb(), 'students')).catch(() => null),
+        getDoc(doc(getDb(), 'settings', 'app')).catch(() => null),
       ]);
 
       const exList = exSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Exercise) }));
@@ -194,11 +203,51 @@ export default function AdminHome() {
 
       setExercises(exList);
       setSubmissions(subList);
+
+      if (studentSnap) {
+        const sList = studentSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as Student[];
+        setRosterStudents(sList);
+      }
+
+      if (settingsSnap && settingsSnap.exists()) {
+        setShowClassAverage(!!settingsSnap.data()?.showClassAverageToParents);
+      }
     } catch (err: any) {
       setDataError(err?.message || 'Could not load data.');
     } finally {
       setLoadingData(false);
     }
+  }
+
+  async function handleToggleClassAverage(val: boolean) {
+    setShowClassAverage(val);
+    try {
+      await adminPost('/api/admin/settings', { showClassAverageToParents: val });
+      showToast(val ? 'Class average is now visible to parents' : 'Class average hidden from parents');
+    } catch (e: any) {
+      alert('Failed to update setting: ' + (e?.message || 'Error'));
+    }
+  }
+
+  function getUnsubmittedStudents(exerciseId: string) {
+    if (!rosterStudents.length) return [];
+    const exerciseSubs = (submissions || []).filter(
+      (s) => s.exerciseId === exerciseId && s.status === 'submitted'
+    );
+    const submittedStudentIds = new Set(
+      exerciseSubs.map((s) => s.studentId).filter(Boolean)
+    );
+    const submittedNameKeys = new Set(
+      exerciseSubs.map((s) => s.nameKey || s.studentName.trim().toLowerCase())
+    );
+
+    return rosterStudents.filter((student) => {
+      if (student.active === false) return false;
+      if (submittedStudentIds.has(student.id)) return false;
+      const key = student.name.trim().toLowerCase();
+      if (submittedNameKeys.has(key)) return false;
+      return true;
+    });
   }
 
   useEffect(() => {
@@ -936,6 +985,27 @@ export default function AdminHome() {
                 <span>My Exercises ({exercises?.length ?? 0})</span>
               </button>
 
+              <Link
+                href="/admin/students"
+                onClick={() => setMobileMenuOpen(false)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '12px 14px',
+                  borderRadius: 12,
+                  border: 'none',
+                  backgroundColor: 'transparent',
+                  color: 'var(--theme-navy)',
+                  fontWeight: 600,
+                  fontSize: '0.92rem',
+                  textDecoration: 'none',
+                }}
+              >
+                <Users size={18} />
+                <span>Students Roster ({rosterStudents.length})</span>
+              </Link>
+
               <button
                 type="button"
                 onClick={() => {
@@ -1277,6 +1347,28 @@ export default function AdminHome() {
               <span>Exercises</span>
             </button>
 
+            <Link
+              href="/admin/students"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                padding: '13px 18px',
+                border: 'none',
+                background: 'transparent',
+                color: 'rgba(255, 255, 255, 0.85)',
+                borderRadius: '16px 0 0 16px',
+                cursor: 'pointer',
+                fontSize: '0.94rem',
+                fontWeight: 600,
+                textAlign: 'left',
+                textDecoration: 'none',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <Users size={18} />
+              <span>Students ({rosterStudents.length})</span>
+            </Link>
           </div>
 
           {/* Sidebar bottom: Log out */}
@@ -1558,6 +1650,39 @@ export default function AdminHome() {
 
             {/* Right Top Bar Controls */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              {/* Students Roster Link */}
+              <Link
+                href="/admin/students"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  backgroundColor: 'var(--theme-card-bg)',
+                  border: '1px solid var(--theme-border)',
+                  color: 'var(--theme-navy)',
+                  borderRadius: 12,
+                  padding: '7px 14px',
+                  fontWeight: 700,
+                  fontSize: '0.84rem',
+                  textDecoration: 'none',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
+                }}
+              >
+                <Users size={16} />
+                <span>Students</span>
+                <span
+                  style={{
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    color: '#2563eb',
+                    padding: '1px 6px',
+                    borderRadius: 999,
+                    fontSize: '0.74rem',
+                  }}
+                >
+                  {rosterStudents.length}
+                </span>
+              </Link>
+
               {/* Language Switcher */}
               <button
                 type="button"
@@ -1975,6 +2100,106 @@ export default function AdminHome() {
                 </div>
               </div>
 
+              {/* Parent Tracking & Settings Banner */}
+              <div
+                style={{
+                  backgroundColor: 'var(--theme-card-bg)',
+                  borderRadius: 18,
+                  padding: '16px 22px',
+                  boxShadow: 'var(--theme-shadow)',
+                  border: '1px solid var(--theme-border-subtle)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: 14,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                  <div
+                    style={{
+                      width: 42,
+                      height: 42,
+                      borderRadius: 12,
+                      backgroundColor: 'rgba(59, 130, 246, 0.12)',
+                      color: '#2563eb',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Sparkles size={20} />
+                  </div>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
+                        Parent Tracking & Roster
+                      </h4>
+                      <span
+                        style={{
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          padding: '2px 8px',
+                          borderRadius: 999,
+                          backgroundColor: 'var(--theme-page-bg)',
+                          color: 'var(--theme-muted)',
+                          border: '1px solid var(--theme-border)',
+                        }}
+                      >
+                        {rosterStudents.length} Students in Roster
+                      </span>
+                    </div>
+                    <p style={{ margin: '2px 0 0 0', fontSize: '0.82rem', color: 'var(--theme-muted)' }}>
+                      Parents can follow their child&apos;s results with a single private link or QR code.
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <Link
+                    href="/admin/students"
+                    className="btn secondary small"
+                    style={{
+                      borderRadius: 12,
+                      fontSize: '0.84rem',
+                      fontWeight: 700,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <Users size={15} />
+                    <span>Manage Students</span>
+                  </Link>
+
+                  <label
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      cursor: 'pointer',
+                      fontSize: '0.84rem',
+                      fontWeight: 600,
+                      color: 'var(--theme-navy)',
+                      padding: '7px 12px',
+                      borderRadius: 12,
+                      backgroundColor: 'var(--theme-page-bg)',
+                      border: '1px solid var(--theme-border)',
+                      userSelect: 'none',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={showClassAverage}
+                      onChange={(e) => handleToggleClassAverage(e.target.checked)}
+                      style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--theme-primary)' }}
+                    />
+                    <span>Show class average to parents</span>
+                  </label>
+                </div>
+              </div>
+
               {/* 4. My Exercises List (Replaces Linked Teachers) */}
               <div
                 id="my-exercises-section"
@@ -2072,6 +2297,7 @@ export default function AdminHome() {
                       const stats = exStats.get(r.id);
                       const subCount = stats?.count ?? 0;
                       const isMenuOpen = activeMenuId === r.id;
+                      const unsubmittedList = getUnsubmittedStudents(r.id);
 
                       return (
                         <div
@@ -2138,7 +2364,33 @@ export default function AdminHome() {
                           </div>
 
                           {/* Action Buttons */}
-                          <div className="exercise-row-actions" style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                          <div className="exercise-row-actions" style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
+                            {/* Unsubmitted Students Button (if roster exists) */}
+                            {rosterStudents.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => setUnsubmittedModalEx(r)}
+                                style={{
+                                  padding: '6px 11px',
+                                  borderRadius: 10,
+                                  backgroundColor: unsubmittedList.length > 0 ? 'rgba(239, 68, 68, 0.08)' : 'var(--good-bg)',
+                                  color: unsubmittedList.length > 0 ? 'var(--theme-danger)' : 'var(--theme-success)',
+                                  border: '1px solid currentColor',
+                                  fontSize: '0.78rem',
+                                  fontWeight: 700,
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 6,
+                                  whiteSpace: 'nowrap',
+                                }}
+                                title="View roster students who haven't submitted"
+                              >
+                                <UserX size={13} />
+                                <span>{unsubmittedList.length} Not Done</span>
+                              </button>
+                            )}
+
                             {/* QR Code Button */}
                             <button
                               type="button"
@@ -2208,7 +2460,7 @@ export default function AdminHome() {
                                     position: 'absolute',
                                     right: 0,
                                     top: 40,
-                                    width: 170,
+                                    width: 175,
                                     backgroundColor: 'var(--theme-card-bg)',
                                     borderRadius: 14,
                                     boxShadow: 'var(--theme-shadow-hover)',
@@ -2283,6 +2535,33 @@ export default function AdminHome() {
                                     <CopyPlus size={14} />
                                     <span>Duplicate</span>
                                   </button>
+
+                                  {rosterStudents.length > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setUnsubmittedModalEx(r);
+                                        setActiveMenuId(null);
+                                      }}
+                                      style={{
+                                        width: '100%',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 10,
+                                        padding: '8px 14px',
+                                        border: 'none',
+                                        background: 'none',
+                                        color: 'var(--theme-navy)',
+                                        fontSize: '0.84rem',
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        textAlign: 'left',
+                                      }}
+                                    >
+                                      <UserX size={14} />
+                                      <span>Not submitted ({unsubmittedList.length})</span>
+                                    </button>
+                                  )}
 
                                   <div style={{ height: 1, backgroundColor: 'var(--theme-border)', margin: '4px 0' }} />
 
@@ -2834,6 +3113,227 @@ export default function AdminHome() {
         </div>
       )}
 
+      {/* Unsubmitted Students Modal */}
+      {unsubmittedModalEx && (() => {
+        const unsubmittedList = getUnsubmittedStudents(unsubmittedModalEx.id);
+        const origin = typeof window !== 'undefined' ? window.location.origin : '';
+
+        const copyReminderForStudent = (s: Student) => {
+          const parentLink = `${origin}/p/${s.parentToken}`;
+          const msg = `សួស្តី! សូមរំលឹកថា ${s.name} មិនទាន់បានធ្វើលំហាត់ "${unsubmittedModalEx.title}" នៅឡើយទេ។ សូមចុចតំណនេះដើម្បីពិនិត្យ៖ ${parentLink}`;
+          navigator.clipboard.writeText(msg);
+          showToast(`Copied Khmer reminder for ${s.name}`);
+        };
+
+        const copyAllReminders = () => {
+          if (!unsubmittedList.length) return;
+          const allMsgs = unsubmittedList.map((s) => {
+            const parentLink = `${origin}/p/${s.parentToken}`;
+            return `សួស្តី! សូមរំលឹកថា ${s.name} មិនទាន់បានធ្វើលំហាត់ "${unsubmittedModalEx.title}" នៅឡើយទេ។ សូមចុចតំណនេះដើម្បីពិនិត្យ៖ ${parentLink}`;
+          }).join('\n\n');
+          navigator.clipboard.writeText(allMsgs);
+          showToast(`Copied reminders for all ${unsubmittedList.length} students`);
+        };
+
+        return (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              backgroundColor: 'rgba(15, 23, 42, 0.65)',
+              backdropFilter: 'blur(4px)',
+              zIndex: 9999,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 16,
+            }}
+            onClick={() => setUnsubmittedModalEx(null)}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                backgroundColor: 'var(--theme-card-bg)',
+                borderRadius: 24,
+                padding: '26px 24px',
+                maxWidth: 580,
+                width: '100%',
+                maxHeight: '85vh',
+                overflowY: 'auto',
+                boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 16,
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 10,
+                        backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                        color: 'var(--theme-danger)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <UserX size={18} />
+                    </div>
+                    <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
+                      Students Not Submitted
+                    </h3>
+                  </div>
+                  <p style={{ margin: '4px 0 0 0', fontSize: '0.86rem', color: 'var(--theme-muted)' }}>
+                    {unsubmittedModalEx.title} • {unsubmittedList.length} of {rosterStudents.length} active students have not submitted yet
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setUnsubmittedModalEx(null)}
+                  style={{
+                    border: 'none',
+                    background: 'none',
+                    color: 'var(--theme-muted)',
+                    cursor: 'pointer',
+                    padding: 4,
+                  }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {unsubmittedList.length === 0 ? (
+                <div
+                  style={{
+                    padding: '32px 16px',
+                    textAlign: 'center',
+                    backgroundColor: 'var(--good-bg)',
+                    borderRadius: 16,
+                    color: 'var(--theme-success)',
+                  }}
+                >
+                  <Check size={36} style={{ margin: '0 auto 8px auto', display: 'block' }} />
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: '1rem' }}>
+                    All active students in your roster have submitted this exercise! 🎉
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '0.82rem', color: 'var(--theme-muted)', fontWeight: 600 }}>
+                      Send reminders to parents via Telegram or Messenger:
+                    </span>
+                    <button
+                      type="button"
+                      className="btn secondary small"
+                      onClick={copyAllReminders}
+                      style={{
+                        borderRadius: 10,
+                        fontSize: '0.78rem',
+                        fontWeight: 700,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                      }}
+                    >
+                      <MessageSquare size={13} />
+                      <span>Copy All Reminders</span>
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 380, overflowY: 'auto' }}>
+                    {unsubmittedList.map((s) => {
+                      const studentLink = `${origin}/s/${s.studentToken}`;
+                      return (
+                        <div
+                          key={s.id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '12px 14px',
+                            backgroundColor: 'var(--theme-page-bg)',
+                            borderRadius: 12,
+                            border: '1px solid var(--theme-border-subtle)',
+                            gap: 12,
+                            flexWrap: 'wrap',
+                          }}
+                        >
+                          <div>
+                            <div style={{ fontWeight: 700, fontSize: '0.94rem', color: 'var(--theme-navy)' }}>
+                              {s.name}
+                            </div>
+                            {s.className && (
+                              <div style={{ fontSize: '0.76rem', color: 'var(--theme-muted)' }}>
+                                Class: {s.className}
+                              </div>
+                            )}
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <button
+                              type="button"
+                              className="btn small"
+                              onClick={() => copyReminderForStudent(s)}
+                              style={{
+                                borderRadius: 8,
+                                padding: '5px 10px',
+                                fontSize: '0.78rem',
+                                fontWeight: 700,
+                                backgroundColor: 'var(--theme-primary)',
+                                borderColor: 'var(--theme-primary)',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 5,
+                              }}
+                              title="Copy friendly Khmer reminder message with parent link"
+                            >
+                              <MessageSquare size={13} />
+                              <span>Copy Reminder</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="btn secondary small"
+                              onClick={() => {
+                                navigator.clipboard.writeText(studentLink);
+                                showToast(`Copied student link for ${s.name}`);
+                              }}
+                              style={{
+                                borderRadius: 8,
+                                padding: '5px 8px',
+                                fontSize: '0.78rem',
+                              }}
+                              title="Copy direct student link"
+                            >
+                              Student Link
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={() => setUnsubmittedModalEx(null)}
+                  style={{ borderRadius: 12, padding: '8px 20px', fontSize: '0.88rem' }}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Mobile Sticky Bottom Navigation Dock */}
       <nav className="mobile-bottom-nav show-on-mobile-only" aria-label="Mobile Bottom Navigation">
         <button
@@ -2852,6 +3352,14 @@ export default function AdminHome() {
           <BookOpen size={20} />
           <span>Tests</span>
         </button>
+        <Link
+          href="/admin/students"
+          className="mobile-nav-btn"
+          style={{ textDecoration: 'none' }}
+        >
+          <Users size={20} />
+          <span>Students</span>
+        </Link>
         <Link
           href="/admin/exercises/new"
           className="mobile-nav-btn"

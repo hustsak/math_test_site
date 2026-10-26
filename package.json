@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test:grade": "node scripts/test-grade.mjs"
+    "test:grade": "node scripts/test-grade.mjs",
+    "test:tracking": "node scripts/test-parent-tracking.mjs",
+    "test": "node scripts/test-grade.mjs && node scripts/test-parent-tracking.mjs"
   },
   "dependencies": {
     "firebase": "^10.14.1",

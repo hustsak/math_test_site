@@ -71,6 +71,7 @@ export interface QuestionResult {
 export interface Submission {
   exerciseId: string;
   studentName: string;
+  studentId?: string;
   nameKey: string;
   status: 'started' | 'submitted';
   startedAt: number;
@@ -79,4 +80,107 @@ export interface Submission {
   score?: number;
   total?: number;
   details?: QuestionResult[];
+}
+
+export interface Student {
+  id: string;
+  name: string;
+  className?: string;
+  studentToken: string;
+  parentToken: string;
+  active: boolean;
+  createdAt: number;
+}
+
+export interface AppSettings {
+  showClassAverageToParents?: boolean;
+}
+
+export type FaceRating = 'happy' | 'neutral' | 'sad';
+
+export interface FaceEvaluation {
+  face: FaceRating;
+  emoji: string;
+  color: string;
+  bgColor: string;
+  borderColor: string;
+  labelKh: string;
+  labelEn: string;
+}
+
+export interface ParentQuestionDetail {
+  id: string;
+  prompt: string;
+  points: number;
+  correct: boolean;
+  earned: number;
+  childAnswer: string;
+  correctAnswer: string;
+  explanation: string;
+}
+
+export interface ParentExerciseDetail {
+  id: string;
+  title: string;
+  description?: string;
+  submitted: boolean;
+  submittedAt?: number;
+  late?: boolean;
+  score?: number;
+  total?: number;
+  percentage?: number;
+  face?: FaceRating;
+  classAveragePercent?: number | null;
+  questions?: ParentQuestionDetail[];
+}
+
+export interface ParentNotDoneExercise {
+  id: string;
+  title: string;
+  deadline: string | null;
+  timeLimitMinutes: number;
+  questionCount: number;
+  isClosed: boolean;
+}
+
+export interface ParentViewData {
+  childName: string;
+  className?: string;
+  completedCount: number;
+  totalPublishedCount: number;
+  latestResult?: {
+    exerciseId: string;
+    title: string;
+    score: number;
+    total: number;
+    percentage: number;
+    face: FaceRating;
+    submittedAt: number;
+  } | null;
+  exercises: ParentExerciseDetail[];
+  notDoneExercises: ParentNotDoneExercise[];
+  showClassAverage?: boolean;
+}
+
+export interface StudentViewExercise {
+  id: string;
+  title: string;
+  description: string;
+  deadline: string | null;
+  timeLimitMinutes: number;
+  questionCount: number;
+  isClosed: boolean;
+  isDone: boolean;
+  score?: number;
+  total?: number;
+  submittedAt?: number;
+}
+
+export interface StudentViewData {
+  student: {
+    id: string;
+    name: string;
+    className?: string;
+  };
+  exercises: StudentViewExercise[];
 }

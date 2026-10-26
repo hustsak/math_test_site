@@ -1,6 +1,6 @@
 rules_version = '2';
 
-// Students never touch Firestore directly. They use the server API routes,
+// Students and parents never touch Firestore directly. They use the server API routes,
 // which run with the Admin SDK (bypassing these rules) and never reveal answers.
 // Only the teacher's account can read or write from the browser.
 service cloud.firestore {
@@ -17,6 +17,14 @@ service cloud.firestore {
     match /submissions/{id} {
       allow read, delete: if isTeacher();
       allow create, update: if false;
+    }
+
+    match /students/{id} {
+      allow read, write: if isTeacher();
+    }
+
+    match /settings/{id} {
+      allow read, write: if isTeacher();
     }
   }
 }
