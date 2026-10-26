@@ -68,7 +68,15 @@ export default function AdminHome() {
   const [lang, setLang] = useState<'EN' | 'KH'>('EN');
 
   // Auth form states (when unauthenticated)
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [authMode, setAuthMode] = useState<'login' | 'register'>(() => {
+    if (typeof window !== 'undefined') {
+      const p = new URLSearchParams(window.location.search);
+      if (p.get('mode') === 'register' || p.get('register') === 'true' || window.location.hash === '#register') {
+        return 'register';
+      }
+    }
+    return 'login';
+  });
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -135,7 +143,7 @@ export default function AdminHome() {
     return () => window.removeEventListener('click', handleClickOutside);
   }, []);
 
-  // Theme initialization
+  // Theme and initial URL query params
   useEffect(() => {
     const savedTheme = localStorage.getItem('mathtest_theme') as 'light' | 'dark' | null;
     if (savedTheme) {
@@ -144,6 +152,21 @@ export default function AdminHome() {
     } else {
       document.documentElement.setAttribute('data-theme', 'light');
     }
+
+    function syncMode() {
+      if (typeof window !== 'undefined') {
+        const p = new URLSearchParams(window.location.search);
+        if (p.get('mode') === 'register' || p.get('register') === 'true' || window.location.hash === '#register') {
+          setAuthMode('register');
+        } else if (p.get('mode') === 'login') {
+          setAuthMode('login');
+        }
+      }
+    }
+
+    syncMode();
+    window.addEventListener('popstate', syncMode);
+    return () => window.removeEventListener('popstate', syncMode);
   }, []);
 
   function toggleTheme() {
