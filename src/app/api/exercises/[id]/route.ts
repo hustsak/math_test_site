@@ -43,8 +43,55 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
         points: q.points,
       })),
     };
-    const response = NextResponse.json({ exercise: pub, closed, serverNow: now });
-    response.headers.set('Cache-Control', 'public, s-maxage=10, stale-while-revalidate=60');
+    let submissionResult = null;
+    const urlObj = new URL(_req.url);
+    const tokenQuery = (urlObj.searchParams.get('token') || '').trim();
+    const studentNameQuery = (urlObj.searchParams.get('studentName') || '').trim();
+
+    if (tokenQuery || studentNameQuery) {
+      let matchedStudentId: string | null = null;
+      let matchedNameKey = '';
+
+      if (tokenQuery) {
+        const studentSnap = await adminDb()
+          .collection('students')
+          .where('studentToken', '==', tokenQuery)
+          .limit(1)
+          .get();
+        if (!studentSnap.empty) {
+          matchedStudentId = studentSnap.docs[0].id;
+          matchedNameKey = studentSnap.docs[0].data().nameKey || '';
+        }
+      }
+
+      const subsQuery = matchedStudentId
+        ? adminDb().collection('submissions').where('studentId', '==', matchedStudentId).where('exerciseId', '==', params.id).limit(5).get()
+        : adminDb().collection('submissions').where('exerciseId', '==', params.id).where('nameKey', '==', matchedNameKey || studentNameQuery.toLowerCase()).limit(5).get();
+
+      const subsSnap = await subsQuery;
+      const submittedDoc = subsSnap.docs
+        .map((d) => d.data())
+        .find((s) => s.status === 'submitted');
+
+      if (submittedDoc) {
+        submissionResult = {
+          score: submittedDoc.score ?? 0,
+          total: submittedDoc.total ?? 0,
+          late: !!submittedDoc.late,
+          details: submittedDoc.details || [],
+          studentName: submittedDoc.studentName || '',
+          className: submittedDoc.className || '',
+        };
+      }
+    }
+
+    const response = NextResponse.json({
+      exercise: pub,
+      closed,
+      serverNow: now,
+      ...(submissionResult ? { submission: submissionResult } : {}),
+    });
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
     return response;
   } catch (e) {
     console.error(e);

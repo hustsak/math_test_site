@@ -28,6 +28,7 @@ interface Result {
   late: boolean;
   details: QuestionResult[];
   parentLink?: string;
+  studentName?: string;
 }
 
 const SYMBOLS = ['−', '×', '÷', '²', '√', 'π', '≤', '≥', '≠'];
@@ -155,12 +156,18 @@ export default function StudentPage() {
     return ex.questions;
   }, [ex, attempt?.attemptId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load exercise and conditionally resume an in-progress attempt ONLY if it belongs to current student
+  // Load exercise and conditionally resume an in-progress attempt or completed submission
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`/api/exercises/${id}`);
+        const p = new URLSearchParams(window.location.search);
+        const urlToken = (p.get('token') || '').trim();
+        const fetchUrl = urlToken
+          ? `/api/exercises/${id}?token=${encodeURIComponent(urlToken)}`
+          : `/api/exercises/${id}`;
+
+        const res = await fetch(fetchUrl);
         const data = await res.json();
         if (cancelled) return;
         if (!res.ok) {
@@ -168,14 +175,25 @@ export default function StudentPage() {
           return setPhase('error');
         }
         setEx(data.exercise);
+
+        // If student has already completed this exercise, show result view directly!
+        if (data.submission) {
+          setResult({
+            score: data.submission.score,
+            total: data.submission.total,
+            late: data.submission.late,
+            details: data.submission.details,
+            studentName: data.submission.studentName || name,
+          });
+          return setPhase('done');
+        }
+
         if (data.closed) return setPhase('closed');
 
         try {
           const saved = localStorage.getItem(storeKey);
           if (saved) {
             const parsed = JSON.parse(saved) as Attempt;
-            const p = new URLSearchParams(window.location.search);
-            const urlToken = (p.get('token') || '').trim();
 
             // Safety check: Don't restore if attempt belongs to a different student name
             const currentExpectedName = name.trim();
@@ -794,7 +812,7 @@ export default function StudentPage() {
               />
               <div>
                 <h1 style={{ margin: 0, fontSize: '1.25rem', lineHeight: 1.3, fontWeight: 800, color: 'var(--theme-navy)' }}>
-                  លទ្ធផល{attempt?.name ? `: ${attempt.name}` : ''}
+                  លទ្ធផល{(attempt?.name || result.studentName || name) ? `: ${attempt?.name || result.studentName || name}` : ''}
                 </h1>
                 <div style={{ fontSize: '0.85rem', color: 'var(--theme-muted)' }}>
                   បានបញ្ចប់ការធ្វើតេស្ត
