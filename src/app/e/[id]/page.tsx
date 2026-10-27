@@ -112,8 +112,32 @@ export default function StudentPage() {
   }
 
   // Initialize remembered name and class from localStorage
+  // Initialize remembered name and class from localStorage and student token
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window === 'undefined') return;
+
+    const p = new URLSearchParams(window.location.search);
+    const t = (p.get('token') || '').trim();
+
+    if (t) {
+      setStudentToken(t);
+      fetch(`/api/student/${encodeURIComponent(t)}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          const fetchedName = d?.student?.name || d?.studentName;
+          const fetchedClass = d?.student?.className || d?.className || '';
+          if (fetchedName) {
+            setName(fetchedName);
+            if (fetchedClass) setClassName(fetchedClass);
+            setStudentLocked(true);
+            try {
+              localStorage.setItem('math_last_student_name', fetchedName);
+              if (fetchedClass) localStorage.setItem('math_last_student_class', fetchedClass);
+            } catch {}
+          }
+        })
+        .catch(() => {});
+    } else {
       const storedName = localStorage.getItem('math_last_student_name') || '';
       const storedClass = localStorage.getItem('math_last_student_class') || '';
       const storedParentLink = localStorage.getItem('math_parent_link') || '';
@@ -121,22 +145,6 @@ export default function StudentPage() {
       if (storedName && !name) setName(storedName);
       if (storedClass && !className) setClassName(storedClass);
       if (storedParentLink) setSavedParentLink(storedParentLink);
-
-      const p = new URLSearchParams(window.location.search);
-      const t = p.get('token') || '';
-      if (t) {
-        setStudentToken(t);
-        fetch(`/api/student/${t}`)
-          .then((r) => (r.ok ? r.json() : null))
-          .then((d) => {
-            if (d?.studentName) {
-              setName(d.studentName);
-              if (d.className) setClassName(d.className);
-              setStudentLocked(true);
-            }
-          })
-          .catch(() => {});
-      }
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -147,32 +155,62 @@ export default function StudentPage() {
     return ex.questions;
   }, [ex, attempt?.attemptId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load exercise (and resume an in-progress attempt after a refresh)
+  // Load exercise and conditionally resume an in-progress attempt ONLY if it belongs to current student
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       try {
         const res = await fetch(`/api/exercises/${id}`);
         const data = await res.json();
+        if (cancelled) return;
         if (!res.ok) {
           setError(data.error || 'Exercise not found.');
           return setPhase('error');
         }
         setEx(data.exercise);
         if (data.closed) return setPhase('closed');
+
         try {
           const saved = localStorage.getItem(storeKey);
           if (saved) {
-            setAttempt(JSON.parse(saved) as Attempt);
-            return setPhase('taking');
+            const parsed = JSON.parse(saved) as Attempt;
+            const p = new URLSearchParams(window.location.search);
+            const urlToken = (p.get('token') || '').trim();
+
+            // Safety check: Don't restore if attempt belongs to a different student name
+            const currentExpectedName = name.trim();
+            const attemptName = (parsed.name || '').trim();
+
+            const isMatchingStudent = !currentExpectedName || !attemptName ||
+              currentExpectedName.toLowerCase() === attemptName.toLowerCase();
+
+            // Also check if time limit already expired by a wide margin (avoid instant auto-submit on page load)
+            const timeLimitMs = (data.exercise.timeLimitMinutes || 0) * 60_000;
+            const isAlreadyExpired = timeLimitMs > 0 && (Date.now() - parsed.startedAt > timeLimitMs + 30_000);
+
+            if (isMatchingStudent && !isAlreadyExpired && !urlToken) {
+              setAttempt(parsed);
+              return setPhase('taking');
+            } else {
+              // Stale or belongs to another student: clear it
+              localStorage.removeItem(storeKey);
+            }
           }
-        } catch {}
+        } catch {
+          localStorage.removeItem(storeKey);
+        }
         setPhase('name');
       } catch {
-        setError('Could not load the exercise. Check your connection.');
-        setPhase('error');
+        if (!cancelled) {
+          setError('Could not load the exercise. Check your connection.');
+          setPhase('error');
+        }
       }
     })();
-  }, [id, storeKey]);
+    return () => {
+      cancelled = true;
+    };
+  }, [id, storeKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const persist = useCallback(
     (a: Attempt) => {
@@ -508,6 +546,33 @@ export default function StudentPage() {
               }}
               required
             />
+            {!studentLocked && name && (
+              <div style={{ marginTop: 4, display: 'flex', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setName('');
+                    setClassName('');
+                    try {
+                      localStorage.removeItem('math_last_student_name');
+                      localStorage.removeItem('math_last_student_class');
+                      localStorage.removeItem(storeKey);
+                    } catch {}
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--theme-muted)',
+                    fontSize: '0.82rem',
+                    textDecoration: 'underline',
+                    cursor: 'pointer',
+                    padding: 0,
+                  }}
+                >
+                  មិនមែន {name}? (ប្តូរឈ្មោះ / Not you?)
+                </button>
+              </div>
+            )}
             {studentLocked && (
               <span
                 style={{
@@ -1093,6 +1158,61 @@ export default function StudentPage() {
             </div>
           );
         })}
+
+        {/* Action navigation buttons at the end of results */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>
+          <button
+            type="button"
+            onClick={() => {
+              try {
+                localStorage.removeItem(storeKey);
+              } catch {}
+              setAttempt(null);
+              setResult(null);
+              setPhase('name');
+            }}
+            style={{
+              padding: '12px 18px',
+              borderRadius: 12,
+              fontWeight: 800,
+              fontSize: '0.95rem',
+              backgroundColor: 'var(--theme-card-bg)',
+              color: 'var(--theme-primary)',
+              border: '1.5px solid var(--theme-primary)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+            }}
+          >
+            <span>🔄</span>
+            <span>ធ្វើលំហាត់នេះម្តងទៀត ឬប្តូរសិស្ស (Retake / Switch Student)</span>
+          </button>
+
+          {studentToken && (
+            <Link
+              href={`/s/${studentToken}`}
+              style={{
+                padding: '12px 18px',
+                borderRadius: 12,
+                fontWeight: 800,
+                fontSize: '0.95rem',
+                backgroundColor: 'var(--theme-primary)',
+                color: '#ffffff',
+                textDecoration: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                textAlign: 'center',
+              }}
+            >
+              <span>🏠</span>
+              <span>ត្រឡប់ទៅមជ្ឈមណ្ឌលសិស្សរបស់ខ្ញុំ (Back to My Portal)</span>
+            </Link>
+          )}
+        </div>
       </div>
     );
   }

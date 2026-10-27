@@ -66,7 +66,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     let studentId: string | undefined = undefined;
     let approvedStudentName = studentName;
 
-    // Backward compatibility: If old studentToken is provided from roster
+    // If studentToken is provided from student link
+    let targetDoc: FirebaseFirestore.QueryDocumentSnapshot | null = null;
     if (studentToken) {
       const tokenSnap = await db
         .collection('students')
@@ -75,46 +76,46 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         .get();
 
       if (!tokenSnap.empty) {
-        studentId = tokenSnap.docs[0].id;
-        approvedStudentName = tokenSnap.docs[0].data().name || studentName;
+        targetDoc = tokenSnap.docs[0];
+        studentId = targetDoc.id;
+        approvedStudentName = targetDoc.data().name || studentName;
       }
     }
 
-    // Search by normalized nameKey
-    const studentsSnap = await db
-      .collection('students')
-      .where('nameKey', '==', nameKey)
-      .get();
+    if (!targetDoc) {
+      // Search by normalized nameKey
+      const studentsSnap = await db
+        .collection('students')
+        .where('nameKey', '==', nameKey)
+        .get();
 
-    if (studentsSnap.empty) {
-      // Name not on approved list
-      return NextResponse.json(
-        {
-          error: ACCESS_ERRORS.NOT_APPROVED.message,
-          code: ACCESS_ERRORS.NOT_APPROVED.code,
-        },
-        { status: 403 }
-      );
-    }
-
-    // Resolve exactly one student record
-    let targetDoc: FirebaseFirestore.QueryDocumentSnapshot | null = null;
-
-    if (studentsSnap.docs.length === 1) {
-      targetDoc = studentsSnap.docs[0];
-    } else {
-      // Multiple records exist for this nameKey across different classes
-      if (classKey) {
-        targetDoc = studentsSnap.docs.find((d) => d.data().classKey === classKey) || null;
-      }
-      if (!targetDoc) {
+      if (studentsSnap.empty) {
+        // Name not on approved list
         return NextResponse.json(
           {
-            error: ACCESS_ERRORS.AMBIGUOUS_NAME.message,
-            code: ACCESS_ERRORS.AMBIGUOUS_NAME.code,
+            error: ACCESS_ERRORS.NOT_APPROVED.message,
+            code: ACCESS_ERRORS.NOT_APPROVED.code,
           },
           { status: 403 }
         );
+      }
+
+      if (studentsSnap.docs.length === 1) {
+        targetDoc = studentsSnap.docs[0];
+      } else {
+        // Multiple records exist for this nameKey across different classes
+        if (classKey) {
+          targetDoc = studentsSnap.docs.find((d) => d.data().classKey === classKey) || null;
+        }
+        if (!targetDoc) {
+          return NextResponse.json(
+            {
+              error: ACCESS_ERRORS.AMBIGUOUS_NAME.message,
+              code: ACCESS_ERRORS.AMBIGUOUS_NAME.code,
+            },
+            { status: 403 }
+          );
+        }
       }
     }
 

@@ -763,7 +763,7 @@ export default function StudentPortalPage() {
                         </div>
                       ) : (
                         <Link
-                          href={`/e/${ex.id}`}
+                          href={data.student.studentToken ? `/e/${ex.id}?token=${encodeURIComponent(data.student.studentToken)}` : `/e/${ex.id}`}
                           style={{
                             display: 'inline-flex',
                             alignItems: 'center',
