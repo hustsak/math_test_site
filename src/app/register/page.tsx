@@ -17,6 +17,7 @@ import {
   HelpCircle,
   Copy,
   Check,
+  QrCode,
 } from 'lucide-react';
 
 function StudentRegisterForm() {
@@ -328,6 +329,68 @@ function StudentRegisterForm() {
                 </div>
               </div>
             )}
+
+            {/* Payment QR Code & Instructions */}
+            <div
+              style={{
+                backgroundColor: 'var(--theme-card-bg)',
+                border: '1.5px solid var(--theme-border)',
+                borderRadius: 18,
+                padding: '18px 16px',
+                textAlign: 'center',
+                boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 4 }}>
+                <QrCode size={20} color="var(--brand)" />
+                <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 900, color: 'var(--theme-navy)' }}>
+                  QR Code ស្កេនបង់ប្រាក់ចូលរៀន (Payment QR)
+                </h3>
+              </div>
+              <p style={{ margin: '4px 0 14px', fontSize: '0.84rem', color: 'var(--theme-muted)', lineHeight: 1.45 }}>
+                សូមស្កេន QR កូដខាងក្រោមនេះដើម្បីបង់ប្រាក់ថ្លៃរៀន និងចូលធ្វើលំហាត់ទាំងអស់
+              </p>
+
+              <div
+                style={{
+                  display: 'inline-block',
+                  padding: 10,
+                  borderRadius: 16,
+                  backgroundColor: '#ffffff',
+                  border: '1.5px solid var(--theme-border)',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                }}
+              >
+                <img
+                  src="/qrcode.jpg"
+                  alt="QR Code Payment"
+                  style={{
+                    width: '100%',
+                    maxWidth: 260,
+                    height: 'auto',
+                    borderRadius: 10,
+                    display: 'block',
+                    objectFit: 'contain',
+                  }}
+                />
+              </div>
+
+              <div
+                style={{
+                  marginTop: 12,
+                  padding: '10px 12px',
+                  borderRadius: 10,
+                  backgroundColor: 'rgba(74, 103, 214, 0.08)',
+                  border: '1px solid rgba(74, 103, 214, 0.2)',
+                  fontSize: '0.82rem',
+                  color: 'var(--theme-navy)',
+                  lineHeight: 1.4,
+                  textAlign: 'left',
+                }}
+              >
+                💡 <strong>ចំណាំ៖</strong> បន្ទាប់ពីស្កេនទូទាត់ប្រាក់រួច សូមផ្ញើវិក្កយបត្រ (Receipt) ឬប្រាប់ឈ្មោះ «<strong>{registeredStudent.name}</strong>» ទៅកាន់លោកគ្រូ ដើម្បីលោកគ្រូបើកសិទ្ធិ (Approve) ចូលធ្វើលំហាត់ទាំងអស់បានភ្លាមៗ!
+              </div>
+            </div>
 
             {/* Payment Approval Notice */}
             {registeredStudent.paymentStatus === 'pending' ? (
