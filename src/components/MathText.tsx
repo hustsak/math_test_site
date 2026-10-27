@@ -33,22 +33,28 @@ function prepareTex(tex: string): string {
   return s;
 }
 
-function render(tex: string, displayMode: boolean) {
-  const prepared = prepareTex(tex);
-  return katex.renderToString(prepared, { throwOnError: false, displayMode, strict: 'ignore' });
+function render(tex: string, displayMode: boolean): string {
+  try {
+    const prepared = prepareTex(tex);
+    return katex.renderToString(prepared, { throwOnError: false, displayMode, strict: 'ignore' });
+  } catch (err) {
+    console.error('KaTeX render error:', err);
+    return `<span class="katex-error" style="color:#ef4444">${tex.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>`;
+  }
 }
 
 /**
  * Normalizes raw text containing LaTeX expressions:
  * Converts \[ ... \] to $$ ... $$ and \( ... \) to $ ... $
  * so AI outputs using standard LaTeX delimiters parse smoothly.
+ * Using callback functions avoids string replacement pattern bugs with $ in JavaScript.
  */
 function normalizeMathDelimiters(text: string): string {
   if (!text) return '';
   // Convert \[ ... \] to $$ ... $$
-  let s = text.replace(/\\\[([\s\S]*?)\\\]/g, '$$$$$1$$$$');
+  let s = text.replace(/\\\[([\s\S]*?)\\\]/g, (_, math) => `$$${math}$$`);
   // Convert \( ... \) to $ ... $
-  s = s.replace(/\\\(([\s\S]*?)\\\)/g, '$$$1$$');
+  s = s.replace(/\\\(([\s\S]*?)\\\)/g, (_, math) => `$${math}$`);
   return s;
 }
 
