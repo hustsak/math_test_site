@@ -112,6 +112,17 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       updatedGrade = Math.min(12, Math.max(7, parseInt(body.grade, 10) || 7));
     }
 
+    let paymentStatus = currentData.paymentStatus || 'approved';
+    let paidAt = currentData.paidAt || null;
+    if (body.paymentStatus !== undefined) {
+      paymentStatus = body.paymentStatus === 'pending' ? 'pending' : 'approved';
+      if (paymentStatus === 'approved' && !paidAt) {
+        paidAt = Date.now();
+      } else if (paymentStatus === 'pending') {
+        paidAt = null;
+      }
+    }
+
     const nowTimestamp = admin.firestore.Timestamp.now();
     const expiresAtTimestamp = admin.firestore.Timestamp.fromMillis(expiresAtMs);
 
@@ -123,6 +134,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       classKey,
       accessEnabled,
       active: accessEnabled,
+      paymentStatus,
+      paidAt,
       expiresAt: expiresAtTimestamp,
       updatedAt: nowTimestamp,
     };
@@ -131,7 +144,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
     const nowMs = Date.now();
     const expirationDate = formatCambodiaDate(expiresAtMs);
-    const status = getStudentStatus(accessEnabled, expiresAtMs, nowMs);
+    const status = getStudentStatus(accessEnabled, expiresAtMs, nowMs, paymentStatus);
 
     const updatedStudent: StudentAccess = {
       id,
@@ -141,6 +154,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       className: updatedClassName,
       classKey,
       accessEnabled,
+      paymentStatus,
+      paidAt,
       expiresAt: expiresAtMs,
       expirationDate,
       createdAt: currentData.createdAt?.toMillis ? currentData.createdAt.toMillis() : (currentData.createdAt || nowMs),

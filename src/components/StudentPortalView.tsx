@@ -5,7 +5,7 @@ import Link from 'next/link';
 import MathText from '@/components/MathText';
 import { formatKhmerCountdown } from '@/lib/parentTracking';
 import type { StudentViewData } from '@/lib/types';
-import { CheckCircle2, Clock, Lock, BookOpen, AlertCircle, ArrowRight } from 'lucide-react';
+import { CheckCircle2, Clock, Lock, BookOpen, AlertCircle, ArrowRight, Copy, Check } from 'lucide-react';
 
 export default function StudentPortalView({
   token,
@@ -17,6 +17,7 @@ export default function StudentPortalView({
   const [data, setData] = useState<StudentViewData | null>(initialData || null);
   const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState('');
+  const [copiedLink, setCopiedLink] = useState(false);
 
   useEffect(() => {
     if (!initialData) {
@@ -141,6 +142,84 @@ export default function StudentPortalView({
         </p>
       </header>
 
+      {/* Unique Link & Payment Status Banners */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
+        {/* Unique Link Banner */}
+        <div
+          style={{
+            backgroundColor: 'var(--card)',
+            border: '1.5px solid var(--theme-border)',
+            borderRadius: 16,
+            padding: '14px 18px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            flexWrap: 'wrap',
+            boxShadow: 'var(--theme-shadow)',
+          }}
+        >
+          <div>
+            <div style={{ fontWeight: 800, fontSize: '0.92rem', color: 'var(--theme-navy)' }}>
+              🔗 តំណផ្ទាល់ខ្លួនរបស់អ្នក (Personal Link)
+            </div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: 2 }}>
+              រក្សាទុកតំណនេះដើម្បីចូលធ្វើលំហាត់ដោយផ្ទាល់
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              const url = window.location.href;
+              navigator.clipboard.writeText(url);
+              setCopiedLink(true);
+              setTimeout(() => setCopiedLink(false), 2500);
+            }}
+            className="btn small"
+            style={{
+              padding: '6px 14px',
+              borderRadius: 8,
+              fontSize: '0.82rem',
+              fontWeight: 700,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              backgroundColor: copiedLink ? '#059669' : 'var(--theme-primary)',
+              borderColor: copiedLink ? '#059669' : 'var(--theme-primary)',
+              color: '#ffffff',
+            }}
+          >
+            {copiedLink ? <Check size={14} /> : <Copy size={14} />}
+            <span>{copiedLink ? 'បានចម្លង!' : 'ចម្លងតំណផ្ទាល់ខ្លួន (Copy Link)'}</span>
+          </button>
+        </div>
+
+        {/* Pending Payment Notice */}
+        {student.paymentStatus === 'pending' && (
+          <div
+            style={{
+              backgroundColor: 'rgba(234, 88, 12, 0.08)',
+              border: '1.5px solid rgba(234, 88, 12, 0.35)',
+              borderRadius: 16,
+              padding: '14px 18px',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 12,
+            }}
+          >
+            <div style={{ fontSize: '1.4rem', lineHeight: 1 }}>⏳</div>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#ea580c' }}>
+                ការទូទាត់ប្រាក់មិនទាន់ត្រូវបានអនុម័ត (Payment Pending Approval)
+              </div>
+              <div style={{ fontSize: '0.84rem', color: 'var(--theme-navy)', marginTop: 4, lineHeight: 1.45 }}>
+                បច្ចុប្បន្នអ្នកអាចចូលធ្វើ<strong>លំហាត់សាកល្បងឥតគិតថ្លៃ (Sample Test Cases)</strong> បាន។ ពេលលោកគ្រូបានអនុម័តការបង់ប្រាក់រួច លំហាត់ទាំងអស់នឹងត្រូវបានបើកជូនភ្លាមៗ។
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Exercises Section Title */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
         <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
@@ -201,8 +280,26 @@ export default function StudentPortalView({
                     )}
                   </div>
 
-                  {/* Status Badge */}
-                  <div>
+                  {/* Status Badges */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    {ex.isSample && (
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          fontSize: '0.78rem',
+                          fontWeight: 800,
+                          padding: '3px 10px',
+                          borderRadius: 999,
+                          backgroundColor: '#10b981',
+                          color: '#ffffff',
+                        }}
+                      >
+                        🌟 លំហាត់សាកល្បង (Sample)
+                      </span>
+                    )}
+
                     {ex.isDone ? (
                       <span
                         style={{
@@ -218,6 +315,23 @@ export default function StudentPortalView({
                         }}
                       >
                         <CheckCircle2 size={16} /> បានធ្វើរួច
+                      </span>
+                    ) : ex.isLockedForPayment ? (
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          fontSize: '0.85rem',
+                          fontWeight: 700,
+                          padding: '4px 12px',
+                          borderRadius: 999,
+                          backgroundColor: 'rgba(234, 88, 12, 0.12)',
+                          color: '#ea580c',
+                          border: '1px solid rgba(234, 88, 12, 0.3)',
+                        }}
+                      >
+                        <Lock size={15} /> រង់ចាំបង់ប្រាក់
                       </span>
                     ) : ex.isClosed ? (
                       <span
@@ -315,6 +429,10 @@ export default function StudentPortalView({
                         {ex.score ?? 0} / {ex.total ?? 0}
                       </span>
                     </div>
+                  ) : ex.isLockedForPayment ? (
+                    <div style={{ fontSize: '0.84rem', color: '#ea580c', fontWeight: 600 }}>
+                      ⚠️ ត្រូវការអនុម័តការបង់ប្រាក់ដើម្បីធ្វើលំហាត់នេះ
+                    </div>
                   ) : (
                     <div style={{ fontSize: '0.88rem', color: 'var(--muted)' }}>
                       ឈ្មោះរបស់អ្នកត្រូវបានបំពេញរួចជាស្រេច
@@ -322,23 +440,53 @@ export default function StudentPortalView({
                   )}
 
                   {/* Button */}
-                  <Link
-                    href={`/e/${ex.id}?token=${token}`}
-                    className={`btn ${ex.isDone ? 'secondary' : ''}`}
-                    style={{
-                      borderRadius: 12,
-                      padding: '8px 18px',
-                      fontSize: '0.95rem',
-                      fontWeight: 700,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      textDecoration: 'none',
-                    }}
-                  >
-                    <span>{ex.isDone ? 'មើលលទ្ធផលឡើងវិញ' : 'ចាប់ផ្ដើមធ្វើលំហាត់'}</span>
-                    <ArrowRight size={16} />
-                  </Link>
+                  {ex.isLockedForPayment ? (
+                    <span
+                      style={{
+                        borderRadius: 12,
+                        padding: '8px 16px',
+                        fontSize: '0.9rem',
+                        fontWeight: 700,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        backgroundColor: 'var(--theme-page-bg)',
+                        color: 'var(--muted)',
+                        border: '1px solid var(--line)',
+                        cursor: 'not-allowed',
+                      }}
+                    >
+                      <Lock size={15} />
+                      <span>ចាក់សោ (Locked)</span>
+                    </span>
+                  ) : (
+                    <Link
+                      href={`/e/${ex.id}?token=${token}`}
+                      className={`btn ${ex.isDone ? 'secondary' : ''}`}
+                      style={{
+                        borderRadius: 12,
+                        padding: '8px 18px',
+                        fontSize: '0.95rem',
+                        fontWeight: 700,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        textDecoration: 'none',
+                        backgroundColor: ex.isSample && !ex.isDone ? '#10b981' : undefined,
+                        borderColor: ex.isSample && !ex.isDone ? '#10b981' : undefined,
+                        color: ex.isSample && !ex.isDone ? '#ffffff' : undefined,
+                      }}
+                    >
+                      <span>
+                        {ex.isDone
+                          ? 'មើលលទ្ធផលឡើងវិញ'
+                          : ex.isSample
+                          ? 'ធ្វើលំហាត់សាកល្បង'
+                          : 'ចាប់ផ្ដើមធ្វើលំហាត់'}
+                      </span>
+                      <ArrowRight size={16} />
+                    </Link>
+                  )}
                 </div>
               </div>
             );

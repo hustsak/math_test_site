@@ -440,9 +440,29 @@ export default function StudentPage() {
             {ThemeToggle}
           </div>
 
-          <h1 style={{ textAlign: 'center', margin: '6px 0', fontSize: '1.45rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
-            {ex.title}
-          </h1>
+          <div style={{ textAlign: 'center' }}>
+            <h1 style={{ margin: '6px 0', fontSize: '1.45rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
+              {ex.title}
+            </h1>
+            {ex.isSample && (
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '4px 12px',
+                  borderRadius: 20,
+                  backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                  color: '#059669',
+                  fontWeight: 800,
+                  fontSize: '0.82rem',
+                  marginTop: 4,
+                }}
+              >
+                🌟 លំហាត់សាកល្បងឥតគិតថ្លៃ (Free Sample Exercise)
+              </span>
+            )}
+          </div>
 
           {ex.description && (
             <div style={{ textAlign: 'center', color: 'var(--theme-muted)', fontSize: '1rem', lineHeight: 1.5 }}>
@@ -550,7 +570,13 @@ export default function StudentPage() {
           {error && (
             <div className="error" style={{ marginBottom: 12 }}>
               <div>{error}</div>
-              <div style={{ marginTop: 8, fontSize: '0.86rem' }}>
+              <div style={{ marginTop: 8, fontSize: '0.86rem', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <Link
+                  href="/student"
+                  style={{ color: 'var(--theme-primary)', fontWeight: 800, textDecoration: 'underline' }}
+                >
+                  👉 ទៅកាន់មជ្ឈមណ្ឌលសិស្ស (Go to Student Portal)
+                </Link>
                 <Link
                   href={`/register?exerciseId=${id}`}
                   style={{ color: '#b91c1c', fontWeight: 800, textDecoration: 'underline' }}

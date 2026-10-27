@@ -19,6 +19,8 @@ import {
   RefreshCw,
   Sparkles,
   UserCheck,
+  Lock,
+  Check,
 } from 'lucide-react';
 
 interface PortalData {
@@ -29,6 +31,8 @@ interface PortalData {
     className: string | null;
     expirationDate: string;
     parentToken: string | null;
+    studentToken?: string | null;
+    paymentStatus?: 'approved' | 'pending';
   };
   availableNow: Array<{
     id: string;
@@ -41,6 +45,8 @@ interface PortalData {
     gradeLevels: number[];
     questionCount: number;
     totalPoints: number;
+    isSample?: boolean;
+    isLockedForPayment?: boolean;
   }>;
   upcoming: Array<{
     id: string;
@@ -54,6 +60,8 @@ interface PortalData {
     gradeLevels: number[];
     questionCount: number;
     totalPoints: number;
+    isSample?: boolean;
+    isLockedForPayment?: boolean;
   }>;
   completed: Array<{
     exerciseId: string;
@@ -486,29 +494,133 @@ export default function StudentPortalPage() {
               </div>
 
               {/* Parent Link Shortcut */}
-              {data.student.parentToken && (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                {data.student.studentToken && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const url = `${window.location.origin}/s/${data.student.studentToken}`;
+                      navigator.clipboard.writeText(url);
+                      showToast('📋 បានចម្លងតំណផ្ទាល់ខ្លួន (Personal Link Copied!)');
+                    }}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '9px 16px',
+                      borderRadius: 12,
+                      backgroundColor: 'rgba(59, 130, 246, 0.12)',
+                      color: 'var(--theme-primary)',
+                      border: '1px solid rgba(59, 130, 246, 0.3)',
+                      fontWeight: 800,
+                      fontSize: '0.85rem',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Copy size={15} />
+                    <span>តំណផ្ទាល់ខ្លួន (My Link)</span>
+                  </button>
+                )}
+
+                {data.student.parentToken && (
+                  <button
+                    type="button"
+                    onClick={() => setShowParentModal(true)}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '9px 16px',
+                      borderRadius: 12,
+                      backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                      color: '#059669',
+                      border: '1px solid rgba(16, 185, 129, 0.3)',
+                      fontWeight: 800,
+                      fontSize: '0.85rem',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <QrCode size={16} />
+                    <span>តំណឪពុកម្តាយ (Parent Link)</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Unique Link Card */}
+            {data.student.studentToken && (
+              <div
+                style={{
+                  backgroundColor: 'rgba(59, 130, 246, 0.08)',
+                  border: '1.5px solid rgba(59, 130, 246, 0.25)',
+                  borderRadius: 16,
+                  padding: '14px 18px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: 12,
+                }}
+              >
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: '0.92rem', color: 'var(--theme-primary)', marginBottom: 2 }}>
+                    🔗 តំណផ្ទាល់ខ្លួនរបស់អ្នក (Your Unique Access Link)
+                  </div>
+                  <div style={{ fontSize: '0.82rem', color: 'var(--theme-muted)' }}>
+                    រក្សាទុកតំណនេះ ដើម្បីចូលធ្វើលំហាត់ភ្លាមៗដោយមិនបាច់វាយឈ្មោះឡើងវិញ
+                  </div>
+                </div>
                 <button
                   type="button"
-                  onClick={() => setShowParentModal(true)}
+                  onClick={() => {
+                    const url = `${window.location.origin}/s/${data.student.studentToken}`;
+                    navigator.clipboard.writeText(url);
+                    showToast('📋 បានចម្លងតំណផ្ទាល់ខ្លួន (Personal Link Copied!)');
+                  }}
+                  className="btn small"
                   style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    padding: '9px 16px',
-                    borderRadius: 12,
-                    backgroundColor: 'rgba(16, 185, 129, 0.12)',
-                    color: '#059669',
-                    border: '1px solid rgba(16, 185, 129, 0.3)',
+                    backgroundColor: 'var(--theme-primary)',
+                    color: '#ffffff',
                     fontWeight: 800,
-                    fontSize: '0.85rem',
+                    borderRadius: 10,
+                    padding: '8px 14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    border: 'none',
                     cursor: 'pointer',
                   }}
                 >
-                  <QrCode size={16} />
-                  <span>តំណឪពុកម្តាយ (Parent Link)</span>
+                  <Copy size={14} />
+                  <span>ចម្លងតំណ (Copy Link)</span>
                 </button>
-              )}
-            </div>
+              </div>
+            )}
+
+            {/* Pending Payment Notice */}
+            {data.student.paymentStatus === 'pending' && (
+              <div
+                style={{
+                  backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                  border: '1.5px solid rgba(245, 158, 11, 0.4)',
+                  borderRadius: 16,
+                  padding: '16px 20px',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 14,
+                }}
+              >
+                <AlertCircle size={24} color="#d97706" style={{ flexShrink: 0, marginTop: 2 }} />
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: '0.98rem', color: '#b45309', marginBottom: 4 }}>
+                    ⏳ រង់ចាំការអនុញ្ញាតបង់ប្រាក់ពីគ្រូ (Pending Teacher Payment Approval)
+                  </div>
+                  <div style={{ fontSize: '0.86rem', color: 'var(--theme-navy)', lineHeight: 1.5 }}>
+                    អ្នកអាចសាកល្បងធ្វើ <strong>លំហាត់គំរូសាកល្បង (Sample Test Exercises)</strong> បានដោយសេរី។ លំហាត់ធម្មតាផ្សេងទៀតនឹងត្រូវបានបើកជូនភ្លាមៗ បន្ទាប់ពីលោកគ្រូ/អ្នកគ្រូបានអនុម័តការបង់ប្រាក់រួចរាល់។
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* SECTION 1: AVAILABLE NOW */}
             <div>
@@ -553,9 +665,48 @@ export default function StudentPortalPage() {
                       }}
                     >
                       <div>
-                        <h4 style={{ margin: '0 0 6px 0', fontSize: '1.15rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
-                          {ex.title}
-                        </h4>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+                          <h4 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
+                            {ex.title}
+                          </h4>
+                          {ex.isSample && (
+                            <span
+                              style={{
+                                padding: '3px 8px',
+                                borderRadius: 10,
+                                backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                                color: '#059669',
+                                fontSize: '0.72rem',
+                                fontWeight: 800,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                flexShrink: 0,
+                              }}
+                            >
+                              🌟 លំហាត់សាកល្បង (Sample)
+                            </span>
+                          )}
+                          {ex.isLockedForPayment && (
+                            <span
+                              style={{
+                                padding: '3px 8px',
+                                borderRadius: 10,
+                                backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                                color: '#dc2626',
+                                fontSize: '0.72rem',
+                                fontWeight: 800,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                flexShrink: 0,
+                              }}
+                            >
+                              <Lock size={12} />
+                              <span>រង់ចាំបង់ប្រាក់</span>
+                            </span>
+                          )}
+                        </div>
                         {(ex.chapter || ex.topic) && (
                           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
                             {ex.chapter && (
@@ -591,26 +742,47 @@ export default function StudentPortalPage() {
                         )}
                       </div>
 
-                      <Link
-                        href={`/e/${ex.id}`}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: 6,
-                          padding: '11px 18px',
-                          borderRadius: 12,
-                          backgroundColor: 'var(--theme-primary)',
-                          color: '#ffffff',
-                          fontWeight: 800,
-                          fontSize: '0.92rem',
-                          textDecoration: 'none',
-                          boxShadow: '0 4px 12px rgba(37,99,235,0.2)',
-                        }}
-                      >
-                        <span>ចាប់ផ្ដើមធ្វើ (Start Exercise)</span>
-                        <ChevronRight size={16} />
-                      </Link>
+                      {ex.isLockedForPayment ? (
+                        <div
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 6,
+                            padding: '11px 18px',
+                            borderRadius: 12,
+                            backgroundColor: 'rgba(156, 163, 175, 0.2)',
+                            color: 'var(--theme-muted)',
+                            fontWeight: 800,
+                            fontSize: '0.92rem',
+                            cursor: 'not-allowed',
+                          }}
+                        >
+                          <Lock size={16} />
+                          <span>ចាក់សោរ (Locked — ត្រូវការអនុម័តបង់ប្រាក់)</span>
+                        </div>
+                      ) : (
+                        <Link
+                          href={`/e/${ex.id}`}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 6,
+                            padding: '11px 18px',
+                            borderRadius: 12,
+                            backgroundColor: 'var(--theme-primary)',
+                            color: '#ffffff',
+                            fontWeight: 800,
+                            fontSize: '0.92rem',
+                            textDecoration: 'none',
+                            boxShadow: '0 4px 12px rgba(37,99,235,0.2)',
+                          }}
+                        >
+                          <span>{ex.isSample ? '🌟 សាកល្បងធ្វើ (Try Sample)' : 'ចាប់ផ្ដើមធ្វើ (Start Exercise)'}</span>
+                          <ChevronRight size={16} />
+                        </Link>
+                      )}
                     </div>
                   ))}
                 </div>

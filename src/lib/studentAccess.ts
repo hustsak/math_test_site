@@ -6,7 +6,7 @@ export const CAMBODIA_OFFSET_HOURS = 7;
 export const CAMBODIA_OFFSET_MS = 7 * 60 * 60 * 1000;
 export const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
-export type StudentAccessStatus = 'active' | 'expiring_soon' | 'expired' | 'blocked';
+export type StudentAccessStatus = 'active' | 'expiring_soon' | 'expired' | 'blocked' | 'pending_payment';
 
 export interface StudentAccess {
   id: string;
@@ -16,6 +16,8 @@ export interface StudentAccess {
   className: string | null;
   classKey: string;
   accessEnabled: boolean;
+  paymentStatus?: 'approved' | 'pending';
+  paidAt?: number | null;
   expiresAt: number; // UTC ms of exclusive end-of-day boundary
   expirationDate: string; // "YYYY-MM-DD" in Asia/Phnom_Penh
   createdAt: number;
@@ -210,17 +212,22 @@ export function addDaysToCambodiaDate(dateStr: string, days: number): string {
 /**
  * Evaluates the display access status:
  * - 'blocked': Access disabled by teacher (takes precedence)
+ * - 'pending_payment': Student registered but payment has not been approved
  * - 'expired': Expiration boundary has passed
- * - 'expiring_soon': Enabled and expires within the next 7 days
- * - 'active': Enabled and expires more than 7 days away
+ * - 'expiring_soon': Enabled, paid, and expires within the next 7 days
+ * - 'active': Enabled, paid, and expires more than 7 days away
  */
 export function getStudentStatus(
   accessEnabled: boolean,
   expiresAtMs: number,
-  nowMs: number = Date.now()
+  nowMs: number = Date.now(),
+  paymentStatus?: 'approved' | 'pending'
 ): StudentAccessStatus {
   if (!accessEnabled) {
     return 'blocked';
+  }
+  if (paymentStatus === 'pending') {
+    return 'pending_payment';
   }
   if (nowMs >= expiresAtMs) {
     return 'expired';
@@ -234,13 +241,25 @@ export function getStudentStatus(
 /**
  * Core authorization check for starting an exercise:
  * accessEnabled === true && currentTime < expiresAt
+ * If payment is pending, only sample exercises (isSample === true) can be started.
  */
 export function isStudentAuthorized(
   accessEnabled: boolean,
   expiresAtMs: number,
-  nowMs: number = Date.now()
-): boolean {
-  return accessEnabled === true && nowMs < expiresAtMs;
+  nowMs: number = Date.now(),
+  paymentStatus?: 'approved' | 'pending',
+  isExerciseSample?: boolean
+): { authorized: boolean; reason?: 'blocked' | 'expired' | 'payment_required' } {
+  if (!accessEnabled) {
+    return { authorized: false, reason: 'blocked' };
+  }
+  if (nowMs >= expiresAtMs) {
+    return { authorized: false, reason: 'expired' };
+  }
+  if (paymentStatus === 'pending' && !isExerciseSample) {
+    return { authorized: false, reason: 'payment_required' };
+  }
+  return { authorized: true };
 }
 
 /**
@@ -253,6 +272,13 @@ export const ACCESS_ERRORS = {
     en: 'Your name has not been approved yet. Please contact your teacher.',
     message:
       'ឈ្មោះរបស់អ្នកមិនទាន់ត្រូវបានអនុញ្ញាតទេ។ សូមទាក់ទងគ្រូរបស់អ្នក។ (Your name has not been approved yet. Please contact your teacher.)',
+  },
+  PAYMENT_REQUIRED: {
+    code: 'PAYMENT_REQUIRED',
+    kh: 'ការទូទាត់ប្រាក់មិនទាន់ត្រូវបានអនុម័តទេ។ អ្នកអាចធ្វើបានតែលំហាត់សាកល្បង (Sample Exercise) ប៉ុណ្ណោះ។ សូមទាក់ទងលោកគ្រូដើម្បីអនុម័តការបង់ប្រាក់។',
+    en: 'Payment has not been approved yet. You can only access sample test exercises. Please contact your teacher to approve payment.',
+    message:
+      'ការទូទាត់ប្រាក់មិនទាន់ត្រូវបានអនុម័តទេ។ អ្នកអាចធ្វើបានតែលំហាត់សាកល្បងប៉ុណ្ណោះ។ សូមទាក់ទងលោកគ្រូ។ (Payment approval required to access all exercises. Sample exercises available.)',
   },
   ACCESS_EXPIRED: {
     code: 'ACCESS_EXPIRED',

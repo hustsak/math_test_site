@@ -85,7 +85,8 @@ export async function GET(req: Request) {
       }
 
       const expirationDate = formatCambodiaDate(expiresAtMs);
-      const status = getStudentStatus(accessEnabled, expiresAtMs, now);
+      const paymentStatus = data.paymentStatus || 'approved';
+      const status = getStudentStatus(accessEnabled, expiresAtMs, now, paymentStatus);
       const grade = typeof data.grade === 'number' ? data.grade : (parseInt(data.grade, 10) || 7);
 
       return {
@@ -96,6 +97,8 @@ export async function GET(req: Request) {
         className,
         classKey,
         accessEnabled,
+        paymentStatus,
+        paidAt: data.paidAt || null,
         expiresAt: expiresAtMs,
         expirationDate,
         createdAt,
@@ -221,6 +224,9 @@ export async function POST(req: Request) {
       parentToken = generateToken(24);
     }
 
+    const paymentStatus = body?.paymentStatus === 'pending' ? 'pending' : 'approved';
+    const paidAt = paymentStatus === 'approved' ? nowMs : null;
+
     const newStudentData = {
       name,
       nameKey,
@@ -229,6 +235,8 @@ export async function POST(req: Request) {
       classKey,
       accessEnabled,
       active: accessEnabled,
+      paymentStatus,
+      paidAt,
       expiresAt: expiresAtTimestamp,
       createdAt: nowTimestamp,
       updatedAt: nowTimestamp,
@@ -261,7 +269,7 @@ export async function POST(req: Request) {
       await profileRef.set(newProfile);
     }
 
-    const status = getStudentStatus(accessEnabled, expiresAtMs, nowMs);
+    const status = getStudentStatus(accessEnabled, expiresAtMs, nowMs, paymentStatus);
 
     const createdStudent: StudentAccess = {
       id: docId,
@@ -271,6 +279,8 @@ export async function POST(req: Request) {
       className,
       classKey,
       accessEnabled,
+      paymentStatus,
+      paidAt,
       expiresAt: expiresAtMs,
       expirationDate,
       createdAt: nowMs,

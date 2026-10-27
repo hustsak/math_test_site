@@ -132,6 +132,9 @@ export async function POST(req: Request) {
     const completed: any[] = [];
     const closed: any[] = [];
 
+    const paymentStatus = sData.paymentStatus || 'approved';
+    const isUnpaid = paymentStatus === 'pending';
+
     exercisesSnap.docs.forEach((d) => {
       const ex = d.data() as Exercise;
       const exId = d.id;
@@ -147,6 +150,8 @@ export async function POST(req: Request) {
       const sub = completedSubsMap.get(exId);
       const questionCount = ex.questions?.length || 0;
       const totalPoints = ex.questions?.reduce((s, q) => s + (Number(q.points) || 0), 0) || 0;
+      const isSample = !!ex.isSample;
+      const isLockedForPayment = isUnpaid && !isSample;
 
       if (sub) {
         completed.push({
@@ -160,6 +165,7 @@ export async function POST(req: Request) {
           submittedAt: sub.submittedAt || sub.startedAt,
           late: !!sub.late,
           questionCount,
+          isSample,
         });
         return;
       }
@@ -179,6 +185,8 @@ export async function POST(req: Request) {
           gradeLevels: ex.gradeLevels || [studentGrade],
           questionCount,
           totalPoints,
+          isSample,
+          isLockedForPayment,
         });
       } else if (availability.upcoming) {
         upcoming.push({
@@ -193,6 +201,8 @@ export async function POST(req: Request) {
           gradeLevels: ex.gradeLevels || [studentGrade],
           questionCount,
           totalPoints,
+          isSample,
+          isLockedForPayment,
         });
       } else if (availability.closed) {
         closed.push({
@@ -204,12 +214,18 @@ export async function POST(req: Request) {
           deadline: ex.deadline || null,
           questionCount,
           totalPoints,
+          isSample,
+          isLockedForPayment,
         });
       }
     });
 
-    // Sort availableNow by deadline asc, then created desc
+    // Sort availableNow: sample exercises first, then unlocked first, then deadline asc
     availableNow.sort((a, b) => {
+      if (a.isSample && !b.isSample) return -1;
+      if (!a.isSample && b.isSample) return 1;
+      if (!a.isLockedForPayment && b.isLockedForPayment) return -1;
+      if (a.isLockedForPayment && !b.isLockedForPayment) return 1;
       if (a.deadline && b.deadline) return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
       if (a.deadline) return -1;
       if (b.deadline) return 1;
@@ -234,6 +250,8 @@ export async function POST(req: Request) {
         className: sData.className || null,
         expirationDate: formatCambodiaDate(expiresAtMs),
         parentToken: sData.parentToken || null,
+        studentToken: sData.studentToken || null,
+        paymentStatus,
       },
       availableNow,
       upcoming,

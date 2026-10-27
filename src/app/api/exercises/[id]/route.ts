@@ -34,6 +34,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       shuffleQuestions: !!ex.shuffleQuestions,
       gradeLevels: ex.gradeLevels,
       scheduledPublishAt: ex.scheduledPublishAt,
+      isSample: !!ex.isSample,
       questions: ex.questions.map((q) => ({
         id: q.id,
         prompt: q.prompt,

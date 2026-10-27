@@ -65,22 +65,21 @@ export async function POST(req: Request) {
 
     if (existingDoc.exists) {
       const existingData = existingDoc.data() || {};
+      const studentToken = existingData.studentToken || generateToken(24);
+      const parentToken = existingData.parentToken || generateToken(24);
+      const currentPaymentStatus = existingData.paymentStatus || 'approved';
 
-      // If already exists, update grade/class if provided and ensure active access
+      // If already exists, keep current payment status or default to approved if previously active
       await studentRef.update({
         grade: grade || existingData.grade || 7,
         className: className || existingData.className || null,
         classKey: classKey || existingData.classKey || '',
         accessEnabled: true,
         active: true,
-        expiresAt: expiresAtTimestamp,
+        studentToken,
+        parentToken,
         updatedAt: nowTimestamp,
       });
-
-      const parentToken = existingData.parentToken || generateToken(24);
-      if (!existingData.parentToken) {
-        await studentRef.update({ parentToken });
-      }
 
       return NextResponse.json({
         success: true,
@@ -92,12 +91,15 @@ export async function POST(req: Request) {
           grade: grade || existingData.grade || 7,
           className: className || existingData.className || null,
           expirationDate,
+          paymentStatus: currentPaymentStatus,
+          studentToken,
         },
+        studentToken,
         parentToken,
       });
     }
 
-    // New student record
+    // New student record: default paymentStatus to 'pending'
     const studentToken = generateToken(24);
     let parentToken = generateToken(24);
     while (parentToken === studentToken) {
@@ -112,6 +114,8 @@ export async function POST(req: Request) {
       classKey,
       accessEnabled: true,
       active: true,
+      paymentStatus: 'pending', // Pending payment approval from teacher
+      paidAt: null,
       expiresAt: expiresAtTimestamp,
       createdAt: nowTimestamp,
       updatedAt: nowTimestamp,
@@ -150,14 +154,17 @@ export async function POST(req: Request) {
     return NextResponse.json({
       success: true,
       isExisting: false,
-      message: 'បានចុះឈ្មោះសិស្សថ្មីដោយជោគជ័យ! អ្នកអាចប្រើឈ្មោះនេះដើម្បីចូលធ្វើលំហាត់បានភ្លាមៗ។',
+      message: 'បានចុះឈ្មោះសិស្សថ្មីដោយជោគជ័យ! អ្នកអាចធ្វើលំហាត់សាកល្បង (Sample Test) បានភ្លាមៗ ហើយបន្ទាប់ពីលោកគ្រូអនុម័តការបង់ប្រាក់ អ្នកនឹងអាចធ្វើលំហាត់ទាំងអស់បាន។',
       student: {
         id: docId,
         name,
         grade,
         className,
         expirationDate,
+        paymentStatus: 'pending',
+        studentToken,
       },
+      studentToken,
       parentToken,
     });
   } catch (err: any) {

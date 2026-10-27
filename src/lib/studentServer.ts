@@ -57,11 +57,16 @@ export async function fetchStudentPortalData(rawToken: string): Promise<StudentV
       return true;
     });
 
+    const paymentStatus = student.paymentStatus || 'approved';
+    const isUnpaid = paymentStatus === 'pending';
+
     const now = Date.now();
     const exercises: StudentViewExercise[] = exList.map(({ id, data: ex }) => {
       const sub = submissionMap.get(id);
       const isClosed = !!(ex.deadline && now > new Date(ex.deadline).getTime());
       const isDone = sub?.status === 'submitted';
+      const isSample = !!ex.isSample;
+      const isLockedForPayment = isUnpaid && !isSample;
 
       return {
         id,
@@ -72,14 +77,20 @@ export async function fetchStudentPortalData(rawToken: string): Promise<StudentV
         questionCount: ex.questions.length,
         isClosed,
         isDone,
+        isSample,
+        isLockedForPayment,
         score: sub?.score,
         total: sub?.total,
         submittedAt: sub?.submittedAt,
       };
     });
 
-    // Sort: open & not done first, then done, then closed
+    // Sort: open & sample/not-locked first, then done, then locked, then closed
     exercises.sort((a, b) => {
+      if (a.isSample && !b.isSample) return -1;
+      if (!a.isSample && b.isSample) return 1;
+      if (!a.isLockedForPayment && b.isLockedForPayment) return -1;
+      if (a.isLockedForPayment && !b.isLockedForPayment) return 1;
       if (!a.isDone && b.isDone) return -1;
       if (a.isDone && !b.isDone) return 1;
       if (!a.isClosed && b.isClosed) return -1;
@@ -92,6 +103,8 @@ export async function fetchStudentPortalData(rawToken: string): Promise<StudentV
         id: studentId,
         name: student.name,
         className: student.className || '',
+        paymentStatus,
+        studentToken: token,
       },
       exercises,
     };

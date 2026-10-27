@@ -2662,6 +2662,25 @@ export default function AdminHome() {
                                 </span>
                               )}
 
+                              {/* Sample Free Trial Badge */}
+                              {r.isSample && (
+                                <span
+                                  style={{
+                                    fontSize: '0.72rem',
+                                    fontWeight: 800,
+                                    padding: '2px 8px',
+                                    borderRadius: 6,
+                                    backgroundColor: '#10b981',
+                                    color: '#ffffff',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 3,
+                                  }}
+                                >
+                                  🌟 FREE SAMPLE
+                                </span>
+                              )}
+
                               {/* Publication Status Pill */}
                               {(() => {
                                 const isScheduled = r.published && r.publicationMode === 'scheduled' && r.scheduledPublishAt && new Date(r.scheduledPublishAt).getTime() > Date.now();

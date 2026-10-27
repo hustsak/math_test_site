@@ -42,6 +42,8 @@ export interface Exercise {
   scheduledPublishAt?: string | number | null;
   /** Default: Asia/Phnom_Penh */
   timezone?: string;
+  /** Mark as sample/trial exercise that unpaid/registered students can access */
+  isSample?: boolean;
   questions: Question[];
   createdAt: number;
   updatedAt: number;
@@ -61,6 +63,7 @@ export interface PublicExercise {
   shuffleQuestions?: boolean;
   gradeLevels?: number[];
   scheduledPublishAt?: string | number | null;
+  isSample?: boolean;
   questions: PublicQuestion[];
 }
 
@@ -114,7 +117,7 @@ export interface ProfileWithStats extends Profile {
   lastActivity: number | null;
 }
 
-export type StudentAccessStatus = 'active' | 'expiring_soon' | 'expired' | 'blocked';
+export type StudentAccessStatus = 'active' | 'expiring_soon' | 'expired' | 'blocked' | 'pending_payment';
 
 export interface StudentAccess {
   id: string;
@@ -124,6 +127,8 @@ export interface StudentAccess {
   className: string | null;
   classKey: string;
   accessEnabled: boolean;
+  paymentStatus?: 'approved' | 'pending';
+  paidAt?: number | null;
   expiresAt: number; // UTC ms of exclusive end-of-day boundary
   expirationDate: string; // "YYYY-MM-DD" in Asia/Phnom_Penh
   createdAt: number;
@@ -143,6 +148,9 @@ export interface Student {
   studentToken: string;
   parentToken: string;
   active: boolean;
+  accessEnabled?: boolean;
+  paymentStatus?: 'approved' | 'pending';
+  paidAt?: number | null;
   createdAt: number;
 }
 
@@ -239,6 +247,8 @@ export interface StudentViewExercise {
   questionCount: number;
   isClosed: boolean;
   isDone: boolean;
+  isSample?: boolean;
+  isLockedForPayment?: boolean;
   score?: number;
   total?: number;
   submittedAt?: number;
@@ -249,6 +259,8 @@ export interface StudentViewData {
     id: string;
     name: string;
     className?: string;
+    paymentStatus?: 'approved' | 'pending';
+    studentToken?: string;
   };
   exercises: StudentViewExercise[];
 }

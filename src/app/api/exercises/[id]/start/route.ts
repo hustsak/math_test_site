@@ -137,6 +137,19 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       );
     }
 
+    // 5.1 Verify Payment Approval: if payment is pending, only sample exercises are allowed
+    const paymentStatus = studentData.paymentStatus || 'approved';
+    const isExerciseSample = !!ex.isSample;
+    if (paymentStatus === 'pending' && !isExerciseSample) {
+      return NextResponse.json(
+        {
+          error: ACCESS_ERRORS.PAYMENT_REQUIRED.message,
+          code: ACCESS_ERRORS.PAYMENT_REQUIRED.code,
+        },
+        { status: 403 }
+      );
+    }
+
     // 6. Verify expiration boundary in Cambodia time
     const now = Date.now();
     let expiresAtMs = now + 30 * 24 * 60 * 60 * 1000;

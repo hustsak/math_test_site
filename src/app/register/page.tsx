@@ -15,6 +15,8 @@ import {
   Calendar,
   AlertCircle,
   HelpCircle,
+  Copy,
+  Check,
 } from 'lucide-react';
 
 function StudentRegisterForm() {
@@ -38,7 +40,10 @@ function StudentRegisterForm() {
     grade: number;
     className: string | null;
     expirationDate: string;
+    studentToken?: string;
+    paymentStatus?: 'approved' | 'pending';
   } | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   // Sync theme
   useEffect(() => {
@@ -106,6 +111,8 @@ function StudentRegisterForm() {
         grade: data.student?.grade || grade,
         className: data.student?.className || className.trim() || null,
         expirationDate: data.student?.expirationDate || '',
+        studentToken: data.studentToken || data.student?.studentToken || '',
+        paymentStatus: data.student?.paymentStatus || 'pending',
       });
     } catch (err: any) {
       setError(err?.message || 'Error registering student.');
@@ -232,24 +239,136 @@ function StudentRegisterForm() {
               )}
             </div>
 
-            {/* Crucial Instruction for Next Exercises */}
-            <div
-              style={{
-                backgroundColor: 'rgba(59, 130, 246, 0.08)',
-                border: '1px solid rgba(59, 130, 246, 0.25)',
-                borderRadius: 14,
-                padding: '14px 16px',
-                textAlign: 'left',
-                fontSize: '0.88rem',
-                color: 'var(--theme-navy)',
-                lineHeight: 1.5,
-              }}
-            >
-              <span style={{ fontWeight: 800, display: 'block', marginBottom: 4 }}>
-                💡 ចំណាំសំខាន់សម្រាប់ការចូលធ្វើលំហាត់ ៖
-              </span>
-              សម្រាប់លំហាត់បន្ទាប់ ឬលំហាត់បច្ចុប្បន្ន អ្នកគ្រាន់តែវាយបញ្ចូលឈ្មោះ «<strong>{registeredStudent.name}</strong>» នេះ នោះអ្នកនឹងអាចចូលធ្វើលំហាត់ និងមើលលទ្ធផលបានភ្លាមៗដោយមិនបាច់ចុះឈ្មោះម្ដងទៀតឡើយ!
-            </div>
+            {/* Student's Unique Personal Link Card */}
+            {registeredStudent.studentToken && (
+              <div
+                style={{
+                  backgroundColor: 'rgba(74, 103, 214, 0.08)',
+                  border: '1.5px solid rgba(74, 103, 214, 0.35)',
+                  borderRadius: 16,
+                  padding: '16px 18px',
+                  textAlign: 'left',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontWeight: 800, fontSize: '0.92rem', color: 'var(--theme-navy)' }}>
+                    🔗 តំណផ្ទាល់ខ្លួនរបស់អ្នក (Your Personal Access Link)
+                  </span>
+                  <span
+                    style={{
+                      fontSize: '0.72rem',
+                      fontWeight: 800,
+                      backgroundColor: 'var(--brand)',
+                      color: '#ffffff',
+                      padding: '2px 7px',
+                      borderRadius: 6,
+                    }}
+                  >
+                    SAVE THIS LINK
+                  </span>
+                </div>
+                <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--theme-muted)', lineHeight: 1.4 }}>
+                  អ្នកអាចរក្សាទុក ឬ Bookmark តំណនេះដើម្បីចូលធ្វើលំហាត់ដោយផ្ទាល់បានគ្រប់ពេលវេលាដោយមិនបាច់វាយឈ្មោះម្ដងទៀតឡើយ!
+                </p>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    backgroundColor: 'var(--theme-page-bg)',
+                    borderRadius: 10,
+                    padding: '8px 12px',
+                    border: '1px solid var(--theme-border)',
+                  }}
+                >
+                  <input
+                    type="text"
+                    readOnly
+                    value={typeof window !== 'undefined' ? `${window.location.origin}/s/${registeredStudent.studentToken}` : `/s/${registeredStudent.studentToken}`}
+                    style={{
+                      border: 'none',
+                      background: 'none',
+                      outline: 'none',
+                      fontSize: '0.84rem',
+                      fontFamily: 'monospace',
+                      fontWeight: 700,
+                      color: 'var(--theme-primary)',
+                      flex: 1,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const url = `${window.location.origin}/s/${registeredStudent.studentToken}`;
+                      navigator.clipboard.writeText(url);
+                      setCopiedLink(true);
+                      setTimeout(() => setCopiedLink(false), 2500);
+                    }}
+                    className="btn small"
+                    style={{
+                      padding: '5px 12px',
+                      borderRadius: 8,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      fontSize: '0.8rem',
+                      backgroundColor: copiedLink ? '#059669' : 'var(--theme-primary)',
+                      borderColor: copiedLink ? '#059669' : 'var(--theme-primary)',
+                      color: '#ffffff',
+                    }}
+                  >
+                    {copiedLink ? <Check size={14} /> : <Copy size={14} />}
+                    <span>{copiedLink ? 'បានចម្លង!' : 'ចម្លងតំណ (Copy)'}</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Payment Approval Notice */}
+            {registeredStudent.paymentStatus === 'pending' ? (
+              <div
+                style={{
+                  backgroundColor: 'rgba(234, 88, 12, 0.08)',
+                  border: '1px solid rgba(234, 88, 12, 0.3)',
+                  borderRadius: 14,
+                  padding: '14px 16px',
+                  textAlign: 'left',
+                  fontSize: '0.88rem',
+                  color: 'var(--theme-navy)',
+                  lineHeight: 1.5,
+                }}
+              >
+                <span style={{ fontWeight: 800, color: '#ea580c', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <span>⏳</span>
+                  <span>រង់ចាំការអនុម័តបង់ប្រាក់ (Pending Payment Approval)</span>
+                </span>
+                បច្ចុប្បន្នអ្នកអាចចូលធ្វើ<strong>លំហាត់សាកល្បងឥតគិតថ្លៃ (Sample Test Exercises)</strong> បានភ្លាមៗ។ បន្ទាប់ពីលោកគ្រូបានអនុម័តការបង់ប្រាក់រួច អ្នកនឹងអាចចូលធ្វើលំហាត់ទាំងអស់បានដោយស្វ័យប្រវត្តិ!
+              </div>
+            ) : (
+              /* Crucial Instruction for Next Exercises */
+              <div
+                style={{
+                  backgroundColor: 'rgba(59, 130, 246, 0.08)',
+                  border: '1px solid rgba(59, 130, 246, 0.25)',
+                  borderRadius: 14,
+                  padding: '14px 16px',
+                  textAlign: 'left',
+                  fontSize: '0.88rem',
+                  color: 'var(--theme-navy)',
+                  lineHeight: 1.5,
+                }}
+              >
+                <span style={{ fontWeight: 800, display: 'block', marginBottom: 4 }}>
+                  💡 ចំណាំសំខាន់សម្រាប់ការចូលធ្វើលំហាត់ ៖
+                </span>
+                សម្រាប់លំហាត់បន្ទាប់ ឬលំហាត់បច្ចុប្បន្ន អ្នកគ្រាន់តែវាយបញ្ចូលឈ្មោះ «<strong>{registeredStudent.name}</strong>» ឬប្រើតំណផ្ទាល់ខ្លួនរបស់អ្នក នោះអ្នកនឹងអាចចូលធ្វើលំហាត់ និងមើលលទ្ធផលបានភ្លាមៗ!
+              </div>
+            )}
 
             {/* Actions */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>

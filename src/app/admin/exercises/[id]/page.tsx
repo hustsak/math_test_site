@@ -659,6 +659,47 @@ export default function EditExercise() {
           />
           Show questions in a different order to each student
         </label>
+        <label
+          className="row"
+          style={{
+            fontWeight: 600,
+            padding: '10px 12px',
+            backgroundColor: ex.isSample ? 'rgba(16, 185, 129, 0.08)' : 'var(--card)',
+            border: ex.isSample ? '1.5px solid #10b981' : '1px solid var(--line)',
+            borderRadius: 8,
+            marginTop: 4,
+            cursor: 'pointer',
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={!!ex.isSample}
+            onChange={(e) => set({ isSample: e.target.checked })}
+            style={{ width: 17, height: 17, accentColor: '#10b981' }}
+          />
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ color: ex.isSample ? '#059669' : 'inherit' }}>
+                🌟 លំហាត់សាកល្បងឥតគិតថ្លៃ (Sample Test Case Exercise)
+              </span>
+              <span
+                style={{
+                  fontSize: '0.72rem',
+                  padding: '2px 7px',
+                  borderRadius: 10,
+                  backgroundColor: '#10b981',
+                  color: '#ffffff',
+                  fontWeight: 800,
+                }}
+              >
+                FREE TRIAL
+              </span>
+            </div>
+            <span style={{ fontSize: '0.78rem', color: 'var(--muted)', display: 'block', marginTop: 2, fontWeight: 400 }}>
+              អនុញ្ញាតឱ្យសិស្សដែលទើបចុះឈ្មោះ និងមិនទាន់បានបង់ប្រាក់អាចសាកល្បងធ្វើបាន (Unpaid registered students can access this exercise)
+            </span>
+          </div>
+        </label>
       </div>
 
       {/* 1. AI Exercise Prompt Section */}

@@ -29,8 +29,20 @@ export default async function ParentTrackingPage({
     <>
       <head>
         <meta name="robots" content="noindex,nofollow" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `document.documentElement.setAttribute('data-theme', 'light');`,
+          }}
+        />
       </head>
-      <main style={{ minHeight: '100vh', backgroundColor: 'var(--theme-page-bg, #f6f7f9)' }}>
+      <main
+        data-theme="light"
+        style={{
+          minHeight: '100vh',
+          backgroundColor: '#f8fafc',
+          color: '#1b2240',
+        }}
+      >
         <ParentTrackingView token={params.token} initialData={initialData} />
       </main>
     </>

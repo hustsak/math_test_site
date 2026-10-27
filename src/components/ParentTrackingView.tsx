@@ -98,6 +98,13 @@ export default function ParentTrackingView({
     }
   }
 
+  // Enforce light theme only for Parent Tracking
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-theme', 'light');
+    }
+  }, []);
+
   useEffect(() => {
     if (!initialData) {
       try {

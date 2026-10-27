@@ -78,8 +78,12 @@ export default function AdminStudentsPage() {
   const [formClass, setFormClass] = useState('');
   const [formExpiration, setFormExpiration] = useState('');
   const [formAccessEnabled, setFormAccessEnabled] = useState(true);
+  const [formPaymentStatus, setFormPaymentStatus] = useState<'approved' | 'pending'>('approved');
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
+
+  // Payment Quick Approval state
+  const [paymentTogglingId, setPaymentTogglingId] = useState<string | null>(null);
 
   // Extension Modal state
   const [customExtDate, setCustomExtDate] = useState('');
@@ -182,6 +186,7 @@ export default function AdminStudentsPage() {
     setFormClass('');
     setFormExpiration(getDefaultExpirationDate());
     setFormAccessEnabled(true);
+    setFormPaymentStatus('approved');
     setFormError('');
     setShowAddModal(true);
   }
@@ -193,6 +198,7 @@ export default function AdminStudentsPage() {
     setFormClass(s.className || '');
     setFormExpiration(s.expirationDate);
     setFormAccessEnabled(s.accessEnabled);
+    setFormPaymentStatus(s.paymentStatus || 'approved');
     setFormError('');
   }
 
@@ -217,6 +223,36 @@ export default function AdminStudentsPage() {
     }
   }
 
+  // Quick Toggle Payment Approval directly from table
+  async function handleTogglePaymentApproval(s: StudentAccess) {
+    const nextStatus = s.paymentStatus === 'pending' ? 'approved' : 'pending';
+    setPaymentTogglingId(s.id);
+    try {
+      const token = await user?.getIdToken();
+      const res = await fetch(`/api/admin/students/${s.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ paymentStatus: nextStatus }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update payment status.');
+
+      showToast(
+        nextStatus === 'approved'
+          ? (lang === 'KH' ? `✓ បានអនុម័តការបង់ប្រាក់សម្រាប់ "${s.name}"!` : `Payment approved for "${s.name}"!`)
+          : (lang === 'KH' ? `បានប្ដូរ "${s.name}" ទៅរង់ចាំបង់ប្រាក់` : `Set "${s.name}" to pending payment.`)
+      );
+      loadStudents();
+    } catch (err: any) {
+      alert(err?.message || 'Error updating payment status.');
+    } finally {
+      setPaymentTogglingId(null);
+    }
+  }
+
   // Submit Add Student
   async function handleAddSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -238,6 +274,7 @@ export default function AdminStudentsPage() {
         className: formClass.trim() || null,
         expirationDate: formExpiration,
         accessEnabled: formAccessEnabled,
+        paymentStatus: formPaymentStatus,
       });
 
       if (res.warning) {
@@ -289,6 +326,7 @@ export default function AdminStudentsPage() {
           className: formClass.trim() || null,
           expirationDate: formExpiration,
           accessEnabled: formAccessEnabled,
+          paymentStatus: formPaymentStatus,
         }),
       });
 
@@ -596,6 +634,26 @@ export default function AdminStudentsPage() {
           >
             <XCircle size={13} />
             <span>{lang === 'KH' ? 'ផុតកំណត់ (Expired)' : 'Expired'}</span>
+          </span>
+        );
+      case 'pending_payment':
+        return (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+              padding: '4px 10px',
+              borderRadius: 20,
+              fontSize: '0.8rem',
+              fontWeight: 800,
+              backgroundColor: 'rgba(234, 88, 12, 0.14)',
+              color: '#ea580c',
+              border: '1px solid rgba(234, 88, 12, 0.35)',
+            }}
+          >
+            <span>⏳</span>
+            <span>{lang === 'KH' ? 'រង់ចាំបង់ប្រាក់ (Pending Payment)' : 'Pending Payment'}</span>
           </span>
         );
       case 'blocked':
@@ -1211,11 +1269,76 @@ export default function AdminStudentsPage() {
                             transition: 'background-color 0.1s ease',
                           }}
                         >
-                          {/* Student Name */}
+                          {/* Student Name & Unique Link */}
                           <td style={{ padding: '14px 18px' }}>
-                            <div style={{ fontWeight: 800, color: 'var(--theme-navy)', fontSize: '0.95rem' }}>
-                              {s.name}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                              <span style={{ fontWeight: 800, color: 'var(--theme-navy)', fontSize: '0.95rem' }}>
+                                {s.name}
+                              </span>
+                              {s.paymentStatus === 'pending' && (
+                                <span
+                                  style={{
+                                    fontSize: '0.72rem',
+                                    fontWeight: 800,
+                                    padding: '2px 7px',
+                                    borderRadius: 6,
+                                    backgroundColor: 'rgba(234, 88, 12, 0.12)',
+                                    color: '#ea580c',
+                                    border: '1px solid rgba(234, 88, 12, 0.3)',
+                                  }}
+                                >
+                                  ⏳ {lang === 'KH' ? 'មិនទាន់បង់ប្រាក់' : 'Unpaid'}
+                                </span>
+                              )}
                             </div>
+                            {/* Student's unique link preview & copy */}
+                            {s.studentToken && (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                                <span
+                                  style={{
+                                    fontFamily: 'monospace',
+                                    fontSize: '0.74rem',
+                                    backgroundColor: 'var(--theme-page-bg)',
+                                    padding: '2px 6px',
+                                    borderRadius: 6,
+                                    color: 'var(--theme-primary)',
+                                    border: '1px solid var(--theme-border-subtle)',
+                                  }}
+                                >
+                                  /s/{s.studentToken.slice(0, 8)}…
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const fullUrl = `${window.location.origin}/s/${s.studentToken}`;
+                                    navigator.clipboard.writeText(fullUrl);
+                                    showToast(lang === 'KH' ? `បានចម្លងតំណសិស្ស ${s.name}!` : `Copied student link for ${s.name}!`);
+                                  }}
+                                  title={lang === 'KH' ? 'ចម្លងតំណសិស្ស' : 'Copy Student Link'}
+                                  style={{
+                                    border: 'none',
+                                    background: 'none',
+                                    padding: '2px 4px',
+                                    cursor: 'pointer',
+                                    color: 'var(--theme-primary)',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    borderRadius: 4,
+                                  }}
+                                >
+                                  <Copy size={13} />
+                                </button>
+                                <a
+                                  href={`/s/${s.studentToken}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title={lang === 'KH' ? 'បើកមើលមជ្ឈមណ្ឌលសិស្ស' : 'Open Student Portal'}
+                                  style={{ color: 'var(--theme-muted)', display: 'inline-flex', alignItems: 'center' }}
+                                >
+                                  <ExternalLink size={12} />
+                                </a>
+                              </div>
+                            )}
                             {s.lastActivityAt && (
                               <div style={{ fontSize: '0.74rem', color: 'var(--theme-muted)', marginTop: 2 }}>
                                 <span>{lang === 'KH' ? 'សកម្មភាពចុងក្រោយ ៖ ' : 'Last activity: '}</span>
@@ -1306,6 +1429,43 @@ export default function AdminStudentsPage() {
                               >
                                 <Clock size={14} />
                                 <span>{lang === 'KH' ? 'ប្រវត្តិ' : 'History'}</span>
+                              </button>
+
+                              {/* Quick Approve / Revoke Payment Button */}
+                              <button
+                                type="button"
+                                disabled={paymentTogglingId === s.id}
+                                onClick={() => handleTogglePaymentApproval(s)}
+                                title={
+                                  s.paymentStatus === 'pending'
+                                    ? (lang === 'KH' ? 'ចុចដើម្បីអនុម័តការបង់ប្រាក់ (Approve Payment)' : 'Approve Payment')
+                                    : (lang === 'KH' ? 'បានបង់ប្រាក់ហើយ (ចុចដើម្បីប្ដូរទៅរង់ចាំ)' : 'Payment Approved (Click to revoke)')
+                                }
+                                style={{
+                                  padding: '6px 10px',
+                                  borderRadius: 8,
+                                  border: s.paymentStatus === 'pending' ? '1px solid #ea580c' : '1px solid var(--theme-border)',
+                                  backgroundColor: s.paymentStatus === 'pending' ? 'rgba(234, 88, 12, 0.12)' : 'var(--theme-page-bg)',
+                                  color: s.paymentStatus === 'pending' ? '#ea580c' : '#059669',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  fontSize: '0.8rem',
+                                  fontWeight: 800,
+                                }}
+                              >
+                                {s.paymentStatus === 'pending' ? (
+                                  <>
+                                    <span>💳</span>
+                                    <span>{lang === 'KH' ? 'អនុម័ត' : 'Approve'}</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <CheckCircle2 size={14} color="#059669" />
+                                    <span>{lang === 'KH' ? 'បានបង់' : 'Paid'}</span>
+                                  </>
+                                )}
                               </button>
 
                               {/* Extend Button */}
@@ -1812,6 +1972,40 @@ export default function AdminStudentsPage() {
                 </span>
               </label>
 
+              {/* Payment Approval Toggle */}
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  cursor: 'pointer',
+                  padding: '8px 10px',
+                  borderRadius: 10,
+                  backgroundColor: formPaymentStatus === 'approved' ? 'rgba(16, 185, 129, 0.08)' : 'rgba(234, 88, 12, 0.08)',
+                  border: formPaymentStatus === 'approved' ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(234, 88, 12, 0.3)',
+                  userSelect: 'none',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={formPaymentStatus === 'approved'}
+                  onChange={(e) => setFormPaymentStatus(e.target.checked ? 'approved' : 'pending')}
+                  style={{ width: 17, height: 17, accentColor: '#10b981', cursor: 'pointer' }}
+                />
+                <div>
+                  <span style={{ fontSize: '0.88rem', fontWeight: 700, color: formPaymentStatus === 'approved' ? '#059669' : '#ea580c' }}>
+                    {formPaymentStatus === 'approved'
+                      ? (lang === 'KH' ? '✓ បានអនុម័តការបង់ប្រាក់ (Payment Approved)' : 'Payment Approved — Full Access')
+                      : (lang === 'KH' ? '⏳ មិនទាន់បង់ប្រាក់ (Pending Payment — Sample Only)' : 'Pending Payment — Sample Only')}
+                  </span>
+                  <span style={{ display: 'block', fontSize: '0.74rem', color: 'var(--theme-muted)' }}>
+                    {formPaymentStatus === 'approved'
+                      ? (lang === 'KH' ? 'សិស្សអាចធ្វើលំហាត់ទាំងអស់បាន' : 'Student can access all published exercises')
+                      : (lang === 'KH' ? 'សិស្សអាចធ្វើបានតែលំហាត់សាកល្បងប៉ុណ្ណោះ' : 'Student can only access sample exercises')}
+                  </span>
+                </div>
+              </label>
+
               {/* Note on Name-only access */}
               <div style={{ fontSize: '0.76rem', color: 'var(--theme-muted)', lineHeight: 1.4 }}>
                 ℹ️ {lang === 'KH'
@@ -2036,6 +2230,40 @@ export default function AdminStudentsPage() {
                 <span style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--theme-navy)' }}>
                   {lang === 'KH' ? 'បើកដំណើរការការចូលប្រើ (Access Enabled)' : 'Access Enabled'}
                 </span>
+              </label>
+
+              {/* Payment Approval Toggle */}
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  cursor: 'pointer',
+                  padding: '8px 10px',
+                  borderRadius: 10,
+                  backgroundColor: formPaymentStatus === 'approved' ? 'rgba(16, 185, 129, 0.08)' : 'rgba(234, 88, 12, 0.08)',
+                  border: formPaymentStatus === 'approved' ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(234, 88, 12, 0.3)',
+                  userSelect: 'none',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={formPaymentStatus === 'approved'}
+                  onChange={(e) => setFormPaymentStatus(e.target.checked ? 'approved' : 'pending')}
+                  style={{ width: 17, height: 17, accentColor: '#10b981', cursor: 'pointer' }}
+                />
+                <div>
+                  <span style={{ fontSize: '0.88rem', fontWeight: 700, color: formPaymentStatus === 'approved' ? '#059669' : '#ea580c' }}>
+                    {formPaymentStatus === 'approved'
+                      ? (lang === 'KH' ? '✓ បានអនុម័តការបង់ប្រាក់ (Payment Approved)' : 'Payment Approved — Full Access')
+                      : (lang === 'KH' ? '⏳ មិនទាន់បង់ប្រាក់ (Pending Payment — Sample Only)' : 'Pending Payment — Sample Only')}
+                  </span>
+                  <span style={{ display: 'block', fontSize: '0.74rem', color: 'var(--theme-muted)' }}>
+                    {formPaymentStatus === 'approved'
+                      ? (lang === 'KH' ? 'សិស្សអាចធ្វើលំហាត់ទាំងអស់បាន' : 'Student can access all published exercises')
+                      : (lang === 'KH' ? 'សិស្សអាចធ្វើបានតែលំហាត់សាកល្បងប៉ុណ្ណោះ' : 'Student can only access sample exercises')}
+                  </span>
+                </div>
               </label>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
