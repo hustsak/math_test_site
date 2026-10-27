@@ -532,9 +532,7 @@ function StudentRegisterForm() {
                     </option>
                   ))}
                 </select>
-                <span style={{ fontSize: '0.78rem', color: 'var(--theme-muted)', marginTop: 4, display: 'block' }}>
-                  សិស្សម្នាក់ៗអាចជ្រើសរើសបានតែ ១ កម្រិតថ្នាក់ប៉ុណ្ណោះពេលចុះឈ្មោះ (លោកគ្រូអ្នកគ្រូអាចបន្ថែមថ្នាក់ទី ២ ជូននៅពេលក្រោយ)។
-                </span>
+
               </div>
 
 
