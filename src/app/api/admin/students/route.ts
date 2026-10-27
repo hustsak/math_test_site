@@ -88,7 +88,7 @@ export async function GET(req: Request) {
       const paymentStatus = data.paymentStatus || 'approved';
       const status = getStudentStatus(accessEnabled, expiresAtMs, now, paymentStatus);
       const rawGrades = Array.isArray(data.grades) && data.grades.length > 0
-        ? data.grades.map((g: any) => parseInt(g, 10)).filter((g: number) => !isNaN(g) && g >= 7 && g <= 12)
+        ? data.grades.map((g: any) => parseInt(g, 10)).filter((g: number) => !isNaN(g) && g >= 1 && g <= 30)
         : null;
       const grade = typeof data.grade === 'number' ? data.grade : (parseInt(data.grade, 10) || (rawGrades ? rawGrades[0] : 7));
       const grades = rawGrades && rawGrades.length > 0 ? Array.from(new Set(rawGrades)) : [grade];
@@ -161,11 +161,11 @@ export async function POST(req: Request) {
         new Set(
           body.grades
             .map((g: any) => parseInt(g, 10))
-            .filter((g: number) => !isNaN(g) && g >= 7 && g <= 12)
+            .filter((g: number) => !isNaN(g) && g >= 1 && g <= 30)
         )
       );
     }
-    const singleGrade = Math.min(12, Math.max(7, parseInt(body?.grade, 10) || 7));
+    const singleGrade = Math.min(30, Math.max(1, parseInt(body?.grade, 10) || 7));
     if (parsedGrades.length === 0) {
       parsedGrades = [singleGrade];
     }

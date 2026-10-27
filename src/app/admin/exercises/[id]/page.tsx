@@ -129,8 +129,22 @@ export default function EditExercise() {
   const [viewMode, setViewMode] = useState<'published' | 'edit'>('published');
   const [customChapters, setCustomChapters] = useState<string[]>([]);
   const [customTopics, setCustomTopics] = useState<string[]>([]);
+  const [customGrades, setCustomGrades] = useState<number[]>([7, 8, 9, 10, 11, 12]);
 
   const [origin, setOrigin] = useState('');
+
+  useEffect(() => {
+    getDoc(doc(getDb(), 'settings', 'app'))
+      .then((s) => {
+        if (s.exists()) {
+          const data = s.data();
+          if (Array.isArray(data.customGrades) && data.customGrades.length > 0) {
+            setCustomGrades(data.customGrades);
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -212,7 +226,7 @@ export default function EditExercise() {
           let gradeLevels = prev.gradeLevels;
           if (gParam) {
             const gNum = Number(gParam);
-            if (gNum >= 7 && gNum <= 12) gradeLevels = [gNum];
+            if (!isNaN(gNum) && gNum >= 1 && gNum <= 30) gradeLevels = [gNum];
           }
           return {
             ...prev,
@@ -680,18 +694,19 @@ export default function EditExercise() {
               style={{ fontSize: '0.78rem', padding: '3px 8px' }}
               onClick={() => {
                 const current = ex.gradeLevels || [];
-                if (current.length === 6) {
-                  set({ gradeLevels: [7] });
+                const allActive = customGrades.length > 0 ? customGrades : [7, 8, 9, 10, 11, 12];
+                if (current.length === allActive.length) {
+                  set({ gradeLevels: [allActive[0]] });
                 } else {
-                  set({ gradeLevels: [7, 8, 9, 10, 11, 12] });
+                  set({ gradeLevels: [...allActive] });
                 }
               }}
             >
-              {(ex.gradeLevels?.length ?? 6) === 6 ? 'ជ្រើសរើសថ្នាក់តែមួយ' : 'គ្រប់កម្រិតថ្នាក់ (7–12)'}
+              {(ex.gradeLevels?.length ?? (customGrades.length || 6)) === (customGrades.length || 6) ? 'ជ្រើសរើសថ្នាក់តែមួយ' : 'គ្រប់កម្រិតថ្នាក់'}
             </button>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {[7, 8, 9, 10, 11, 12].map((g) => {
+            {(customGrades.length > 0 ? customGrades : [7, 8, 9, 10, 11, 12]).map((g) => {
               const selected = (ex.gradeLevels && ex.gradeLevels.length > 0) ? ex.gradeLevels.includes(g) : true;
               return (
                 <label
@@ -715,7 +730,8 @@ export default function EditExercise() {
                     type="checkbox"
                     checked={selected}
                     onChange={(e) => {
-                      const current = ex.gradeLevels && ex.gradeLevels.length > 0 ? [...ex.gradeLevels] : [7, 8, 9, 10, 11, 12];
+                      const fallback = customGrades.length > 0 ? customGrades : [7, 8, 9, 10, 11, 12];
+                      const current = ex.gradeLevels && ex.gradeLevels.length > 0 ? [...ex.gradeLevels] : [...fallback];
                       if (e.target.checked) {
                         if (!current.includes(g)) current.push(g);
                       } else {

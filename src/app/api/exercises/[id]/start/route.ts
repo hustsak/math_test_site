@@ -173,7 +173,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     }
 
     const rawGrades = Array.isArray(studentData.grades) && studentData.grades.length > 0
-      ? studentData.grades.map((g: any) => parseInt(g, 10)).filter((g: number) => !isNaN(g) && g >= 7 && g <= 12)
+      ? studentData.grades.map((g: any) => parseInt(g, 10)).filter((g: number) => !isNaN(g) && g >= 1 && g <= 30)
       : null;
     const defaultGrade = typeof studentData.grade === 'number' ? studentData.grade : (parseInt(studentData.grade, 10) || (rawGrades ? rawGrades[0] : 7));
     const enrolledGrades: number[] = rawGrades && rawGrades.length > 0 ? Array.from(new Set(rawGrades)) : [defaultGrade];

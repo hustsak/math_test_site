@@ -3,6 +3,8 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { doc, getDoc } from 'firebase/firestore';
+import { getDb } from '@/lib/firebaseClient';
 import {
   UserPlus,
   CheckCircle2,
@@ -35,6 +37,10 @@ function StudentRegisterForm() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
+  // Settings
+  const [customGrades, setCustomGrades] = useState<number[]>([7, 8, 9, 10, 11, 12]);
+  const [customClasses, setCustomClasses] = useState<string[]>([]);
+
   // Success state
   const [registeredStudent, setRegisteredStudent] = useState<{
     name: string;
@@ -46,7 +52,24 @@ function StudentRegisterForm() {
   } | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
 
-  // Sync theme
+  // Sync theme & settings
+  useEffect(() => {
+    getDoc(doc(getDb(), 'settings', 'app'))
+      .then((s) => {
+        if (s.exists()) {
+          const data = s.data();
+          if (Array.isArray(data.customGrades) && data.customGrades.length > 0) {
+            setCustomGrades(data.customGrades);
+            setGrade((prev) => (data.customGrades.includes(prev) ? prev : data.customGrades[0]));
+          }
+          if (Array.isArray(data.customClasses)) {
+            setCustomClasses(data.customClasses);
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     const saved = localStorage.getItem('mathtest_theme') as 'light' | 'dark' | null;
     if (saved) {
@@ -589,7 +612,7 @@ function StudentRegisterForm() {
                     cursor: 'pointer',
                   }}
                 >
-                  {[7, 8, 9, 10, 11, 12].map((g) => (
+                  {(customGrades.length > 0 ? customGrades : [7, 8, 9, 10, 11, 12]).map((g) => (
                     <option key={g} value={g}>
                       ថ្នាក់ទី {g} (Grade {g})
                     </option>
@@ -607,6 +630,7 @@ function StudentRegisterForm() {
                 </div>
                 <input
                   type="text"
+                  list="registered-classes-list"
                   value={className}
                   onChange={(e) => setClassName(e.target.value)}
                   placeholder="ឧទាហរណ៍៖ 12A, 12B, ក្រុមពេលល្ងាច, Math Olympiad"
@@ -624,6 +648,13 @@ function StudentRegisterForm() {
                     boxSizing: 'border-box',
                   }}
                 />
+                {customClasses.length > 0 && (
+                  <datalist id="registered-classes-list">
+                    {customClasses.map((c) => (
+                      <option key={c} value={c} />
+                    ))}
+                  </datalist>
+                )}
                 <span style={{ fontSize: '0.76rem', color: 'var(--theme-muted)', marginTop: 4, display: 'block' }}>
                   ជួយលោកគ្រូចែកក្រុម និងស្រង់ពិន្ទុតាមបន្ទប់ ឬក្រុមរៀនបានយ៉ាងងាយស្រួល។
                 </span>

@@ -133,6 +133,15 @@ export default function AdminHome() {
   const [addTeacherSuccess, setAddTeacherSuccess] = useState('');
   const [addTeacherBusy, setAddTeacherBusy] = useState(false);
 
+  // Dynamic Grades & Classes Management
+  const [customGrades, setCustomGrades] = useState<number[]>([7, 8, 9, 10, 11, 12]);
+  const [customClasses, setCustomClasses] = useState<string[]>([]);
+  const [showManageModal, setShowManageModal] = useState(false);
+  const [newGradeInput, setNewGradeInput] = useState<string>('');
+  const [newClassInput, setNewClassInput] = useState<string>('');
+  const [gradeClassBusy, setGradeClassBusy] = useState(false);
+  const [gradeDeleteConfirm, setGradeDeleteConfirm] = useState<number | null>(null);
+
   // Toast feedback
   const [toastMsg, setToastMsg] = useState('');
 
@@ -237,7 +246,14 @@ export default function AdminHome() {
       }
 
       if (settingsSnap && settingsSnap.exists()) {
-        setShowClassAverage(!!settingsSnap.data()?.showClassAverageToParents);
+        const sData = settingsSnap.data() || {};
+        setShowClassAverage(!!sData.showClassAverageToParents);
+        if (Array.isArray(sData.customGrades) && sData.customGrades.length > 0) {
+          setCustomGrades(sData.customGrades);
+        }
+        if (Array.isArray(sData.customClasses)) {
+          setCustomClasses(sData.customClasses);
+        }
       }
     } catch (err: any) {
       setDataError(err?.message || 'Could not load data.');
@@ -253,6 +269,86 @@ export default function AdminHome() {
       showToast(val ? 'Class average is now visible to parents' : 'Class average hidden from parents');
     } catch (e: any) {
       alert('Failed to update setting: ' + (e?.message || 'Error'));
+    }
+  }
+
+  async function handleAddGrade(gNumber: number) {
+    if (isNaN(gNumber) || gNumber < 1 || gNumber > 30) {
+      alert(lang === 'KH' ? 'សូមបញ្ចូលកម្រិតថ្នាក់ត្រឹមត្រូវ (1–30)' : 'Please enter a valid grade number (1–30)');
+      return;
+    }
+    if (customGrades.includes(gNumber)) {
+      alert(lang === 'KH' ? `ថ្នាក់ទី ${gNumber} មានរួចរាល់ហើយ!` : `Grade ${gNumber} already exists!`);
+      return;
+    }
+    const nextGrades = [...customGrades, gNumber].sort((a, b) => a - b);
+    setGradeClassBusy(true);
+    try {
+      await adminPost('/api/admin/settings', { customGrades: nextGrades });
+      setCustomGrades(nextGrades);
+      setNewGradeInput('');
+      showToast(lang === 'KH' ? `បានបន្ថែម ថ្នាក់ទី ${gNumber} ជោគជ័យ!` : `Grade ${gNumber} added successfully!`);
+    } catch (e: any) {
+      alert('Failed to save grade: ' + (e?.message || 'Error'));
+    } finally {
+      setGradeClassBusy(false);
+    }
+  }
+
+  async function handleRemoveGrade(gNumber: number) {
+    if (customGrades.length <= 1) {
+      alert(lang === 'KH' ? 'អ្នកត្រូវទុកយ៉ាងហោចណាស់កម្រិតថ្នាក់ ១ ក្នុងប្រព័ន្ធ!' : 'You must keep at least 1 grade folder in the system!');
+      return;
+    }
+    const nextGrades = customGrades.filter((g) => g !== gNumber);
+    setGradeClassBusy(true);
+    try {
+      await adminPost('/api/admin/settings', { customGrades: nextGrades });
+      setCustomGrades(nextGrades);
+      if (gradeFilter === String(gNumber)) {
+        setGradeFilter('all');
+      }
+      setGradeDeleteConfirm(null);
+      showToast(lang === 'KH' ? `បានលុប ថ្នាក់ទី ${gNumber} រួចរាល់!` : `Grade ${gNumber} removed!`);
+    } catch (e: any) {
+      alert('Failed to delete grade: ' + (e?.message || 'Error'));
+    } finally {
+      setGradeClassBusy(false);
+    }
+  }
+
+  async function handleAddClass(name: string) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    if (customClasses.some((c) => c.toLowerCase() === trimmed.toLowerCase())) {
+      alert(lang === 'KH' ? `ឈ្មោះបន្ទប់/ថ្នាក់ "${trimmed}" មានរួចហើយ!` : `Class "${trimmed}" already exists!`);
+      return;
+    }
+    const nextClasses = [...customClasses, trimmed];
+    setGradeClassBusy(true);
+    try {
+      await adminPost('/api/admin/settings', { customClasses: nextClasses });
+      setCustomClasses(nextClasses);
+      setNewClassInput('');
+      showToast(lang === 'KH' ? `បានបន្ថែមបន្ទប់/ថ្នាក់ "${trimmed}" ជោគជ័យ!` : `Class "${trimmed}" added!`);
+    } catch (e: any) {
+      alert('Failed to save class: ' + (e?.message || 'Error'));
+    } finally {
+      setGradeClassBusy(false);
+    }
+  }
+
+  async function handleRemoveClass(name: string) {
+    const nextClasses = customClasses.filter((c) => c !== name);
+    setGradeClassBusy(true);
+    try {
+      await adminPost('/api/admin/settings', { customClasses: nextClasses });
+      setCustomClasses(nextClasses);
+      showToast(lang === 'KH' ? `បានលុបបន្ទប់/ថ្នាក់ "${name}" រួចរាល់!` : `Class "${name}" removed!`);
+    } catch (e: any) {
+      alert('Failed to delete class: ' + (e?.message || 'Error'));
+    } finally {
+      setGradeClassBusy(false);
     }
   }
 
@@ -508,15 +604,39 @@ export default function AdminHome() {
       });
   }, [exercises]);
 
-  // 6 Permanent Grade Folders definition
-  const GRADE_FOLDERS = [
-    { grade: 7, labelKh: 'ថ្នាក់ទី ៧', labelEn: 'Grade 7', color: '#2563eb', bg: 'rgba(37, 99, 235, 0.08)' },
-    { grade: 8, labelKh: 'ថ្នាក់ទី ៨', labelEn: 'Grade 8', color: '#7c3aed', bg: 'rgba(124, 58, 237, 0.08)' },
-    { grade: 9, labelKh: 'ថ្នាក់ទី ៩', labelEn: 'Grade 9', color: '#db2777', bg: 'rgba(219, 39, 119, 0.08)' },
-    { grade: 10, labelKh: 'ថ្នាក់ទី ១០', labelEn: 'Grade 10', color: '#059669', bg: 'rgba(5, 150, 105, 0.08)' },
-    { grade: 11, labelKh: 'ថ្នាក់ទី ១១', labelEn: 'Grade 11', color: '#d97706', bg: 'rgba(217, 119, 6, 0.08)' },
-    { grade: 12, labelKh: 'ថ្នាក់ទី ១២', labelEn: 'Grade 12', color: '#dc2626', bg: 'rgba(220, 38, 38, 0.08)' },
+  // Dynamic Grade Folders definition with rotating palette
+  const GRADE_PALETTE = [
+    '#2563eb', // Blue
+    '#7c3aed', // Purple
+    '#db2777', // Pink
+    '#059669', // Emerald
+    '#d97706', // Amber
+    '#dc2626', // Red
+    '#0284c7', // Sky
+    '#9333ea', // Violet
+    '#e11d48', // Rose
+    '#0d9488', // Teal
   ];
+
+  const KHMER_DIGITS: Record<string, string> = {
+    '0': '០', '1': '១', '2': '២', '3': '៣', '4': '៤',
+    '5': '៥', '6': '៦', '7': '៧', '8': '៨', '9': '៩',
+  };
+
+  const GRADE_FOLDERS = useMemo(() => {
+    const list = customGrades.length > 0 ? customGrades : [7, 8, 9, 10, 11, 12];
+    return list.map((g, idx) => {
+      const color = GRADE_PALETTE[idx % GRADE_PALETTE.length];
+      const khmerNum = String(g).split('').map((ch) => KHMER_DIGITS[ch] || ch).join('');
+      return {
+        grade: g,
+        labelKh: `ថ្នាក់ទី ${khmerNum}`,
+        labelEn: `Grade ${g}`,
+        color,
+        bg: `${color}14`, // ~8% opacity
+      };
+    });
+  }, [customGrades]);
 
   // Chapter list for current grade filter
   const availableChapters = useMemo(() => {
@@ -2322,7 +2442,7 @@ export default function AdminHome() {
               >
                 {/* 6 Permanent Grade Folders */}
                 <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <Folder size={22} color="var(--theme-primary)" />
                       <div>
@@ -2334,19 +2454,41 @@ export default function AdminHome() {
                         </span>
                       </div>
                     </div>
-                    {gradeFilter !== 'all' && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                       <button
                         type="button"
-                        onClick={() => {
-                          setGradeFilter('all');
-                          setSelectedChapter('all');
+                        onClick={() => setShowManageModal(true)}
+                        className="btn small"
+                        style={{
+                          fontSize: '0.82rem',
+                          borderRadius: 10,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          backgroundColor: 'var(--theme-primary)',
+                          color: '#fff',
+                          fontWeight: 700,
+                          border: 'none',
+                          padding: '6px 12px',
                         }}
-                        className="btn small secondary"
-                        style={{ fontSize: '0.82rem', borderRadius: 10, display: 'inline-flex', alignItems: 'center', gap: 6 }}
                       >
-                        ← {lang === 'KH' ? 'មើលគ្រប់ថតទាំងអស់' : 'View All Folders'}
+                        <Plus size={15} />
+                        {lang === 'KH' ? '+ បន្ថែម / ចាត់ចែងថ្នាក់' : '+ Add / Manage Grade & Class'}
                       </button>
-                    )}
+                      {gradeFilter !== 'all' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setGradeFilter('all');
+                            setSelectedChapter('all');
+                          }}
+                          className="btn small secondary"
+                          style={{ fontSize: '0.82rem', borderRadius: 10, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                        >
+                          ← {lang === 'KH' ? 'មើលគ្រប់ថតទាំងអស់' : 'View All Folders'}
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
@@ -2364,15 +2506,6 @@ export default function AdminHome() {
                       return (
                         <div
                           key={gf.grade}
-                          onClick={() => {
-                            if (isOpen) {
-                              setGradeFilter('all');
-                              setSelectedChapter('all');
-                            } else {
-                              setGradeFilter(String(gf.grade));
-                              setSelectedChapter('all');
-                            }
-                          }}
                           style={{
                             padding: '14px 14px',
                             borderRadius: 14,
@@ -2384,24 +2517,69 @@ export default function AdminHome() {
                             flexDirection: 'column',
                             gap: 8,
                             boxShadow: isOpen ? `0 4px 14px ${gf.color}25` : 'none',
+                            position: 'relative',
+                          }}
+                          onClick={() => {
+                            if (isOpen) {
+                              setGradeFilter('all');
+                              setSelectedChapter('all');
+                            } else {
+                              setGradeFilter(String(gf.grade));
+                              setSelectedChapter('all');
+                            }
                           }}
                         >
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                               {isOpen ? (
-                                <FolderOpen size={24} color={gf.color} />
+                                <FolderOpen size={24} color={gf.color} style={{ flexShrink: 0 }} />
                               ) : (
-                                <Folder size={24} color={gf.color} />
+                                <Folder size={24} color={gf.color} style={{ flexShrink: 0 }} />
                               )}
-                              <span style={{ fontWeight: 800, fontSize: '0.98rem', color: 'var(--theme-navy)' }}>
+                              <span style={{ fontWeight: 800, fontSize: '0.98rem', color: 'var(--theme-navy)', whiteSpace: 'nowrap' }}>
                                 {lang === 'KH' ? gf.labelKh : gf.labelEn}
                               </span>
                             </div>
-                            {isOpen && (
-                              <span style={{ fontSize: '0.7rem', fontWeight: 800, color: gf.color, backgroundColor: 'rgba(255,255,255,0.85)', padding: '2px 6px', borderRadius: 6 }}>
-                                កំពុងបើក
-                              </span>
-                            )}
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              {isOpen && (
+                                <span style={{ fontSize: '0.7rem', fontWeight: 800, color: gf.color, backgroundColor: 'rgba(255,255,255,0.85)', padding: '2px 6px', borderRadius: 6 }}>
+                                  កំពុងបើក
+                                </span>
+                              )}
+                              {/* Quick Delete Grade Folder Button */}
+                              <button
+                                type="button"
+                                title={lang === 'KH' ? `លុប ${gf.labelKh}` : `Delete ${gf.labelEn}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setGradeDeleteConfirm(gf.grade);
+                                }}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  padding: '4px',
+                                  borderRadius: 6,
+                                  cursor: 'pointer',
+                                  color: 'var(--theme-muted)',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  opacity: 0.6,
+                                  transition: 'opacity 0.15s ease, color 0.15s ease',
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.opacity = '1';
+                                  e.currentTarget.style.color = '#ef4444';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.opacity = '0.6';
+                                  e.currentTarget.style.color = 'var(--theme-muted)';
+                                }}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
                           </div>
 
                           <div style={{ fontSize: '0.78rem', color: 'var(--theme-muted)', display: 'flex', justifyContent: 'space-between' }}>
@@ -3991,7 +4169,7 @@ export default function AdminHome() {
                   {lang === 'KH' ? '១. កម្រិតថ្នាក់ (Grade Folder)' : '1. Grade Level Folders'}
                 </label>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-                  {[7, 8, 9, 10, 11, 12].map((g) => {
+                  {(customGrades.length > 0 ? customGrades : [7, 8, 9, 10, 11, 12]).map((g) => {
                     const isChecked = moveGrades.includes(g);
                     return (
                       <label
@@ -4155,6 +4333,356 @@ export default function AdminHome() {
           </div>
         );
       })()}
+
+      {/* =========================================================
+          MODAL: Manage Grade Folders & Custom Classes
+         ========================================================= */}
+      {showManageModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: 16,
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowManageModal(false);
+          }}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: 540,
+              backgroundColor: 'var(--theme-card-bg)',
+              borderRadius: 20,
+              padding: 24,
+              boxShadow: '0 20px 40px rgba(0,0,0,0.25)',
+              border: '1px solid var(--theme-border)',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <Folder size={22} color="var(--theme-primary)" />
+                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
+                  {lang === 'KH' ? 'ចាត់ចែងកម្រិតថ្នាក់ និងបន្ទប់ (Manage Grades & Classes)' : 'Manage Grades & Classes'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowManageModal(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-muted)' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <p style={{ margin: '0 0 18px 0', fontSize: '0.85rem', color: 'var(--theme-muted)' }}>
+              {lang === 'KH'
+                ? 'បន្ថែម ឬលុបកម្រិតថ្នាក់ (Grade Folders) និងបន្ទប់/ក្រុម (Classes) សម្រាប់សាលារៀនរបស់អ្នក។ ការកែប្រែនេះនឹងធ្វើបច្ចុប្បន្នភាពលើគ្រប់ទំព័រ។'
+                : 'Add or remove grade folders and class/group names. Changes are synchronized across exercise library, student registration, and rosters.'}
+            </p>
+
+            {/* SECTION 1: MANAGE GRADES */}
+            <div style={{ marginBottom: 24, padding: 16, borderRadius: 14, backgroundColor: 'var(--theme-page-bg)', border: '1px solid var(--theme-border)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <span style={{ fontSize: '0.92rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
+                  {lang === 'KH' ? '១. កម្រិតថ្នាក់ (Grade Folders)' : '1. Grade Folders'}
+                </span>
+                <span style={{ fontSize: '0.74rem', color: 'var(--theme-muted)' }}>
+                  {customGrades.length} {lang === 'KH' ? 'ថ្នាក់' : 'grades active'}
+                </span>
+              </div>
+
+              {/* Add Grade Input Form */}
+              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                <input
+                  type="number"
+                  min={1}
+                  max={30}
+                  value={newGradeInput}
+                  onChange={(e) => setNewGradeInput(e.target.value)}
+                  placeholder={lang === 'KH' ? 'បញ្ចូលលេខថ្នាក់ (ឧ. 6, 13)...' : 'Enter grade number (e.g. 6, 13)...'}
+                  style={{
+                    flex: 1,
+                    padding: '8px 12px',
+                    borderRadius: 10,
+                    border: '1.5px solid var(--theme-border)',
+                    backgroundColor: 'var(--theme-card-bg)',
+                    color: 'var(--theme-navy)',
+                    fontSize: '0.86rem',
+                    outline: 'none',
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddGrade(parseInt(newGradeInput, 10));
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  disabled={gradeClassBusy || !newGradeInput}
+                  onClick={() => handleAddGrade(parseInt(newGradeInput, 10))}
+                  className="btn"
+                  style={{
+                    borderRadius: 10,
+                    padding: '8px 16px',
+                    backgroundColor: 'var(--theme-primary)',
+                    color: '#fff',
+                    fontWeight: 700,
+                    border: 'none',
+                    fontSize: '0.84rem',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    cursor: gradeClassBusy || !newGradeInput ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  <Plus size={15} />
+                  {lang === 'KH' ? 'បន្ថែម' : 'Add Grade'}
+                </button>
+              </div>
+
+              {/* Current Active Grades Badges */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {customGrades.map((g) => (
+                  <div
+                    key={g}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '6px 10px',
+                      borderRadius: 10,
+                      backgroundColor: 'var(--theme-card-bg)',
+                      border: '1px solid var(--theme-border)',
+                      fontSize: '0.84rem',
+                      fontWeight: 700,
+                      color: 'var(--theme-navy)',
+                    }}
+                  >
+                    <span>ថ្នាក់ទី {g} (Grade {g})</span>
+                    <button
+                      type="button"
+                      disabled={gradeClassBusy || customGrades.length <= 1}
+                      onClick={() => setGradeDeleteConfirm(g)}
+                      title={lang === 'KH' ? `លុបថ្នាក់ទី ${g}` : `Delete Grade ${g}`}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        padding: 2,
+                        cursor: customGrades.length <= 1 ? 'not-allowed' : 'pointer',
+                        color: customGrades.length <= 1 ? 'var(--theme-border)' : '#ef4444',
+                        display: 'flex',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* SECTION 2: MANAGE CLASSES / GROUPS */}
+            <div style={{ padding: 16, borderRadius: 14, backgroundColor: 'var(--theme-page-bg)', border: '1px solid var(--theme-border)', marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <span style={{ fontSize: '0.92rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
+                  {lang === 'KH' ? '២. បន្ទប់ ឬក្រុម (Classes / Groups)' : '2. Classes / Groups (e.g. 12A, 12B, Room 1)'}
+                </span>
+                <span style={{ fontSize: '0.74rem', color: 'var(--theme-muted)' }}>
+                  {customClasses.length} {lang === 'KH' ? 'បន្ទប់' : 'classes'}
+                </span>
+              </div>
+
+              {/* Add Class Input Form */}
+              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                <input
+                  type="text"
+                  maxLength={40}
+                  value={newClassInput}
+                  onChange={(e) => setNewClassInput(e.target.value)}
+                  placeholder={lang === 'KH' ? 'បញ្ចូលឈ្មោះបន្ទប់ (ឧ. 12A, 10B, Room 1)...' : 'Enter class name (e.g. 12A, 10B, Room 1)...'}
+                  style={{
+                    flex: 1,
+                    padding: '8px 12px',
+                    borderRadius: 10,
+                    border: '1.5px solid var(--theme-border)',
+                    backgroundColor: 'var(--theme-card-bg)',
+                    color: 'var(--theme-navy)',
+                    fontSize: '0.86rem',
+                    outline: 'none',
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddClass(newClassInput);
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  disabled={gradeClassBusy || !newClassInput.trim()}
+                  onClick={() => handleAddClass(newClassInput)}
+                  className="btn"
+                  style={{
+                    borderRadius: 10,
+                    padding: '8px 16px',
+                    backgroundColor: 'var(--theme-primary)',
+                    color: '#fff',
+                    fontWeight: 700,
+                    border: 'none',
+                    fontSize: '0.84rem',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    cursor: gradeClassBusy || !newClassInput.trim() ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  <Plus size={15} />
+                  {lang === 'KH' ? 'បន្ថែម' : 'Add Class'}
+                </button>
+              </div>
+
+              {/* Current Active Classes Badges */}
+              {customClasses.length === 0 ? (
+                <div style={{ fontSize: '0.8rem', color: 'var(--theme-muted)', fontStyle: 'italic', padding: '6px 0' }}>
+                  {lang === 'KH' ? 'មិនទាន់មានឈ្មោះបន្ទប់កំណត់ទុកនៅឡើយទេ។ (សិស្សអាចបញ្ចូលឈ្មោះបន្ទប់ដោយសេរី)' : 'No predefined class names yet. (Students can still enter custom class names on registration)'}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {customClasses.map((c) => (
+                    <div
+                      key={c}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        padding: '6px 10px',
+                        borderRadius: 10,
+                        backgroundColor: 'var(--theme-card-bg)',
+                        border: '1px solid var(--theme-border)',
+                        fontSize: '0.84rem',
+                        fontWeight: 700,
+                        color: 'var(--theme-navy)',
+                      }}
+                    >
+                      <span>{c}</span>
+                      <button
+                        type="button"
+                        disabled={gradeClassBusy}
+                        onClick={() => handleRemoveClass(c)}
+                        title={lang === 'KH' ? `លុបបន្ទប់ ${c}` : `Delete class ${c}`}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          padding: 2,
+                          cursor: 'pointer',
+                          color: '#ef4444',
+                          display: 'flex',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={() => setShowManageModal(false)}
+                style={{ borderRadius: 10, padding: '8px 20px', fontSize: '0.88rem' }}
+              >
+                {lang === 'KH' ? 'បិទ' : 'Done / Close'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================
+          MODAL: Confirmation to delete Grade Folder
+         ========================================================= */}
+      {gradeDeleteConfirm !== null && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.7)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1100,
+            padding: 16,
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setGradeDeleteConfirm(null);
+          }}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: 420,
+              backgroundColor: 'var(--theme-card-bg)',
+              borderRadius: 18,
+              padding: 24,
+              boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
+              border: '1px solid var(--theme-border)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#ef4444', marginBottom: 12 }}>
+              <AlertTriangle size={24} />
+              <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800 }}>
+                {lang === 'KH' ? `លុបថតថ្នាក់ទី ${gradeDeleteConfirm}?` : `Delete Grade ${gradeDeleteConfirm} Folder?`}
+              </h3>
+            </div>
+            <p style={{ margin: '0 0 16px 0', fontSize: '0.88rem', color: 'var(--theme-muted)', lineHeight: 1.5 }}>
+              {lang === 'KH'
+                ? `តើអ្នកប្រាកដជាចង់ដកថតថ្នាក់ទី ${gradeDeleteConfirm} ចេញពីបណ្ណាល័យមែនទេ? លំហាត់ដែលមានស្រាប់នឹងមិនត្រូវបានលុបចោលឡើយ។`
+                : `Are you sure you want to remove Grade ${gradeDeleteConfirm} folder? Exercises assigned to it will remain safe in the library.`}
+            </p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={() => setGradeDeleteConfirm(null)}
+                style={{ borderRadius: 10, padding: '8px 16px' }}
+              >
+                {lang === 'KH' ? 'បោះបង់' : 'Cancel'}
+              </button>
+              <button
+                type="button"
+                disabled={gradeClassBusy}
+                onClick={() => handleRemoveGrade(gradeDeleteConfirm)}
+                style={{
+                  borderRadius: 10,
+                  padding: '8px 18px',
+                  backgroundColor: '#ef4444',
+                  color: '#fff',
+                  fontWeight: 700,
+                  border: 'none',
+                  cursor: gradeClassBusy ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {gradeClassBusy ? 'កំពុងលុប…' : (lang === 'KH' ? 'យល់ព្រមលុប' : 'Yes, Delete')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Mobile Sticky Bottom Navigation Dock */}
       <nav className="mobile-bottom-nav show-on-mobile-only" aria-label="Mobile Bottom Navigation">

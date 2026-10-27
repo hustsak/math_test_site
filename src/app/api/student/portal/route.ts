@@ -99,7 +99,7 @@ export async function POST(req: Request) {
     }
 
     const rawGrades = Array.isArray(sData.grades) && sData.grades.length > 0
-      ? sData.grades.map((g: any) => parseInt(g, 10)).filter((g: number) => !isNaN(g) && g >= 7 && g <= 12)
+      ? sData.grades.map((g: any) => parseInt(g, 10)).filter((g: number) => !isNaN(g) && g >= 1 && g <= 30)
       : null;
     const defaultGrade = typeof sData.grade === 'number' ? sData.grade : (parseInt(sData.grade, 10) || (rawGrades ? rawGrades[0] : 7));
     const enrolledGrades: number[] = rawGrades && rawGrades.length > 0 ? Array.from(new Set(rawGrades)) : [defaultGrade];

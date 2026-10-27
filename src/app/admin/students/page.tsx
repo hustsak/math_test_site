@@ -54,6 +54,8 @@ export default function AdminStudentsPage() {
   const [loadingProfiles, setLoadingProfiles] = useState(false);
   const [showHiddenProfiles, setShowHiddenProfiles] = useState(false);
   const [showClassAverage, setShowClassAverage] = useState(false);
+  const [customGrades, setCustomGrades] = useState<number[]>([7, 8, 9, 10, 11, 12]);
+  const [customClasses, setCustomClasses] = useState<string[]>([]);
 
   // Filters & Search (Access tab)
   const [searchTerm, setSearchTerm] = useState('');
@@ -175,6 +177,12 @@ export default function AdminStudentsPage() {
       if (sRes.ok) {
         const sData = await sRes.json();
         setShowClassAverage(!!sData.showClassAverageToParents);
+        if (Array.isArray(sData.customGrades) && sData.customGrades.length > 0) {
+          setCustomGrades(sData.customGrades);
+        }
+        if (Array.isArray(sData.customClasses)) {
+          setCustomClasses(sData.customClasses);
+        }
       }
     } catch (e: any) {
       console.error(e);
@@ -1065,7 +1073,7 @@ export default function AdminStudentsPage() {
                     gap: 10,
                   }}
                 >
-                  {[7, 8, 9, 10, 11, 12].map((g) => {
+                  {(customGrades.length > 0 ? customGrades : [7, 8, 9, 10, 11, 12]).map((g) => {
                     const gradePath = `/student/grade-${g}`;
                     const fullGradeUrl = typeof window !== 'undefined' ? `${window.location.origin}${gradePath}` : gradePath;
                     return (
@@ -2010,8 +2018,8 @@ export default function AdminStudentsPage() {
                     ? 'កម្រិតថ្នាក់ដែលអនុញ្ញាត (Enrolled Grades) *'
                     : 'Enrolled Grades (Student can enroll in 1 or more grades) *'}
                 </label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-                  {[7, 8, 9, 10, 11, 12].map((g) => {
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(90px, 1fr))', gap: 8 }}>
+                  {(customGrades.length > 0 ? customGrades : [7, 8, 9, 10, 11, 12]).map((g) => {
                     const isSelected = formGrades.includes(g);
                     return (
                       <button
@@ -2343,8 +2351,8 @@ export default function AdminStudentsPage() {
                     ? 'កម្រិតថ្នាក់ដែលអនុញ្ញាត (Enrolled Grades) *'
                     : 'Enrolled Grades (Student can enroll in 1 or more grades) *'}
                 </label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-                  {[7, 8, 9, 10, 11, 12].map((g) => {
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(90px, 1fr))', gap: 8 }}>
+                  {(customGrades.length > 0 ? customGrades : [7, 8, 9, 10, 11, 12]).map((g) => {
                     const isSelected = formGrades.includes(g);
                     return (
                       <button

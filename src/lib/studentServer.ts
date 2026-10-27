@@ -32,7 +32,7 @@ export async function fetchStudentPortalData(rawToken: string): Promise<StudentV
     }
 
     const rawGrades = Array.isArray(student.grades) && student.grades.length > 0
-      ? student.grades.map((g: any) => parseInt(g, 10)).filter((g: number) => !isNaN(g) && g >= 7 && g <= 12)
+      ? student.grades.map((g: any) => parseInt(g, 10)).filter((g: number) => !isNaN(g) && g >= 1 && g <= 30)
       : null;
     const studentGrade = typeof student.grade === 'number' ? student.grade : (parseInt(String(student.grade), 10) || (rawGrades ? rawGrades[0] : undefined));
     const enrolledGrades: number[] = rawGrades && rawGrades.length > 0 ? Array.from(new Set(rawGrades)) : (studentGrade ? [studentGrade] : []);

@@ -24,8 +24,8 @@ export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
     const name = String(body?.name || '').trim();
-    const singleGrade = Math.min(12, Math.max(7, parseInt(body?.grade, 10) || 7));
-    const className = null;
+    const singleGrade = Math.min(30, Math.max(1, parseInt(body?.grade, 10) || 7));
+    const className = body?.className ? String(body.className).trim().slice(0, 40) : null;
 
     if (!name || name.length > 80) {
       return NextResponse.json(
@@ -94,7 +94,7 @@ export async function POST(req: Request) {
           name: existingData.name || name,
           grade: primaryGrade,
           grades: preservedGrades,
-          className: null,
+          className: existingData.className || className || null,
           expirationDate,
           paymentStatus: currentPaymentStatus,
           studentToken,
@@ -116,8 +116,8 @@ export async function POST(req: Request) {
       nameKey,
       grade: singleGrade,
       grades: [singleGrade], // Exactly 1 grade chosen by student at registration
-      className: null,
-      classKey: '',
+      className: className || null,
+      classKey: classKey || '',
       accessEnabled: true,
       active: true,
       paymentStatus: 'pending', // Pending payment approval from teacher

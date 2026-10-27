@@ -159,8 +159,18 @@ export interface Student {
   createdAt: number;
 }
 
+export interface CustomGradeConfig {
+  grade: number;
+  labelKh?: string;
+  labelEn?: string;
+  color?: string;
+  bg?: string;
+}
+
 export interface AppSettings {
   showClassAverageToParents?: boolean;
+  customGrades?: number[]; // List of active grades, default [7, 8, 9, 10, 11, 12]
+  customClasses?: string[]; // List of custom class/group names (e.g. ['12A', '12B', 'Room 1'])
 }
 
 export type FaceRating = 'happy' | 'neutral' | 'sad';

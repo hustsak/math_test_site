@@ -108,7 +108,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     }
 
     let updatedGrades: number[] = Array.isArray(currentData.grades) && currentData.grades.length > 0
-      ? currentData.grades.map((g: any) => parseInt(g, 10)).filter((g: number) => !isNaN(g) && g >= 7 && g <= 12)
+      ? currentData.grades.map((g: any) => parseInt(g, 10)).filter((g: number) => !isNaN(g) && g >= 1 && g <= 30)
       : [];
 
     let updatedGrade = typeof currentData.grade === 'number' ? currentData.grade : (parseInt(currentData.grade, 10) || 7);
@@ -117,14 +117,14 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         new Set(
           body.grades
             .map((g: any) => parseInt(g, 10))
-            .filter((g: number) => !isNaN(g) && g >= 7 && g <= 12)
+            .filter((g: number) => !isNaN(g) && g >= 1 && g <= 30)
         )
       );
       if (updatedGrades.length > 0) {
         updatedGrade = updatedGrades[0];
       }
     } else if (body.grade !== undefined) {
-      updatedGrade = Math.min(12, Math.max(7, parseInt(body.grade, 10) || 7));
+      updatedGrade = Math.min(30, Math.max(1, parseInt(body.grade, 10) || 7));
       if (!updatedGrades.includes(updatedGrade)) {
         updatedGrades = [updatedGrade];
       }
