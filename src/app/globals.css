@@ -235,85 +235,92 @@ table { width: 100%; border-collapse: collapse; background: var(--card); border-
 th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); font-size: 0.93rem; vertical-align: top; }
 th { background: #fafbfc; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); }
 
-.choice {
+.choice-item {
   display: flex;
-  gap: 12px;
   align-items: center;
-  font-weight: 500;
-  font-size: 1.08rem;
-  margin: 0;
+  gap: 14px;
   padding: 10px 14px;
+  border-radius: 12px;
   cursor: pointer;
-  background: var(--theme-card-bg, var(--card));
-  border: 1.5px solid var(--theme-border, var(--line));
-  border-radius: 10px;
-  transition: all 0.15s ease;
+  background: transparent;
+  color: var(--theme-navy, var(--ink));
+  font-size: 1.15rem;
+  line-height: 1.5;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
-  color: var(--theme-navy, var(--ink));
+  touch-action: manipulation;
+  transition: background-color 0.12s ease, transform 0.08s ease;
 }
-.choice:hover {
+
+.choice-item:hover {
   background: rgba(74, 103, 214, 0.05);
-  border-color: var(--theme-primary, var(--brand));
-}
-.choice.selected {
-  background: rgba(74, 103, 214, 0.1);
-  border-color: var(--theme-primary, var(--brand));
-  font-weight: 600;
 }
 
-/* Custom clean circular radio button */
-.choice input[type="radio"] {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 22px;
-  height: 22px;
-  border: 2px solid var(--theme-border, #4b5563);
-  border-radius: 50%;
-  outline: none;
-  margin: 0;
-  cursor: pointer;
-  background: var(--theme-card-bg, #ffffff);
-  display: grid;
-  place-content: center;
-  flex: none;
-  transition: border-color 0.15s ease, transform 0.1s ease;
-}
-.choice input[type="radio"]:active {
-  transform: scale(0.92);
-}
-.choice input[type="radio"]:checked {
-  border-color: var(--theme-primary, #2563eb);
-  background: var(--theme-card-bg, #ffffff);
-}
-.choice input[type="radio"]:checked::before {
-  content: "";
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--theme-primary, #2563eb);
+.choice-item:active {
+  transform: scale(0.99);
 }
 
-[data-theme="dark"] .choice {
-  background: var(--theme-card-bg);
-  border-color: var(--theme-border);
-  color: var(--theme-navy);
+.choice-item.selected {
+  background: rgba(74, 103, 214, 0.08);
 }
-[data-theme="dark"] .choice:hover {
-  background: rgba(92, 121, 230, 0.12);
-  border-color: var(--theme-primary);
+
+[data-theme="dark"] .choice-item:hover {
+  background: rgba(92, 121, 230, 0.08);
 }
-[data-theme="dark"] .choice.selected {
-  background: rgba(92, 121, 230, 0.2);
-  border-color: var(--theme-primary);
+
+[data-theme="dark"] .choice-item.selected {
+  background: rgba(92, 121, 230, 0.15);
 }
-[data-theme="dark"] .choice input[type="radio"] {
-  background: var(--theme-card-bg);
-  border-color: var(--theme-muted);
+
+/* Custom sleek circular radio button without rectangular box */
+.choice-circle {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: border-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), transform 0.1s ease, box-shadow 0.12s ease;
+  background-color: var(--theme-card-bg, #ffffff);
 }
-[data-theme="dark"] .choice input[type="radio"]:checked {
-  border-color: var(--theme-primary);
-  background: var(--theme-card-bg);
+
+.choice-item:hover .choice-circle {
+  border-color: var(--theme-primary, #4a67d6);
+}
+
+.choice-circle.active {
+  border-color: var(--theme-primary, #4a67d6);
+  border-width: 2.5px;
+  box-shadow: 0 0 0 3px rgba(74, 103, 214, 0.15);
+}
+
+.choice-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: var(--theme-primary, #4a67d6);
+  transform: scale(0);
+  transition: transform 0.14s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.choice-circle.active .choice-dot {
+  transform: scale(1);
+}
+
+[data-theme="dark"] .choice-circle {
+  border-color: #64748b;
+  background-color: var(--theme-card-bg, #161e33);
+}
+
+[data-theme="dark"] .choice-circle.active {
+  border-color: var(--theme-primary, #5c79e6);
+  box-shadow: 0 0 0 3px rgba(92, 121, 230, 0.25);
+}
+
+[data-theme="dark"] .choice-dot {
+  background-color: var(--theme-primary, #5c79e6);
 }
 
 /* Compact Question Card for mobile */

@@ -1347,61 +1347,52 @@ export default function StudentPage() {
 
               <div
                 style={{
-                  fontSize: '1.2rem',
+                  fontSize: '1.25rem',
                   fontWeight: 600,
-                  lineHeight: 1.6,
+                  lineHeight: 1.65,
                   color: 'var(--theme-navy)',
-                  marginTop: 6,
+                  marginTop: 8,
+                  wordBreak: 'break-word',
+                  overflowWrap: 'break-word',
                 }}
               >
                 <MathText text={q.prompt} />
               </div>
 
               {q.kind === 'choice' && q.choices ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 10 }}>
                   {q.choices.map((c, cIdx) => {
                     const checked = val === String(cIdx);
                     return (
-                      <label
+                      <div
                         key={cIdx}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 12,
-                          padding: '12px 16px',
-                          borderRadius: 12,
-                          border: `2px solid ${checked ? 'var(--theme-primary)' : 'var(--theme-border)'}`,
-                          backgroundColor: checked
-                            ? theme === 'dark'
-                              ? 'rgba(59, 130, 246, 0.18)'
-                              : 'rgba(37, 99, 235, 0.08)'
-                            : 'var(--theme-card-bg)',
-                          color: 'var(--theme-navy)',
-                          fontSize: '1.1rem',
-                          lineHeight: 1.5,
-                          cursor: 'pointer',
-                          transition: 'all 0.15s ease',
-                          boxShadow: checked ? '0 2px 8px rgba(37,99,235,0.15)' : 'none',
+                        className={`choice-item ${checked ? 'selected' : ''}`}
+                        onClick={() => setAnswer(q.id, String(cIdx))}
+                        role="radio"
+                        aria-checked={checked}
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === ' ' || e.key === 'Enter') {
+                            e.preventDefault();
+                            setAnswer(q.id, String(cIdx));
+                          }
                         }}
                       >
-                        <input
-                          type="radio"
-                          name={`q_${q.id}`}
-                          value={String(cIdx)}
-                          checked={checked}
-                          onChange={() => setAnswer(q.id, String(cIdx))}
+                        <div className={`choice-circle ${checked ? 'active' : ''}`}>
+                          <div className="choice-dot" />
+                        </div>
+                        <div
                           style={{
-                            width: 20,
-                            height: 20,
-                            accentColor: 'var(--theme-primary)',
-                            cursor: 'pointer',
-                            flexShrink: 0,
+                            flex: 1,
+                            fontSize: '1.2rem',
+                            fontWeight: checked ? 700 : 500,
+                            color: checked ? 'var(--theme-primary)' : 'var(--theme-navy)',
+                            transition: 'color 0.12s ease',
                           }}
-                        />
-                        <div style={{ flex: 1, color: 'var(--theme-navy)' }}>
+                        >
                           <MathText text={c} />
                         </div>
-                      </label>
+                      </div>
                     );
                   })}
                 </div>
