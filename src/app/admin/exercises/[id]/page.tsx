@@ -193,6 +193,12 @@ export default function EditExercise() {
     document.documentElement.setAttribute('data-theme', next);
   };
 
+  const currentAiPrompt = useMemo(() => {
+    const singleGrade = ex?.gradeLevels && ex.gradeLevels.length === 1 ? ex.gradeLevels[0] : (ex?.gradeLevels?.[0]);
+    const topic = ex?.topic || ex?.chapter || '';
+    return getAiExercisePrompt(singleGrade, topic, 5);
+  }, [ex?.gradeLevels, ex?.topic, ex?.chapter]);
+
   useEffect(() => {
     if (!isAdmin) return;
     if (id === 'new') {
@@ -340,12 +346,6 @@ export default function EditExercise() {
       return false;
     }
   };
-
-  const currentAiPrompt = useMemo(() => {
-    const singleGrade = ex?.gradeLevels && ex.gradeLevels.length === 1 ? ex.gradeLevels[0] : (ex?.gradeLevels?.[0]);
-    const topic = ex?.topic || ex?.chapter || '';
-    return getAiExercisePrompt(singleGrade, topic, 5);
-  }, [ex?.gradeLevels, ex?.topic, ex?.chapter]);
 
   const copyPrompt = async () => {
     await copyToClipboard(currentAiPrompt);
