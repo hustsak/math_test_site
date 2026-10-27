@@ -38,8 +38,8 @@ export async function fetchStudentPortalData(rawToken: string): Promise<StudentV
 
     const [exListRaw, subsByIdSnap, subsByNameSnap] = await Promise.all([
       getCachedPublishedExercises(),
-      db.collection('submissions').where('studentId', '==', studentId).get(),
-      db.collection('submissions').where('nameKey', '==', nameKey).get(),
+      db.collection('submissions').where('studentId', '==', studentId).limit(150).get(),
+      db.collection('submissions').where('nameKey', '==', nameKey).limit(150).get(),
     ]);
 
     const submissionMap = new Map<string, Submission>();

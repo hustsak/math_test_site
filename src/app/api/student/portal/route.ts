@@ -100,16 +100,24 @@ export async function POST(req: Request) {
 
     const studentGrade = typeof sData.grade === 'number' ? sData.grade : (parseInt(sData.grade, 10) || 7);
 
-    // 2. Fetch all published exercises
-    const exercisesSnap = await db
-      .collection('exercises')
-      .where('published', '==', true)
-      .get();
+    // 2. Fetch cached published exercises (avoids hammering Firestore for every student visit)
+    const { getCachedPublishedExercises } = await import('@/lib/parentTrackingServer');
+    const cachedExList = await getCachedPublishedExercises();
 
-    // 3. Fetch all submissions for this student
+    // 3. Fetch submissions for this student with selected fields and a sensible limit (e.g. 150 latest)
     const [subByIdSnap, subByNameSnap] = await Promise.all([
-      db.collection('submissions').where('studentId', '==', studentId).get(),
-      db.collection('submissions').where('nameKey', '==', nameKey).get(),
+      db.collection('submissions')
+        .where('studentId', '==', studentId)
+        .orderBy('startedAt', 'desc')
+        .limit(150)
+        .get()
+        .catch(() => db.collection('submissions').where('studentId', '==', studentId).limit(150).get()),
+      db.collection('submissions')
+        .where('nameKey', '==', nameKey)
+        .orderBy('startedAt', 'desc')
+        .limit(150)
+        .get()
+        .catch(() => db.collection('submissions').where('nameKey', '==', nameKey).limit(150).get()),
     ]);
 
     const completedSubsMap = new Map<string, Submission & { id: string }>();
@@ -135,9 +143,7 @@ export async function POST(req: Request) {
     const paymentStatus = sData.paymentStatus || 'approved';
     const isUnpaid = paymentStatus === 'pending';
 
-    exercisesSnap.docs.forEach((d) => {
-      const ex = d.data() as Exercise;
-      const exId = d.id;
+    cachedExList.forEach(({ id: exId, data: ex }) => {
 
       // Filter: exercise must be assigned to student's grade (or be untargeted/all grades)
       if (Array.isArray(ex.gradeLevels) && ex.gradeLevels.length > 0) {
