@@ -61,6 +61,7 @@ import {
 import { getAuthClient, getDb } from '@/lib/firebaseClient';
 import { useAdmin } from '@/lib/useAdmin';
 import { adminPost } from '@/lib/authFetch';
+import { CAMBODIAN_MATH_CURRICULUM } from '@/lib/curriculum';
 import type { Exercise, Submission, Student } from '@/lib/types';
 
 type Row = { id: string } & Exercise;
@@ -121,6 +122,7 @@ export default function AdminHome() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [moveModalEx, setMoveModalEx] = useState<Row | null>(null);
   const [moveGrades, setMoveGrades] = useState<number[]>([]);
+  const [moveChapter, setMoveChapter] = useState<string>('');
   const [moveBusy, setMoveBusy] = useState(false);
 
   // Register another teacher form states
@@ -412,7 +414,7 @@ export default function AdminHome() {
     }
   }
 
-  async function handleMoveExercise(r: Row, newGrades: number[]) {
+  async function handleMoveExercise(r: Row, newGrades: number[], newChapter: string) {
     if (!newGrades.length) {
       alert(lang === 'KH' ? 'សូមជ្រើសរើសកម្រិតថ្នាក់យ៉ាងហោចណាស់មួយ។' : 'Please select at least one grade.');
       return;
@@ -420,11 +422,14 @@ export default function AdminHome() {
     setMoveBusy(true);
     try {
       const docRef = doc(getDb(), 'exercises', r.id);
+      const trimmedChapter = newChapter.trim();
       await updateDoc(docRef, {
         gradeLevels: newGrades.sort((a, b) => a - b),
+        chapter: trimmedChapter || '',
         updatedAt: Date.now(),
       });
-      showToast(lang === 'KH' ? `បានប្តូរទៅថ្នាក់ទី ${newGrades.join(', ')} ដោយជោគជ័យ!` : `Moved to Grade ${newGrades.join(', ')}!`);
+      const chMsg = trimmedChapter ? (lang === 'KH' ? ` ក្នុង${trimmedChapter}` : ` to chapter "${trimmedChapter}"`) : '';
+      showToast(lang === 'KH' ? `បានប្តូរទៅថ្នាក់ទី ${newGrades.join(', ')}${chMsg} ដោយជោគជ័យ!` : `Moved to Grade ${newGrades.join(', ')}${chMsg}!`);
       setMoveModalEx(null);
       loadData();
     } catch (e: any) {
@@ -3063,6 +3068,7 @@ export default function AdminHome() {
                                     onClick={() => {
                                       setMoveModalEx(r);
                                       setMoveGrades(r.gradeLevels && r.gradeLevels.length > 0 ? [...r.gradeLevels] : [7, 8, 9, 10, 11, 12]);
+                                      setMoveChapter(r.chapter || '');
                                       setActiveMenuId(null);
                                     }}
                                     style={{
@@ -3081,7 +3087,7 @@ export default function AdminHome() {
                                     }}
                                   >
                                     <FolderSymlink size={14} color="var(--theme-primary)" />
-                                    <span>{lang === 'KH' ? 'ប្តូរកម្រិតថ្នាក់ (Move)' : 'Move to Grade'}</span>
+                                    <span>{lang === 'KH' ? 'ប្តូរថ្នាក់ / ជំពូក (Move)' : 'Move to Chapter / Grade'}</span>
                                   </button>
 
                                   {rosterStudents.length > 0 && (
@@ -3890,126 +3896,248 @@ export default function AdminHome() {
       })()}
 
       {/* =========================================================
-          MODAL: Move Exercise to Grade Folder Modal
+          MODAL: Move Exercise to Grade & Chapter Modal
          ========================================================= */}
-      {moveModalEx && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(15, 23, 42, 0.6)',
-            backdropFilter: 'blur(6px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: 16,
-          }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setMoveModalEx(null);
-          }}
-        >
+      {moveModalEx && (() => {
+        // Compute available chapters for the selected grades in modal
+        const modalChapters: string[] = [];
+        (moveGrades.length > 0 ? moveGrades : [7, 8, 9, 10, 11, 12]).forEach((g) => {
+          const chs = CAMBODIAN_MATH_CURRICULUM[g] || [];
+          chs.forEach((c) => {
+            if (c.titleKh && !modalChapters.includes(c.titleKh)) {
+              modalChapters.push(c.titleKh);
+            }
+          });
+        });
+        // Also include any chapters currently used across exercises in this site
+        (exercises || []).forEach((e) => {
+          if (e.chapter && e.chapter.trim() && !modalChapters.includes(e.chapter.trim())) {
+            modalChapters.push(e.chapter.trim());
+          }
+        });
+
+        return (
           <div
             style={{
-              width: '100%',
-              maxWidth: 440,
-              backgroundColor: 'var(--theme-card-bg)',
-              borderRadius: 20,
-              padding: 24,
-              boxShadow: '0 20px 40px rgba(0,0,0,0.25)',
-              border: '1px solid var(--theme-border)',
+              position: 'fixed',
+              inset: 0,
+              backgroundColor: 'rgba(15, 23, 42, 0.6)',
+              backdropFilter: 'blur(6px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000,
+              padding: 16,
+            }}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setMoveModalEx(null);
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <FolderSymlink size={22} color="var(--theme-primary)" />
-                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
-                  {lang === 'KH' ? 'ផ្លាស់ប្តូរកម្រិតថ្នាក់ (Move to Grade)' : 'Move to Grade Folder'}
-                </h3>
+            <div
+              style={{
+                width: '100%',
+                maxWidth: 480,
+                backgroundColor: 'var(--theme-card-bg)',
+                borderRadius: 20,
+                padding: 24,
+                boxShadow: '0 20px 40px rgba(0,0,0,0.25)',
+                border: '1px solid var(--theme-border)',
+                maxHeight: '90vh',
+                overflowY: 'auto',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <FolderSymlink size={22} color="var(--theme-primary)" />
+                  <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
+                    {lang === 'KH' ? 'ផ្លាស់ប្តូរថ្នាក់ ឬជំពូក (Move Exercise)' : 'Move Exercise (Grade & Chapter)'}
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMoveModalEx(null)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-muted)' }}
+                >
+                  <X size={20} />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setMoveModalEx(null)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-muted)' }}
-              >
-                <X size={20} />
-              </button>
-            </div>
 
-            <p style={{ margin: '0 0 14px 0', fontSize: '0.88rem', color: 'var(--theme-muted)' }}>
-              {lang === 'KH' ? 'ជ្រើសរើសកម្រិតថ្នាក់ដែលត្រូវចាត់ចែងលំហាត់ ៖' : 'Assign exercise to one or more grade folders:'}
-              <br />
-              <strong style={{ color: 'var(--theme-navy)' }}>{moveModalEx.title}</strong>
-            </p>
+              <p style={{ margin: '0 0 16px 0', fontSize: '0.88rem', color: 'var(--theme-muted)' }}>
+                {lang === 'KH' ? 'ចាត់ចែងលំហាត់ទៅកាន់ថ្នាក់ និងជំពូកដែលចង់បាន ៖' : 'Assign exercise to target grade folder and chapter:'}
+                <br />
+                <strong style={{ color: 'var(--theme-navy)' }}>{moveModalEx.title}</strong>
+              </p>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 20 }}>
-              {[7, 8, 9, 10, 11, 12].map((g) => {
-                const isChecked = moveGrades.includes(g);
-                return (
-                  <label
-                    key={g}
+              {/* SECTION 1: GRADE LEVELS */}
+              <div style={{ marginBottom: 18 }}>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: 'var(--theme-navy)', marginBottom: 8 }}>
+                  {lang === 'KH' ? '១. កម្រិតថ្នាក់ (Grade Folder)' : '1. Grade Level Folders'}
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                  {[7, 8, 9, 10, 11, 12].map((g) => {
+                    const isChecked = moveGrades.includes(g);
+                    return (
+                      <label
+                        key={g}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          padding: '8px 10px',
+                          borderRadius: 10,
+                          backgroundColor: isChecked ? 'rgba(59, 130, 246, 0.1)' : 'var(--theme-page-bg)',
+                          border: isChecked ? '1.5px solid var(--theme-primary)' : '1px solid var(--theme-border)',
+                          cursor: 'pointer',
+                          fontSize: '0.82rem',
+                          fontWeight: isChecked ? 700 : 500,
+                          color: isChecked ? 'var(--theme-primary)' : 'var(--theme-navy)',
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setMoveGrades((prev) => [...prev, g].sort((a, b) => a - b));
+                            } else {
+                              setMoveGrades((prev) => prev.filter((item) => item !== g));
+                            }
+                          }}
+                          style={{ accentColor: 'var(--theme-primary)' }}
+                        />
+                        <span>ថ្នាក់ទី {g}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* SECTION 2: CHAPTER SELECTION */}
+              <div style={{ marginBottom: 22 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <label style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--theme-navy)', margin: 0 }}>
+                    {lang === 'KH' ? '២. ជំពូក (Chapter)' : '2. Target Chapter'}
+                  </label>
+                  {modalChapters.length > 0 && (
+                    <select
+                      style={{
+                        fontSize: '0.75rem',
+                        padding: '3px 8px',
+                        borderRadius: 8,
+                        border: '1px solid var(--theme-border)',
+                        background: 'var(--theme-card-bg)',
+                        color: 'var(--theme-navy)',
+                        cursor: 'pointer',
+                      }}
+                      value=""
+                      onChange={(e) => {
+                        if (e.target.value) setMoveChapter(e.target.value);
+                      }}
+                    >
+                      <option value="">{lang === 'KH' ? '— ជ្រើសរើសជំពូកដែលមាន —' : '— Pick Existing Chapter —'}</option>
+                      {modalChapters.map((ch) => (
+                        <option key={ch} value={ch}>{ch}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                <input
+                  type="text"
+                  value={moveChapter}
+                  onChange={(e) => setMoveChapter(e.target.value)}
+                  placeholder={lang === 'KH' ? 'ឧទាហរណ៍៖ ជំពូកទី ១ ឬ គ្មានជំពូក (ទុកទទេ)' : 'e.g. Chapter 1 or leave empty for General'}
+                  style={{
+                    width: '100%',
+                    padding: '9px 12px',
+                    borderRadius: 10,
+                    border: '1.5px solid var(--theme-border)',
+                    backgroundColor: 'var(--theme-page-bg)',
+                    color: 'var(--theme-navy)',
+                    fontSize: '0.86rem',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                />
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '0.74rem', color: 'var(--theme-muted)' }}>
+                    {lang === 'KH' ? 'ជម្រើសលឿន៖' : 'Quick options:'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setMoveChapter('')}
                     style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      padding: '10px 12px',
-                      borderRadius: 10,
-                      backgroundColor: isChecked ? 'rgba(59, 130, 246, 0.1)' : 'var(--theme-page-bg)',
-                      border: isChecked ? '1.5px solid var(--theme-primary)' : '1px solid var(--theme-border)',
+                      fontSize: '0.72rem',
+                      padding: '2px 8px',
+                      borderRadius: 6,
+                      border: '1px solid var(--theme-border)',
+                      background: moveChapter === '' ? 'rgba(59, 130, 246, 0.15)' : 'none',
+                      color: moveChapter === '' ? 'var(--theme-primary)' : 'var(--theme-muted)',
                       cursor: 'pointer',
-                      fontSize: '0.88rem',
-                      fontWeight: isChecked ? 700 : 500,
-                      color: isChecked ? 'var(--theme-primary)' : 'var(--theme-navy)',
+                      fontWeight: 600,
                     }}
                   >
-                    <input
-                      type="checkbox"
-                      checked={isChecked}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setMoveGrades((prev) => [...prev, g].sort((a, b) => a - b));
-                        } else {
-                          setMoveGrades((prev) => prev.filter((item) => item !== g));
-                        }
+                    {lang === 'KH' ? 'គ្មានជំពូក (ទូទៅ)' : 'No Chapter (General)'}
+                  </button>
+                  {modalChapters.slice(0, 3).map((ch) => (
+                    <button
+                      key={ch}
+                      type="button"
+                      onClick={() => setMoveChapter(ch)}
+                      style={{
+                        fontSize: '0.72rem',
+                        padding: '2px 8px',
+                        borderRadius: 6,
+                        border: '1px solid var(--theme-border)',
+                        background: moveChapter === ch ? 'rgba(59, 130, 246, 0.15)' : 'none',
+                        color: moveChapter === ch ? 'var(--theme-primary)' : 'var(--theme-muted)',
+                        cursor: 'pointer',
+                        fontWeight: 600,
+                        maxWidth: 160,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
                       }}
-                      style={{ accentColor: 'var(--theme-primary)' }}
-                    />
-                    <span>ថ្នាក់ទី {g} (Grade {g})</span>
-                  </label>
-                );
-              })}
-            </div>
+                      title={ch}
+                    >
+                      {ch}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button
-                type="button"
-                className="btn secondary"
-                onClick={() => setMoveModalEx(null)}
-                style={{ borderRadius: 10, padding: '8px 16px' }}
-              >
-                {lang === 'KH' ? 'បោះបង់' : 'Cancel'}
-              </button>
-              <button
-                type="button"
-                className="btn"
-                disabled={moveBusy || moveGrades.length === 0}
-                onClick={() => handleMoveExercise(moveModalEx, moveGrades)}
-                style={{
-                  borderRadius: 10,
-                  padding: '8px 20px',
-                  backgroundColor: 'var(--theme-primary)',
-                  color: '#fff',
-                  fontWeight: 700,
-                  border: 'none',
-                  cursor: moveBusy || moveGrades.length === 0 ? 'not-allowed' : 'pointer',
-                }}
-              >
-                {moveBusy ? 'កំពុងផ្លាស់ប្តូរ…' : (lang === 'KH' ? 'រក្សាទុក (Move)' : 'Save / Move')}
-              </button>
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={() => setMoveModalEx(null)}
+                  style={{ borderRadius: 10, padding: '8px 16px' }}
+                >
+                  {lang === 'KH' ? 'បោះបង់' : 'Cancel'}
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={moveBusy || moveGrades.length === 0}
+                  onClick={() => handleMoveExercise(moveModalEx, moveGrades, moveChapter)}
+                  style={{
+                    borderRadius: 10,
+                    padding: '8px 20px',
+                    backgroundColor: 'var(--theme-primary)',
+                    color: '#fff',
+                    fontWeight: 700,
+                    border: 'none',
+                    cursor: moveBusy || moveGrades.length === 0 ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {moveBusy ? 'កំពុងផ្លាស់ប្តូរ…' : (lang === 'KH' ? 'រក្សាទុក (Move)' : 'Save / Move')}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Mobile Sticky Bottom Navigation Dock */}
       <nav className="mobile-bottom-nav show-on-mobile-only" aria-label="Mobile Bottom Navigation">
