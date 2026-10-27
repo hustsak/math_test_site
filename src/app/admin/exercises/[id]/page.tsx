@@ -813,6 +813,34 @@ export default function EditExercise() {
                 gap: 8,
                 padding: '10px 12px',
                 borderRadius: 8,
+                border: ex.publicationMode === 'drip' ? '1.5px solid var(--brand)' : '1px solid var(--line)',
+                background: ex.publicationMode === 'drip' ? 'rgba(74, 103, 214, 0.12)' : 'var(--card)',
+                cursor: 'pointer',
+              }}
+            >
+              <input
+                type="radio"
+                name="publicationMode"
+                value="drip"
+                checked={ex.publicationMode === 'drip'}
+                onChange={() => set({ publicationMode: 'drip', published: true, dripDay: ex.dripDay || 1, scheduledPublishAt: null })}
+                style={{ marginTop: 2, accentColor: 'var(--brand)' }}
+              />
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>💧 បញ្ចេញតាមថ្ងៃ (Drip Day 1–30)</div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>
+                  ដោះសោតាមថ្ងៃគិតពីថ្ងៃដែលសិស្សម្នាក់ៗចុះឈ្មោះ
+                </div>
+              </div>
+            </label>
+
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 8,
+                padding: '10px 12px',
+                borderRadius: 8,
                 border: ex.publicationMode === 'draft' ? '1.5px solid var(--brand)' : '1px solid var(--line)',
                 background: ex.publicationMode === 'draft' ? 'rgba(74, 103, 214, 0.12)' : 'var(--card)',
                 cursor: 'pointer',
@@ -834,6 +862,53 @@ export default function EditExercise() {
               </div>
             </label>
           </div>
+
+          {ex.publicationMode === 'drip' && (
+            <div style={{ padding: '14px 16px', borderRadius: 10, background: 'rgba(74, 103, 214, 0.08)', border: '1.5px solid rgba(74, 103, 214, 0.3)', marginBottom: 12 }}>
+              <label style={{ fontWeight: 700, display: 'block', marginBottom: 6, color: 'var(--brand)' }}>
+                💧 កំណត់ថ្ងៃត្រូវដោះសោ (Drip Unlock Day Number)
+              </label>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: '0.92rem', fontWeight: 700 }}>ថ្ងៃទី (Day) ៖</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={365}
+                    value={ex.dripDay ?? 1}
+                    onChange={(e) => set({ dripDay: Math.max(1, parseInt(e.target.value, 10) || 1) })}
+                    style={{ width: 80, padding: '6px 10px', borderRadius: 8, fontWeight: 700, textAlign: 'center' }}
+                  />
+                </div>
+                <span style={{ fontSize: '0.84rem', color: 'var(--muted)' }}>
+                  • ថ្ងៃទី ១ = ដោះសោភ្លាមៗពេលសិស្សចុះឈ្មោះ
+                  • ថ្ងៃទី ២ = ដោះសោ ២៤ ម៉ោងក្រោយមក ...
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--muted)', alignSelf: 'center' }}>ជ្រើសរើសរហ័ស ៖</span>
+                {[1, 2, 3, 5, 7, 10, 15, 20, 25, 30].map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => set({ dripDay: d })}
+                    style={{
+                      fontSize: '0.75rem',
+                      padding: '2px 8px',
+                      borderRadius: 6,
+                      border: '1px solid var(--line)',
+                      background: (ex.dripDay ?? 1) === d ? 'var(--brand)' : 'var(--card)',
+                      color: (ex.dripDay ?? 1) === d ? '#ffffff' : 'inherit',
+                      cursor: 'pointer',
+                      fontWeight: 600,
+                    }}
+                  >
+                    Day {d}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {ex.publicationMode === 'scheduled' && (
             <div style={{ padding: '12px 14px', borderRadius: 8, background: 'var(--card)', border: '1px solid var(--line)', marginBottom: 10 }}>

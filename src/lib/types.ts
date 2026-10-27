@@ -36,10 +36,12 @@ export interface Exercise {
   shuffleQuestions?: boolean;
   /** Grades targeted: e.g. [7], [7, 8], [9, 10, 11, 12] */
   gradeLevels?: number[];
-  /** 'instant' | 'scheduled' | 'draft' */
-  publicationMode?: 'instant' | 'scheduled' | 'draft';
+  /** 'instant' | 'scheduled' | 'drip' | 'draft' */
+  publicationMode?: 'instant' | 'scheduled' | 'drip' | 'draft';
   /** ISO string or timestamp of when exercise becomes available to students */
   scheduledPublishAt?: string | number | null;
+  /** Drip Day: 1, 2, ..., 30 (unlocks on Day N since student registered) */
+  dripDay?: number | null;
   /** Default: Asia/Phnom_Penh */
   timezone?: string;
   /** Mark as sample/trial exercise that unpaid/registered students can access */
@@ -63,6 +65,7 @@ export interface PublicExercise {
   shuffleQuestions?: boolean;
   gradeLevels?: number[];
   scheduledPublishAt?: string | number | null;
+  dripDay?: number | null;
   isSample?: boolean;
   questions: PublicQuestion[];
 }
@@ -244,6 +247,8 @@ export interface StudentViewExercise {
   id: string;
   title: string;
   description: string;
+  chapter?: string;
+  topic?: string;
   deadline: string | null;
   timeLimitMinutes: number;
   questionCount: number;
@@ -251,6 +256,9 @@ export interface StudentViewExercise {
   isDone: boolean;
   isSample?: boolean;
   isLockedForPayment?: boolean;
+  isDripLocked?: boolean;
+  dripDay?: number | null;
+  dripUnlockMs?: number | null;
   gradeLevels?: number[];
   score?: number;
   total?: number;

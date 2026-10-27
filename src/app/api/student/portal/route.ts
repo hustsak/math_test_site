@@ -206,7 +206,7 @@ export async function POST(req: Request) {
       }
 
       // If not completed, evaluate availability
-      const availability = evaluateExerciseAvailability(ex, studentGrade, now);
+      const availability = evaluateExerciseAvailability(ex, studentGrade, now, sData.createdAt || null);
 
       if (availability.available) {
         availableNow.push({

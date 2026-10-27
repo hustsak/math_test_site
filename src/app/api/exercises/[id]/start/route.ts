@@ -185,8 +185,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       if (matched) studentGrade = matched;
     }
 
-    // Verify exercise availability: scheduling (Asia/Phnom_Penh), publication, and grade level match
-    const availability = evaluateExerciseAvailability(ex, studentGrade, now);
+    // Verify exercise availability: scheduling (Asia/Phnom_Penh), publication, drip, and grade level match
+    const studentCreatedAt = studentData.createdAt || null;
+    const availability = evaluateExerciseAvailability(ex, studentGrade, now, studentCreatedAt);
     if (!availability.available) {
       return NextResponse.json(
         {

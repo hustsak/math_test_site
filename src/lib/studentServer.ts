@@ -69,6 +69,7 @@ export async function fetchStudentPortalData(rawToken: string): Promise<StudentV
 
     const paymentStatus = student.paymentStatus || 'approved';
     const isUnpaid = paymentStatus === 'pending';
+    const studentCreatedAt = student.createdAt || null;
 
     const now = Date.now();
     const exercises: StudentViewExercise[] = exList.map(({ id, data: ex }) => {
@@ -78,10 +79,25 @@ export async function fetchStudentPortalData(rawToken: string): Promise<StudentV
       const isSample = !!ex.isSample;
       const isLockedForPayment = isUnpaid && !isSample;
 
+      // Check Drip lock relative to student.createdAt
+      let isDripLocked = false;
+      let dripUnlockMs: number | null = null;
+      if (!isDone && (ex.publicationMode === 'drip' || (typeof ex.dripDay === 'number' && ex.dripDay > 0)) && typeof ex.dripDay === 'number' && ex.dripDay > 0) {
+        if (studentCreatedAt) {
+          const offsetMs = (ex.dripDay - 1) * 24 * 60 * 60 * 1000;
+          dripUnlockMs = studentCreatedAt + offsetMs;
+          if (now < dripUnlockMs) {
+            isDripLocked = true;
+          }
+        }
+      }
+
       return {
         id,
         title: ex.title,
         description: ex.description || '',
+        chapter: ex.chapter || undefined,
+        topic: ex.topic || undefined,
         deadline: ex.deadline,
         timeLimitMinutes: ex.timeLimitMinutes || 0,
         questionCount: ex.questions.length,
@@ -89,6 +105,9 @@ export async function fetchStudentPortalData(rawToken: string): Promise<StudentV
         isDone,
         isSample,
         isLockedForPayment,
+        isDripLocked,
+        dripDay: ex.dripDay || null,
+        dripUnlockMs,
         gradeLevels: ex.gradeLevels || [],
         score: sub?.score,
         total: sub?.total,
@@ -98,10 +117,16 @@ export async function fetchStudentPortalData(rawToken: string): Promise<StudentV
 
     // Sort: open & sample/not-locked first, then done, then locked, then closed
     exercises.sort((a, b) => {
+      // If both have dripDay, sort by dripDay ascending
+      if (a.dripDay && b.dripDay && a.dripDay !== b.dripDay) {
+        return a.dripDay - b.dripDay;
+      }
       if (a.isSample && !b.isSample) return -1;
       if (!a.isSample && b.isSample) return 1;
       if (!a.isLockedForPayment && b.isLockedForPayment) return -1;
       if (a.isLockedForPayment && !b.isLockedForPayment) return 1;
+      if (!a.isDripLocked && b.isDripLocked) return -1;
+      if (a.isDripLocked && !b.isDripLocked) return 1;
       if (!a.isDone && b.isDone) return -1;
       if (a.isDone && !b.isDone) return 1;
       if (!a.isClosed && b.isClosed) return -1;

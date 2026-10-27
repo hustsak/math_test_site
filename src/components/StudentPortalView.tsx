@@ -429,6 +429,23 @@ export default function StudentPortalView({
                       >
                         <Lock size={15} /> រង់ចាំបង់ប្រាក់
                       </span>
+                    ) : ex.isDripLocked ? (
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          fontSize: '0.85rem',
+                          fontWeight: 700,
+                          padding: '4px 12px',
+                          borderRadius: 999,
+                          backgroundColor: 'rgba(99, 102, 241, 0.12)',
+                          color: '#4f46e5',
+                          border: '1px solid rgba(99, 102, 241, 0.3)',
+                        }}
+                      >
+                        <Lock size={15} /> ថ្ងៃទី {ex.dripDay} (Day {ex.dripDay})
+                      </span>
                     ) : ex.isClosed ? (
                       <span
                         style={{
@@ -554,6 +571,26 @@ export default function StudentPortalView({
                     >
                       <Lock size={15} />
                       <span>ចាក់សោ (Locked)</span>
+                    </span>
+                  ) : ex.isDripLocked ? (
+                    <span
+                      style={{
+                        borderRadius: 12,
+                        padding: '8px 16px',
+                        fontSize: '0.88rem',
+                        fontWeight: 700,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        backgroundColor: 'rgba(99, 102, 241, 0.08)',
+                        color: '#4f46e5',
+                        border: '1.5px solid rgba(99, 102, 241, 0.25)',
+                        cursor: 'not-allowed',
+                      }}
+                      title={`នឹងដោះសោនៅថ្ងៃទី ${ex.dripDay}`}
+                    >
+                      <Lock size={15} />
+                      <span>ដោះសោនៅថ្ងៃទី {ex.dripDay}</span>
                     </span>
                   ) : (
                     <Link

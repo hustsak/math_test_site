@@ -2774,6 +2774,23 @@ export default function AdminHome() {
 
                               {/* Publication Status Pill */}
                               {(() => {
+                                if (r.publicationMode === 'drip' || (typeof r.dripDay === 'number' && r.dripDay > 0)) {
+                                  return (
+                                    <span
+                                      style={{
+                                        fontSize: '0.72rem',
+                                        fontWeight: 800,
+                                        padding: '2px 8px',
+                                        borderRadius: 999,
+                                        backgroundColor: 'rgba(99, 102, 241, 0.15)',
+                                        color: '#4f46e5',
+                                        border: '1px solid rgba(99, 102, 241, 0.35)',
+                                      }}
+                                    >
+                                      💧 ថ្ងៃទី {r.dripDay || 1} (Day {r.dripDay || 1})
+                                    </span>
+                                  );
+                                }
                                 const isScheduled = r.published && r.publicationMode === 'scheduled' && r.scheduledPublishAt && new Date(r.scheduledPublishAt).getTime() > Date.now();
                                 if (isScheduled) {
                                   return (

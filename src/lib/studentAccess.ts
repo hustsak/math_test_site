@@ -40,22 +40,45 @@ export interface StudentAccess {
 export function evaluateExerciseAvailability(
   ex: {
     published: boolean;
-    publicationMode?: 'instant' | 'scheduled' | 'draft';
+    publicationMode?: 'instant' | 'scheduled' | 'drip' | 'draft';
     scheduledPublishAt?: string | number | null;
+    dripDay?: number | null;
     deadline?: string | null;
     gradeLevels?: number[];
   },
   studentGrade?: number,
-  nowMs: number = Date.now()
+  nowMs: number = Date.now(),
+  studentCreatedAt?: number | null
 ): {
   available: boolean;
   upcoming: boolean;
   closed: boolean;
   reason?: string;
+  dripUnlockMs?: number;
 } {
   // Drafts and unpublished exercises are never visible to students
   if (!ex.published || ex.publicationMode === 'draft') {
     return { available: false, upcoming: false, closed: false, reason: 'Exercise is a draft or unpublished.' };
+  }
+
+  // Drip Mode Check: unlocks on Day N relative to student's own registration date
+  if ((ex.publicationMode === 'drip' || (typeof ex.dripDay === 'number' && ex.dripDay > 0)) && typeof ex.dripDay === 'number' && ex.dripDay > 0) {
+    if (studentCreatedAt) {
+      // Day 1 unlocks immediately upon registration (0 ms offset)
+      // Day N unlocks after (N - 1) calendar days (24h blocks or Cambodia day boundary)
+      const daysOffsetMs = (ex.dripDay - 1) * 24 * 60 * 60 * 1000;
+      const dripUnlockMs = studentCreatedAt + daysOffsetMs;
+
+      if (nowMs < dripUnlockMs) {
+        return {
+          available: false,
+          upcoming: true,
+          closed: false,
+          reason: `លំហាត់នេះនឹងដោះសោនៅថ្ងៃទី ${ex.dripDay} គិតពីថ្ងៃដែលអ្នកបានចុះឈ្មោះ។`,
+          dripUnlockMs,
+        };
+      }
+    }
   }
 
   // Grade matching: if exercise targets specific grades, student's grade must match
