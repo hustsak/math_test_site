@@ -24,8 +24,8 @@ export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
     const name = String(body?.name || '').trim();
-    const grade = Math.min(12, Math.max(7, parseInt(body?.grade, 10) || 7));
-    const className = body?.className ? String(body.className).trim().slice(0, 40) : null;
+    const singleGrade = Math.min(12, Math.max(7, parseInt(body?.grade, 10) || 7));
+    const className = null;
 
     if (!name || name.length > 80) {
       return NextResponse.json(
@@ -69,11 +69,15 @@ export async function POST(req: Request) {
       const parentToken = existingData.parentToken || generateToken(24);
       const currentPaymentStatus = existingData.paymentStatus || 'approved';
 
-      // If already exists, keep current payment status or default to approved if previously active
+      // If student already has grades assigned by admin, preserve them!
+      const preservedGrades = Array.isArray(existingData.grades) && existingData.grades.length > 0
+        ? existingData.grades
+        : [existingData.grade || singleGrade];
+      const primaryGrade = preservedGrades[0] || singleGrade;
+
       await studentRef.update({
-        grade: grade || existingData.grade || 7,
-        className: className || existingData.className || null,
-        classKey: classKey || existingData.classKey || '',
+        grade: primaryGrade,
+        grades: preservedGrades,
         accessEnabled: true,
         active: true,
         studentToken,
@@ -88,8 +92,9 @@ export async function POST(req: Request) {
         student: {
           id: docId,
           name: existingData.name || name,
-          grade: grade || existingData.grade || 7,
-          className: className || existingData.className || null,
+          grade: primaryGrade,
+          grades: preservedGrades,
+          className: null,
           expirationDate,
           paymentStatus: currentPaymentStatus,
           studentToken,
@@ -109,9 +114,10 @@ export async function POST(req: Request) {
     const newStudentData = {
       name,
       nameKey,
-      grade,
-      className,
-      classKey,
+      grade: singleGrade,
+      grades: [singleGrade], // Exactly 1 grade chosen by student at registration
+      className: null,
+      classKey: '',
       accessEnabled: true,
       active: true,
       paymentStatus: 'pending', // Pending payment approval from teacher
@@ -158,8 +164,9 @@ export async function POST(req: Request) {
       student: {
         id: docId,
         name,
-        grade,
-        className,
+        grade: singleGrade,
+        grades: [singleGrade],
+        className: null,
         expirationDate,
         paymentStatus: 'pending',
         studentToken,

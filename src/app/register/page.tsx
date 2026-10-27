@@ -533,33 +533,10 @@ function StudentRegisterForm() {
                   ))}
                 </select>
                 <span style={{ fontSize: '0.78rem', color: 'var(--theme-muted)', marginTop: 4, display: 'block' }}>
-                  ប្រព័ន្ធនឹងបង្ហាញលំហាត់ដែលត្រូវនឹងកម្រិតថ្នាក់នេះ។
+                  សិស្សម្នាក់ៗអាចជ្រើសរើសបានតែ ១ កម្រិតថ្នាក់ប៉ុណ្ណោះពេលចុះឈ្មោះ (លោកគ្រូអ្នកគ្រូអាចបន្ថែមថ្នាក់ទី ២ ជូននៅពេលក្រោយ)។
                 </span>
               </div>
 
-              {/* Class Name (Optional) */}
-              <div>
-                <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 800, color: 'var(--theme-navy)', marginBottom: 6 }}>
-                  ថ្នាក់ (Class) — មិនបង្ខំ (Optional)
-                </label>
-                <input
-                  type="text"
-                  placeholder="ឧ. 7A, 8B, 10A..."
-                  value={className}
-                  onChange={(e) => setClassName(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    borderRadius: 12,
-                    border: '1px solid var(--theme-border)',
-                    backgroundColor: 'var(--theme-page-bg)',
-                    color: 'var(--theme-navy)',
-                    fontSize: '0.95rem',
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                  }}
-                />
-              </div>
 
               <button
                 type="submit"
