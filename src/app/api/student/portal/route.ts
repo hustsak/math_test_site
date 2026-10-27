@@ -282,6 +282,7 @@ export async function POST(req: Request) {
         id: studentId,
         name: sData.name,
         grade: studentGrade,
+        grades: enrolledGrades,
         className: sData.className || null,
         expirationDate: formatCambodiaDate(expiresAtMs),
         parentToken: sData.parentToken || null,

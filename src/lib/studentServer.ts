@@ -31,7 +31,11 @@ export async function fetchStudentPortalData(rawToken: string): Promise<StudentV
       return null;
     }
 
-    const studentGrade = typeof student.grade === 'number' ? student.grade : (parseInt(String(student.grade), 10) || undefined);
+    const rawGrades = Array.isArray(student.grades) && student.grades.length > 0
+      ? student.grades.map((g: any) => parseInt(g, 10)).filter((g: number) => !isNaN(g) && g >= 7 && g <= 12)
+      : null;
+    const studentGrade = typeof student.grade === 'number' ? student.grade : (parseInt(String(student.grade), 10) || (rawGrades ? rawGrades[0] : undefined));
+    const enrolledGrades: number[] = rawGrades && rawGrades.length > 0 ? Array.from(new Set(rawGrades)) : (studentGrade ? [studentGrade] : []);
 
     // Parallel fetch: cached published exercises and student's submissions
     const nameKey = normalize(student.name);
@@ -55,10 +59,10 @@ export async function fetchStudentPortalData(rawToken: string): Promise<StudentV
       }
     }
 
-    // Filter exercises by student grade if set
+    // Filter exercises by student enrolled grades if set (student can see exercises for any of their enrolled grades)
     const exList = exListRaw.filter(({ data: ex }) => {
-      if (studentGrade && Array.isArray(ex.gradeLevels) && ex.gradeLevels.length > 0) {
-        return ex.gradeLevels.includes(studentGrade);
+      if (enrolledGrades.length > 0 && Array.isArray(ex.gradeLevels) && ex.gradeLevels.length > 0) {
+        return ex.gradeLevels.some((gl) => enrolledGrades.includes(gl));
       }
       return true;
     });
@@ -108,6 +112,8 @@ export async function fetchStudentPortalData(rawToken: string): Promise<StudentV
       student: {
         id: studentId,
         name: student.name,
+        grade: studentGrade,
+        grades: enrolledGrades,
         className: student.className || '',
         paymentStatus,
         studentToken: token,

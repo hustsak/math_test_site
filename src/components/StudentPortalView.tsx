@@ -138,23 +138,52 @@ export default function StudentPortalView({
           </div>
         </div>
 
-        {student.className && (
-          <div style={{ display: 'inline-block', marginTop: 10 }}>
-            <span
-              style={{
-                fontSize: '0.85rem',
-                fontWeight: 700,
-                padding: '4px 12px',
-                borderRadius: 999,
-                backgroundColor: 'rgba(255, 255, 255, 0.25)',
-              }}
-            >
-              ថ្នាក់៖ {student.className}
-            </span>
-          </div>
-        )}
+        {(() => {
+          const rawGrades = Array.isArray(student.grades) && student.grades.length > 0
+            ? student.grades
+            : (student.grade ? [student.grade] : []);
+          const enrolledGrades = Array.from(new Set(rawGrades.filter(Boolean)));
+          
+          return (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 10 }}>
+              {enrolledGrades.map((g) => (
+                <span
+                  key={g}
+                  style={{
+                    fontSize: '0.85rem',
+                    fontWeight: 700,
+                    padding: '4px 12px',
+                    borderRadius: 999,
+                    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                    backdropFilter: 'blur(4px)',
+                    border: '1px solid rgba(255, 255, 255, 0.35)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                >
+                  <span>📚</span>
+                  <span>ថ្នាក់ទី {g} (Grade {g})</span>
+                </span>
+              ))}
+              {student.className && (
+                <span
+                  style={{
+                    fontSize: '0.85rem',
+                    fontWeight: 700,
+                    padding: '4px 12px',
+                    borderRadius: 999,
+                    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                  }}
+                >
+                  {student.className}
+                </span>
+              )}
+            </div>
+          );
+        })()}
 
-        <p style={{ margin: '10px 0 0', fontSize: '0.95rem', opacity: 0.92, lineHeight: 1.4 }}>
+        <p style={{ margin: '12px 0 0', fontSize: '0.95rem', opacity: 0.92, lineHeight: 1.4 }}>
           សូមជ្រើសរើសលំហាត់ខាងក្រោមដើម្បីចាប់ផ្ដើមធ្វើ។ ឈ្មោះរបស់អ្នកត្រូវបានបញ្ចូលដោយស្វ័យប្រវត្តិ។
         </p>
       </header>

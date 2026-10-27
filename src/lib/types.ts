@@ -145,6 +145,7 @@ export interface Student {
   id: string;
   name: string;
   grade?: number;
+  grades?: number[];
   className?: string;
   studentToken: string;
   parentToken: string;
@@ -259,6 +260,8 @@ export interface StudentViewData {
   student: {
     id: string;
     name: string;
+    grade?: number;
+    grades?: number[];
     className?: string;
     paymentStatus?: 'approved' | 'pending';
     studentToken?: string;

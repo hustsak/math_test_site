@@ -28,6 +28,7 @@ interface PortalData {
     id: string;
     name: string;
     grade: number;
+    grades?: number[];
     className: string | null;
     expirationDate: string;
     parentToken: string | null;
@@ -445,18 +446,32 @@ export default function StudentPortalPage({ targetGrade }: { targetGrade?: numbe
                   <h2 style={{ margin: 0, fontSize: '1.45rem', fontWeight: 900, color: 'var(--theme-navy)' }}>
                     សួស្តី, {data.student.name}!
                   </h2>
-                  <span
-                    style={{
-                      padding: '4px 10px',
-                      borderRadius: 20,
-                      backgroundColor: 'rgba(74, 103, 214, 0.15)',
-                      color: 'var(--theme-primary)',
-                      fontWeight: 800,
-                      fontSize: '0.85rem',
-                    }}
-                  >
-                    ថ្នាក់ទី {data.student.grade} (Grade {data.student.grade})
-                  </span>
+                  {(() => {
+                    const rawGrades = Array.isArray(data.student.grades) && data.student.grades.length > 0
+                      ? data.student.grades
+                      : (data.student.grade ? [data.student.grade] : []);
+                    const enrolledGrades = Array.from(new Set(rawGrades.filter(Boolean)));
+                    
+                    return enrolledGrades.map((g) => (
+                      <span
+                        key={g}
+                        style={{
+                          padding: '4px 10px',
+                          borderRadius: 20,
+                          backgroundColor: 'rgba(74, 103, 214, 0.15)',
+                          color: 'var(--theme-primary)',
+                          fontWeight: 800,
+                          fontSize: '0.85rem',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                        }}
+                      >
+                        <span>📚</span>
+                        <span>ថ្នាក់ទី {g} (Grade {g})</span>
+                      </span>
+                    ));
+                  })()}
                   {data.student.className && (
                     <span
                       style={{
