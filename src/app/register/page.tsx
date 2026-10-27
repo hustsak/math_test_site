@@ -105,7 +105,7 @@ function StudentRegisterForm() {
           localStorage.setItem('mathtest_class_name', className.trim());
           localStorage.setItem('math_last_student_class', className.trim());
         }
-      } catch {}
+      } catch { }
 
       setRegisteredStudent({
         name: data.student?.name || name.trim(),
@@ -272,7 +272,7 @@ function StudentRegisterForm() {
                   </span>
                 </div>
                 <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--theme-muted)', lineHeight: 1.4 }}>
-                  អ្នកអាចរក្សាទុក ឬ Bookmark តំណនេះដើម្បីចូលធ្វើលំហាត់ដោយផ្ទាល់បានគ្រប់ពេលវេលាដោយមិនបាច់វាយឈ្មោះម្ដងទៀតឡើយ!
+                  រក្សាlink នេះដើម្បីធ្វើលំហាត់!
                 </p>
                 <div
                   style={{
@@ -388,7 +388,7 @@ function StudentRegisterForm() {
                   textAlign: 'left',
                 }}
               >
-                💡 <strong>ចំណាំ៖</strong> បន្ទាប់ពីស្កេនទូទាត់ប្រាក់រួច សូមផ្ញើវិក្កយបត្រ (Receipt) ឬប្រាប់ឈ្មោះ «<strong>{registeredStudent.name}</strong>» ទៅកាន់លោកគ្រូ ដើម្បីលោកគ្រូបើកសិទ្ធិ (Approve) ចូលធ្វើលំហាត់ទាំងអស់បានភ្លាមៗ!
+                💡 <strong>ចំណាំ៖</strong> បន្ទាប់ពីស្កេនទូទាត់ប្រាក់រួច សូមផ្ញើវិក្កយបត្រ (Receipt) ឬប្រាប់ឈ្មោះ «<strong>{registeredStudent.name}</strong>» ដើម្បីបើកសិទ្ធិ (Approve) ចូលធ្វើលំហាត់បានភ្លាមៗ!
               </div>
             </div>
 

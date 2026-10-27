@@ -2615,7 +2615,7 @@ export default function AdminHome() {
                                 backgroundColor: 'var(--theme-card-bg)',
                                 borderRadius: 16,
                                 border: '1.5px solid var(--theme-border)',
-                                overflow: 'hidden',
+                                overflow: 'visible',
                                 boxShadow: 'var(--theme-shadow)',
                               }}
                             >
@@ -2628,6 +2628,7 @@ export default function AdminHome() {
                                   alignItems: 'center',
                                   justifyContent: 'space-between',
                                   cursor: 'pointer',
+                                  borderRadius: isCollapsed ? 15 : '15px 15px 0 0',
                                   backgroundColor: isCollapsed ? 'transparent' : 'rgba(59, 130, 246, 0.05)',
                                   borderBottom: isCollapsed ? 'none' : '1px solid var(--theme-border)',
                                   userSelect: 'none',
@@ -2669,10 +2670,11 @@ export default function AdminHome() {
                               {/* Chapter Exercises Container */}
                               {!isCollapsed && (
                                 <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                  {chExercises.map((r) => {
+                                  {chExercises.map((r, rIdx) => {
                       const stats = exStats.get(r.id);
                       const subCount = stats?.count ?? 0;
                       const isMenuOpen = activeMenuId === r.id;
+                      const isNearBottom = rIdx >= chExercises.length - 1 && chExercises.length > 1;
                       const unsubmittedList = getUnsubmittedStudents(r.id);
 
                       return (
@@ -2929,6 +2931,26 @@ export default function AdminHome() {
                               Results
                             </Link>
 
+                            {/* Direct Edit Button */}
+                            <Link
+                              href={`/admin/exercises/${r.id}`}
+                              className="btn small secondary"
+                              style={{
+                                borderRadius: 10,
+                                padding: '6px 10px',
+                                fontSize: '0.82rem',
+                                fontWeight: 600,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                textDecoration: 'none',
+                              }}
+                              title={lang === 'KH' ? 'កែសម្រួល' : 'Edit'}
+                            >
+                              <Edit3 size={14} />
+                              <span>{lang === 'KH' ? 'កែ' : 'Edit'}</span>
+                            </Link>
+
                             {/* More Actions Dropdown Menu */}
                             <div className="action-menu-container" style={{ position: 'relative' }}>
                               <button
@@ -2959,14 +2981,14 @@ export default function AdminHome() {
                                   style={{
                                     position: 'absolute',
                                     right: 0,
-                                    top: 40,
-                                    width: 175,
+                                    ...(isNearBottom ? { bottom: 'calc(100% + 6px)' } : { top: 40 }),
+                                    width: 185,
                                     backgroundColor: 'var(--theme-card-bg)',
                                     borderRadius: 14,
-                                    boxShadow: 'var(--theme-shadow-hover)',
-                                    border: '1px solid var(--theme-border)',
+                                    boxShadow: '0 10px 30px rgba(0,0,0,0.18), var(--theme-shadow-hover)',
+                                    border: '1.5px solid var(--theme-border)',
                                     padding: '6px 0',
-                                    zIndex: 50,
+                                    zIndex: 100,
                                   }}
                                 >
                                   <button
