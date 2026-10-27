@@ -12,7 +12,40 @@ import type { Exercise, Question } from '@/lib/types';
 import { parseExerciseInput } from '@/lib/parseQuestions';
 import { CAMBODIAN_MATH_CURRICULUM } from '@/lib/curriculum';
 
-const SAMPLE_AI_PROMPT = `Create a mathematics exercise for Grade [GRADE] about [TOPIC] with [NUMBER] questions. Write in Khmer. Mix easy, medium, and slightly advanced questions: 40% easy, 40% medium, and 20% advanced. Create age-appropriate questions with correct answers, point values, and clear step-by-step explanations so students can understand their mistakes when they answer incorrectly. Include a suitable Khmer exercise title and a short Khmer description. Use valid LaTeX for mathematical formulas. Return ONLY valid JSON compatible with my website's existing exercise schema, including title, description, and questions. Each question must contain id, prompt, kind, answer, points, and explanation. For multiple-choice questions, include choices and ensure the correct answer matches one choice exactly. Do not include Markdown fences or extra text outside the JSON.`;
+const SAMPLE_AI_PROMPT = `Create a mathematics exercise for Grade [GRADE] about [TOPIC] with [NUMBER] questions. Write in Khmer. Mix easy, medium, and slightly advanced questions: 40% easy, 40% medium, and 20% advanced. Create age-appropriate questions with correct answers, point values, and clear step-by-step explanations so students can understand their mistakes when they answer incorrectly. Include a suitable Khmer exercise title and a short Khmer description. Use valid LaTeX for mathematical formulas (e.g. $inline$ or $$display$$).
+
+Return ONLY valid JSON matching this exact structure:
+{
+  "title": "ចំណងជើងលំហាត់គណិតវិទ្យា",
+  "description": "ការណែនាំសង្ខេបសម្រាប់សិស្ស",
+  "timeLimitMinutes": 20,
+  "shuffleQuestions": false,
+  "questions": [
+    {
+      "id": "q1",
+      "prompt": "គណនា $2/3 + 1/4$",
+      "kind": "choice",
+      "choices": ["11/12", "3/7", "5/12", "7/12"],
+      "answer": "11/12",
+      "points": 1,
+      "explanation": "តម្រូវភាគបែងរួម 12: 8/12 + 3/12 = 11/12"
+    },
+    {
+      "id": "q2",
+      "prompt": "ដោះស្រាយសមីការ $2x + 6 = 18$",
+      "kind": "number",
+      "answer": "6",
+      "points": 1,
+      "explanation": "2x = 18 - 6 = 12 => x = 12 / 2 = 6"
+    }
+  ]
+}
+
+Important Rules:
+1. For multiple-choice questions ("kind": "choice"), supply 2 to 6 choices and make sure "answer" matches one of the choices or its 0-based index.
+2. For direct-answer questions ("kind": "number" or "kind": "text"), supply the expected answer string.
+3. Keep mathematical formulas clean with LaTeX inside $...$.
+4. Return ONLY the JSON object without markdown fences or additional commentary.`;
 
 const newId = () => Math.random().toString(36).slice(2, 10);
 
@@ -71,6 +104,8 @@ export default function EditExercise() {
   // AI Prompt & Paste-import panel
   const [pasteText, setPasteText] = useState('');
   const [copiedPrompt, setCopiedPrompt] = useState(false);
+  const [copiedQId, setCopiedQId] = useState<string | null>(null);
+  const [copiedAllJson, setCopiedAllJson] = useState(false);
   const [importError, setImportError] = useState('');
   const [importSuccess, setImportSuccess] = useState('');
   const [viewMode, setViewMode] = useState<'published' | 'edit'>('published');
@@ -231,24 +266,91 @@ export default function EditExercise() {
     setQ(i, { choices, answer: String(ans) });
   }
 
-  const copyPrompt = async () => {
+  const copyToClipboard = async (text: string) => {
     try {
       if (typeof navigator !== 'undefined' && navigator.clipboard) {
-        await navigator.clipboard.writeText(SAMPLE_AI_PROMPT);
+        await navigator.clipboard.writeText(text);
       } else {
         const ta = document.createElement('textarea');
-        ta.value = SAMPLE_AI_PROMPT;
+        ta.value = text;
         document.body.appendChild(ta);
         ta.select();
         document.execCommand('copy');
         document.body.removeChild(ta);
       }
-      setCopiedPrompt(true);
-      setTimeout(() => setCopiedPrompt(false), 2000);
+      return true;
     } catch {
-      setCopiedPrompt(true);
-      setTimeout(() => setCopiedPrompt(false), 2000);
+      return false;
     }
+  };
+
+  const copyPrompt = async () => {
+    await copyToClipboard(SAMPLE_AI_PROMPT);
+    setCopiedPrompt(true);
+    setTimeout(() => setCopiedPrompt(false), 2000);
+  };
+
+  const copyQuestionJson = async (q: Question) => {
+    // Generate clean, canonical question JSON ready to paste/import
+    const formatted: any = {
+      id: q.id,
+      prompt: q.prompt,
+      kind: q.kind,
+      points: Number(q.points) || 1,
+    };
+    if (q.kind === 'choice') {
+      formatted.choices = q.choices ?? [];
+      const choiceIndex = parseInt(q.answer, 10);
+      if (!isNaN(choiceIndex) && q.choices && q.choices[choiceIndex] !== undefined) {
+        formatted.answer = q.choices[choiceIndex];
+      } else {
+        formatted.answer = q.answer;
+      }
+    } else {
+      formatted.answer = q.answer;
+    }
+    if (q.explanation) {
+      formatted.explanation = q.explanation;
+    }
+    await copyToClipboard(JSON.stringify(formatted, null, 2));
+    setCopiedQId(q.id);
+    setTimeout(() => setCopiedQId(null), 2000);
+  };
+
+  const copyAllQuestionsJson = async () => {
+    if (!ex) return;
+    const data = {
+      title: ex.title,
+      description: ex.description,
+      chapter: ex.chapter,
+      topic: ex.topic,
+      timeLimitMinutes: ex.timeLimitMinutes,
+      shuffleQuestions: ex.shuffleQuestions,
+      questions: ex.questions.map((q) => {
+        const item: any = {
+          id: q.id,
+          prompt: q.prompt,
+          kind: q.kind,
+          points: Number(q.points) || 1,
+        };
+        if (q.kind === 'choice') {
+          item.choices = q.choices ?? [];
+          const choiceIndex = parseInt(q.answer, 10);
+          if (!isNaN(choiceIndex) && q.choices && q.choices[choiceIndex] !== undefined) {
+            item.answer = q.choices[choiceIndex];
+          } else {
+            item.answer = q.answer;
+          }
+        } else {
+          item.answer = q.answer;
+        }
+        if (q.explanation) item.explanation = q.explanation;
+        return item;
+      }),
+    };
+    await copyToClipboard(JSON.stringify(data, null, 2));
+    setCopiedAllJson(true);
+    setTimeout(() => setCopiedAllJson(false), 2000);
   };
 
   function importExerciseJson() {
@@ -963,8 +1065,8 @@ export default function EditExercise() {
       </div>
 
       {/* View Mode Toggle: Published View (clean output as students see) vs Raw Edit View */}
-      <div className="card row spread" style={{ padding: '10px 16px' }}>
-        <div className="row" style={{ gap: 10 }}>
+      <div className="card row spread" style={{ padding: '10px 16px', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+        <div className="row" style={{ gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>View Mode:</span>
           <button
             type="button"
@@ -981,9 +1083,30 @@ export default function EditExercise() {
             ✏️ Form Edit View
           </button>
         </div>
-        <span className="muted" style={{ fontSize: '0.85rem' }}>
-          {viewMode === 'published' ? 'Showing questions exactly as they appear when published' : 'Showing raw editable form inputs'}
-        </span>
+        <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+          <button
+            type="button"
+            className="btn secondary small"
+            onClick={copyAllQuestionsJson}
+            title="Copy entire exercise data as JSON so you can backup, share, or edit it"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              fontWeight: 700,
+              fontSize: '0.82rem',
+              backgroundColor: copiedAllJson ? 'var(--good-bg, #ecfdf5)' : undefined,
+              borderColor: copiedAllJson ? 'var(--good, #10b981)' : undefined,
+              color: copiedAllJson ? 'var(--good, #059669)' : undefined,
+            }}
+          >
+            {copiedAllJson ? <Check size={14} /> : <Copy size={14} />}
+            <span>{copiedAllJson ? '✓ Copied All JSON' : '📋 Copy All JSON'}</span>
+          </button>
+          <span className="muted" style={{ fontSize: '0.82rem' }}>
+            {viewMode === 'published' ? 'Showing questions as students see' : 'Showing editable form inputs'}
+          </span>
+        </div>
       </div>
 
       {viewMode === 'published' ? (
@@ -991,15 +1114,53 @@ export default function EditExercise() {
         <div className="stack" style={{ gap: 12 }}>
           {ex.questions.map((q, i) => (
             <div className="card q-card" key={q.id}>
-              {/* Question number and exercise on 1 line: "1. (-12) + 7 = ?" */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
-                <div className="q-title" style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--ink)', lineHeight: 1.3 }}>
-                  <span style={{ marginRight: 6 }}>{i + 1}.</span>
-                  <MathText text={q.prompt} />
+              {/* Question header with badge, points and Copy JSON button */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span
+                    style={{
+                      fontSize: '0.82rem',
+                      fontWeight: 700,
+                      padding: '3px 10px',
+                      borderRadius: 999,
+                      backgroundColor: 'var(--theme-page-bg, #f8fafc)',
+                      border: '1px solid var(--line)',
+                      color: 'var(--ink)',
+                    }}
+                  >
+                    សំណួរទី {i + 1}
+                  </span>
+                  <span className="muted" style={{ fontSize: '0.78rem' }}>
+                    {q.points} {q.points === 1 ? 'pt' : 'pts'}
+                  </span>
                 </div>
-                <span className="muted" style={{ fontSize: '0.78rem', marginLeft: 10, flexShrink: 0 }}>
-                  {q.points} {q.points === 1 ? 'pt' : 'pts'}
-                </span>
+
+                <button
+                  type="button"
+                  className="btn secondary small"
+                  onClick={() => copyQuestionJson(q)}
+                  title="Copy this question's JSON data"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    fontSize: '0.78rem',
+                    padding: '3px 9px',
+                    borderRadius: 6,
+                    backgroundColor: copiedQId === q.id ? 'var(--good-bg, #ecfdf5)' : undefined,
+                    borderColor: copiedQId === q.id ? 'var(--good, #10b981)' : undefined,
+                    color: copiedQId === q.id ? 'var(--good, #059669)' : undefined,
+                  }}
+                >
+                  {copiedQId === q.id ? <Check size={13} /> : <Copy size={13} />}
+                  <span>{copiedQId === q.id ? '✓ Copied JSON' : 'Copy Question JSON'}</span>
+                </button>
+              </div>
+
+              {/* Question prompt */}
+              <div className="q-title" style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--ink)', lineHeight: 1.45, marginBottom: 12 }}>
+                <span style={{ marginRight: 6 }}>{i + 1}.</span>
+                <MathText text={q.prompt} />
               </div>
 
               {q.kind === 'choice' ? (
@@ -1016,7 +1177,7 @@ export default function EditExercise() {
                           fontSize: '1.08rem',
                           fontWeight: 500,
                           color: 'var(--ink)',
-                          padding: '3px 0',
+                          padding: '4px 0',
                         }}
                       >
                         <span
@@ -1030,7 +1191,7 @@ export default function EditExercise() {
                             flexShrink: 0,
                           }}
                         />
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                           <MathText text={c} />
                           {isKey && (
                             <span style={{ fontSize: '0.75rem', color: 'var(--good)', fontWeight: 600, background: 'var(--good-bg)', padding: '2px 7px', borderRadius: 4 }}>
@@ -1074,12 +1235,31 @@ export default function EditExercise() {
 
           {ex.questions.map((q, i) => (
             <div className="card stack" key={q.id}>
-              <div className="row spread">
-                <div className="row">
+              <div className="row spread" style={{ alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                <div className="row" style={{ alignItems: 'center', gap: 8 }}>
                   <h2>Question {i + 1}</h2>
                   {q.aiGenerated && <span className="badge warn">AI · Check answer</span>}
                 </div>
-                <div className="row">
+                <div className="row" style={{ alignItems: 'center', gap: 6 }}>
+                  <button
+                    type="button"
+                    className="btn secondary small"
+                    onClick={() => copyQuestionJson(q)}
+                    title="Copy this question's JSON data"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      fontSize: '0.78rem',
+                      padding: '4px 8px',
+                      backgroundColor: copiedQId === q.id ? 'var(--good-bg, #ecfdf5)' : undefined,
+                      borderColor: copiedQId === q.id ? 'var(--good, #10b981)' : undefined,
+                      color: copiedQId === q.id ? 'var(--good, #059669)' : undefined,
+                    }}
+                  >
+                    {copiedQId === q.id ? <Check size={13} /> : <Copy size={13} />}
+                    <span>{copiedQId === q.id ? '✓ Copied' : 'Copy JSON'}</span>
+                  </button>
                   <button className="btn secondary small" onClick={() => move(i, -1)} disabled={i === 0}>↑</button>
                   <button className="btn secondary small" onClick={() => move(i, 1)} disabled={i === ex.questions.length - 1}>↓</button>
                   <button
