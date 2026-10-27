@@ -76,6 +76,7 @@ export default function AdminStudentsPage() {
   const [formName, setFormName] = useState('');
   const [formGrade, setFormGrade] = useState<number>(7);
   const [formGrades, setFormGrades] = useState<number[]>([7]);
+  const [formClassName, setFormClassName] = useState('');
   const [formExpiration, setFormExpiration] = useState('');
   const [formAccessEnabled, setFormAccessEnabled] = useState(true);
   const [formPaymentStatus, setFormPaymentStatus] = useState<'approved' | 'pending'>('approved');
@@ -199,6 +200,7 @@ export default function AdminStudentsPage() {
     setFormName('');
     setFormGrade(7);
     setFormGrades([7]);
+    setFormClassName('');
     setFormExpiration(getDefaultExpirationDate());
     setFormAccessEnabled(true);
     setFormPaymentStatus('approved');
@@ -212,6 +214,7 @@ export default function AdminStudentsPage() {
     const enrolled = Array.isArray(s.grades) && s.grades.length > 0 ? s.grades : [s.grade || 7];
     setFormGrade(enrolled[0]);
     setFormGrades(enrolled);
+    setFormClassName(s.className || '');
     setFormExpiration(s.expirationDate);
     setFormAccessEnabled(s.accessEnabled);
     setFormPaymentStatus(s.paymentStatus || 'approved');
@@ -288,7 +291,7 @@ export default function AdminStudentsPage() {
         name: formName.trim(),
         grade: formGrades[0] || formGrade,
         grades: formGrades,
-        className: null,
+        className: formClassName.trim() || null,
         expirationDate: formExpiration,
         accessEnabled: formAccessEnabled,
         paymentStatus: formPaymentStatus,
@@ -341,7 +344,7 @@ export default function AdminStudentsPage() {
           name: formName.trim(),
           grade: formGrades[0] || formGrade,
           grades: formGrades,
-          className: null,
+          className: formClassName.trim() || null,
           expirationDate: formExpiration,
           accessEnabled: formAccessEnabled,
           paymentStatus: formPaymentStatus,
@@ -1261,6 +1264,31 @@ export default function AdminStudentsPage() {
                   <option value="expired">{lang === 'KH' ? 'ផុតកំណត់ (Expired)' : 'Expired'}</option>
                   <option value="blocked">{lang === 'KH' ? 'បានផ្អាក (Blocked)' : 'Blocked'}</option>
                 </select>
+
+                {/* Class / Group Filter */}
+                {uniqueClasses.length > 0 && (
+                  <select
+                    value={selectedClass}
+                    onChange={(e) => setSelectedClass(e.target.value)}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 10,
+                      backgroundColor: 'var(--theme-page-bg)',
+                      border: '1px solid var(--theme-border)',
+                      color: 'var(--theme-navy)',
+                      fontSize: '0.86rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      outline: 'none',
+                    }}
+                    aria-label="Filter by Class"
+                  >
+                    <option value="all">{lang === 'KH' ? 'គ្រប់បន្ទប់/ក្រុម (All Classes)' : 'All Classes'}</option>
+                    {uniqueClasses.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               {/* Copy Student Registration Link */}
@@ -1410,6 +1438,21 @@ export default function AdminStudentsPage() {
                               <span style={{ fontWeight: 800, color: 'var(--theme-navy)', fontSize: '0.95rem' }}>
                                 {s.name}
                               </span>
+                              {s.className && (
+                                <span
+                                  style={{
+                                    fontSize: '0.74rem',
+                                    fontWeight: 700,
+                                    padding: '2px 8px',
+                                    borderRadius: 6,
+                                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                    color: 'var(--theme-primary)',
+                                    border: '1px solid rgba(59, 130, 246, 0.25)',
+                                  }}
+                                >
+                                  🏷️ {s.className}
+                                </span>
+                              )}
                               {s.paymentStatus === 'pending' && (
                                 <span
                                   style={{
@@ -2002,6 +2045,56 @@ export default function AdminStudentsPage() {
                     ? '💡 អ្នកអាចជ្រើសរើសបានលើសពី ១ ថ្នាក់ (ឧ. សិស្សម្នាក់អាចរៀនទាំងថ្នាក់ទី ៧ និង ថ្នាក់ទី ៨)'
                     : '💡 You can select multiple grades (e.g. 1 student can enroll in Grade 7 and Grade 8).'}
                 </div>
+              </div>
+
+              {/* Class / Group Name (e.g. 12A, 12B, Morning, Evening, Olympiad) */}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <label style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--theme-navy)', margin: 0 }}>
+                    {lang === 'KH' ? 'បន្ទប់ ឬឈ្មោះក្រុម / ថ្នាក់ (Class / Group Name)' : 'Class / Group Name (Optional)'}
+                  </label>
+                  {uniqueClasses.length > 0 && (
+                    <select
+                      style={{
+                        fontSize: '0.75rem',
+                        padding: '2px 8px',
+                        borderRadius: 6,
+                        border: '1px solid var(--theme-border)',
+                        backgroundColor: 'var(--theme-card-bg)',
+                        color: 'var(--theme-navy)',
+                        cursor: 'pointer',
+                      }}
+                      value=""
+                      onChange={(e) => {
+                        if (e.target.value) setFormClassName(e.target.value);
+                      }}
+                    >
+                      <option value="">{lang === 'KH' ? '— ជ្រើសរើសបន្ទប់ដែលមាន —' : '— Pick Existing Class —'}</option>
+                      {uniqueClasses.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                <input
+                  type="text"
+                  placeholder="e.g. 12A, 12B, ក្រុមពេលល្ងាច, Math Olympiad"
+                  value={formClassName}
+                  onChange={(e) => setFormClassName(e.target.value)}
+                  maxLength={50}
+                  style={{
+                    width: '100%',
+                    padding: '11px 14px',
+                    borderRadius: 10,
+                    border: '1px solid var(--theme-border)',
+                    backgroundColor: 'var(--theme-page-bg)',
+                    color: 'var(--theme-navy)',
+                    fontSize: '0.95rem',
+                    fontWeight: 600,
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                />
               </div>
 
               {/* Expiration Date */}
