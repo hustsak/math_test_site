@@ -557,55 +557,6 @@ export default function StudentPortalPage({ targetGrade }: { targetGrade?: numbe
               </div>
             </div>
 
-            {/* Unique Link Card */}
-            {data.student.studentToken && (
-              <div
-                style={{
-                  backgroundColor: 'rgba(59, 130, 246, 0.08)',
-                  border: '1.5px solid rgba(59, 130, 246, 0.25)',
-                  borderRadius: 16,
-                  padding: '14px 18px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  flexWrap: 'wrap',
-                  gap: 12,
-                }}
-              >
-                <div>
-                  <div style={{ fontWeight: 800, fontSize: '0.92rem', color: 'var(--theme-primary)', marginBottom: 2 }}>
-                    🔗 តំណផ្ទាល់ខ្លួនរបស់អ្នក (Your Unique Access Link)
-                  </div>
-                  <div style={{ fontSize: '0.82rem', color: 'var(--theme-muted)' }}>
-                    រក្សាទុកតំណនេះ ដើម្បីចូលធ្វើលំហាត់ភ្លាមៗដោយមិនបាច់វាយឈ្មោះឡើងវិញ
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const url = `${window.location.origin}/s/${data.student.studentToken}`;
-                    navigator.clipboard.writeText(url);
-                    showToast('📋 បានចម្លងតំណផ្ទាល់ខ្លួន (Personal Link Copied!)');
-                  }}
-                  className="btn small"
-                  style={{
-                    backgroundColor: 'var(--theme-primary)',
-                    color: '#ffffff',
-                    fontWeight: 800,
-                    borderRadius: 10,
-                    padding: '8px 14px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    border: 'none',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <Copy size={14} />
-                  <span>ចម្លងតំណ (Copy Link)</span>
-                </button>
-              </div>
-            )}
 
             {/* Pending Payment Notice */}
             {data.student.paymentStatus === 'pending' && (
