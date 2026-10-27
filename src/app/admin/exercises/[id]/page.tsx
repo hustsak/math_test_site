@@ -130,6 +130,14 @@ export default function EditExercise() {
   const [customChapters, setCustomChapters] = useState<string[]>([]);
   const [customTopics, setCustomTopics] = useState<string[]>([]);
 
+  const [origin, setOrigin] = useState('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setOrigin(window.location.origin);
+    }
+  }, []);
+
   // Load custom chapters & topics from localStorage
   useEffect(() => {
     try {
@@ -211,8 +219,39 @@ export default function EditExercise() {
       return;
     }
     getDoc(doc(getDb(), 'exercises', id))
-      .then((s) => (s.exists() ? setEx(s.data() as Exercise) : setError('Exercise not found.')))
-      .catch((e) => setError(e.message));
+      .then((s) => {
+        if (!s.exists()) {
+          setError('Exercise not found.');
+          return;
+        }
+        const data = s.data() as Exercise;
+        // Normalize loaded questions to guarantee array integrity and string fields
+        const safeQuestions: Question[] = (Array.isArray(data.questions) ? data.questions : []).map((q, idx) => ({
+          id: String(q?.id || `q_${idx}_${newId()}`),
+          prompt: String(q?.prompt ?? ''),
+          kind: q?.kind === 'choice' ? 'choice' : q?.kind === 'number' ? 'number' : 'text',
+          choices: Array.isArray(q?.choices) ? q.choices.map((c) => String(c ?? '')) : undefined,
+          answer: String(q?.answer ?? ''),
+          points: Math.max(0, Number(q?.points) || 1),
+          explanation: String(q?.explanation ?? ''),
+          aiGenerated: Boolean(q?.aiGenerated),
+        }));
+        if (safeQuestions.length === 0) {
+          safeQuestions.push(blankQuestion());
+        }
+        setEx({
+          ...data,
+          title: String(data.title ?? ''),
+          description: String(data.description ?? ''),
+          chapter: String(data.chapter ?? ''),
+          topic: String(data.topic ?? ''),
+          questions: safeQuestions,
+          gradeLevels: Array.isArray(data.gradeLevels) && data.gradeLevels.length > 0 ? data.gradeLevels : [7, 8, 9, 10, 11, 12],
+          timeLimitMinutes: Math.max(0, Number(data.timeLimitMinutes) || 0),
+          publicationMode: data.publicationMode || 'instant',
+        });
+      })
+      .catch((e) => setError(e?.message || 'Error loading exercise'));
   }, [isAdmin, id]);
 
   if (loading) return <div className="wrap muted">Loading…</div>;
@@ -1190,7 +1229,7 @@ export default function EditExercise() {
               {q.kind === 'choice' ? (
                 <div className="stack" style={{ gap: 10 }}>
                   {(q.choices ?? []).map((c, k) => {
-                    const isKey = Number(q.answer) === k;
+                    const isKey = Number(q.answer) === k || String(q.answer).trim() === String(c).trim();
                     return (
                       <div
                         key={k}
@@ -1459,7 +1498,7 @@ export default function EditExercise() {
 
       {id !== 'new' && ex.published && (
         <div className="notice">
-          Student link: <code>{typeof window !== 'undefined' ? `${window.location.origin}/e/${id}` : ''}</code>
+          Student link: <code>{origin ? `${origin}/e/${id}` : `/e/${id}`}</code>
         </div>
       )}
     </div>

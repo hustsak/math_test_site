@@ -12,7 +12,7 @@ import { splitAutoMath, toLatex } from '@/lib/autoMath';
  */
 function prepareTex(tex: string): string {
   if (!tex) return '';
-  let s = tex.trim();
+  let s = String(tex).trim();
 
   // If text contains doubled backslashes from JSON serialization (e.g. \\frac), normalize them
   if (s.includes('\\\\frac') || s.includes('\\\\sqrt') || s.includes('\\\\lim') || s.includes('\\\\times') || s.includes('\\\\pm')) {
@@ -38,8 +38,8 @@ function render(tex: string, displayMode: boolean): string {
     const prepared = prepareTex(tex);
     return katex.renderToString(prepared, { throwOnError: false, displayMode, strict: 'ignore' });
   } catch (err) {
-    console.error('KaTeX render error:', err);
-    return `<span class="katex-error" style="color:#ef4444">${tex.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>`;
+    console.warn('KaTeX render error:', err);
+    return `<span class="katex-error" style="color:#ef4444">${String(tex ?? '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>`;
   }
 }
 
@@ -51,51 +51,61 @@ function render(tex: string, displayMode: boolean): string {
  */
 function normalizeMathDelimiters(text: string): string {
   if (!text) return '';
+  let s = String(text);
   // Convert \[ ... \] to $$ ... $$
-  let s = text.replace(/\\\[([\s\S]*?)\\\]/g, (_, math) => `$$${math}$$`);
+  s = s.replace(/\\\[([\s\S]*?)\\\]/g, (_, math) => `$$${math}$$`);
   // Convert \( ... \) to $ ... $
   s = s.replace(/\\\(([\s\S]*?)\\\)/g, (_, math) => `$${math}$`);
   return s;
 }
 
 /**
- * Renders text containing math.
+ * Renders text containing math safely.
  *  - $$display$$ and \[display\] are treated as display-mode LaTeX.
  *  - $inline$ and \(inline\) are treated as inline LaTeX.
  *  - Everything else is plain text, except simple typed math such as 3*4, x^2, 3/4,
  *    sqrt(49), x>=2, which is detected and rendered automatically.
  * Khmer and other text outside math is left untouched.
  */
-export default function MathText({ text }: { text: string }) {
-  const normalized = normalizeMathDelimiters(text || '');
-  // Matches $$...$$ (including multiline) or $...$ (non-greedy, within line or across math)
-  const parts = normalized.split(/(\$\$[\s\S]*?\$\$|\$[^$\n]+?\$)/g);
+export default function MathText({ text }: { text?: any }) {
+  if (text === null || text === undefined) return null;
+  const rawStr = typeof text === 'string' ? text : String(text);
+  if (!rawStr) return null;
 
-  return (
-    <span className="math-text">
-      {parts.map((p, i) => {
-        if (!p) return null;
-        if (p.startsWith('$$') && p.endsWith('$$') && p.length >= 4) {
-          const content = p.slice(2, -2);
-          return <span key={i} className="math-display" dangerouslySetInnerHTML={{ __html: render(content, true) }} />;
-        }
-        if (p.startsWith('$') && p.endsWith('$') && p.length >= 2) {
-          const content = p.slice(1, -1);
-          return <span key={i} className="math-inline" dangerouslySetInnerHTML={{ __html: render(content, false) }} />;
-        }
-        return (
-          <span key={i}>
-            {splitAutoMath(p).map((piece, j) =>
-              piece.type === 'math' ? (
-                <span key={j} className="math-inline" dangerouslySetInnerHTML={{ __html: render(toLatex(piece.value), false) }} />
-              ) : (
-                <span key={j}>{piece.value}</span>
-              ),
-            )}
-          </span>
-        );
-      })}
-    </span>
-  );
+  try {
+    const normalized = normalizeMathDelimiters(rawStr);
+    // Matches $$...$$ (including multiline) or $...$ (non-greedy, within line or across math)
+    const parts = normalized.split(/(\$\$[\s\S]*?\$\$|\$[^$\n]+?\$)/g);
+
+    return (
+      <span className="math-text">
+        {parts.map((p, i) => {
+          if (!p) return null;
+          if (p.startsWith('$$') && p.endsWith('$$') && p.length >= 4) {
+            const content = p.slice(2, -2);
+            return <span key={i} className="math-display" dangerouslySetInnerHTML={{ __html: render(content, true) }} />;
+          }
+          if (p.startsWith('$') && p.endsWith('$') && p.length >= 2) {
+            const content = p.slice(1, -1);
+            return <span key={i} className="math-inline" dangerouslySetInnerHTML={{ __html: render(content, false) }} />;
+          }
+          return (
+            <span key={i}>
+              {splitAutoMath(p).map((piece, j) =>
+                piece.type === 'math' ? (
+                  <span key={j} className="math-inline" dangerouslySetInnerHTML={{ __html: render(toLatex(piece.value), false) }} />
+                ) : (
+                  <span key={j}>{piece.value}</span>
+                ),
+              )}
+            </span>
+          );
+        })}
+      </span>
+    );
+  } catch (err) {
+    console.warn('MathText render error:', err);
+    return <span className="math-text-fallback">{rawStr}</span>;
+  }
 }
 
