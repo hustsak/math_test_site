@@ -33,7 +33,13 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       return NextResponse.json({ error: 'Attempt does not match this exercise.' }, { status: 400 });
     }
     if (sub.status === 'submitted') {
-      return NextResponse.json({ error: 'Already submitted.' }, { status: 409 });
+      return NextResponse.json({
+        score: sub.score ?? 0,
+        total: sub.total ?? 0,
+        late: !!sub.late,
+        details: sub.details || [],
+        alreadySubmitted: true,
+      });
     }
 
     // Policy check: If the teacher explicitly blocked the student during the test, halt submission.

@@ -20,39 +20,40 @@ export default function StudentPortalView({
   const [copiedLink, setCopiedLink] = useState(false);
 
   useEffect(() => {
-    if (!initialData) {
-      let active = true;
-      async function load() {
-        if (!token) return;
-        setLoading(true);
-        setError('');
-        try {
-          const res = await fetch(`/api/student/${token}`, {
-            cache: 'no-store',
-          });
-          const json = await res.json();
-          if (!res.ok) {
-            throw new Error(json.error || 'Student link not found or inactive.');
-          }
-          if (active) {
-            setData(json);
-          }
-        } catch (e: any) {
-          if (active) {
-            setError(e.message || 'Could not load student information.');
-          }
-        } finally {
-          if (active) {
-            setLoading(false);
-          }
+    let active = true;
+    async function load() {
+      if (!token) return;
+      try {
+        const res = await fetch(`/api/student/${encodeURIComponent(token)}`, {
+          cache: 'no-store',
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          throw new Error(json.error || 'Student link not found or inactive.');
+        }
+        if (active) {
+          setData(json);
+        }
+      } catch (e: any) {
+        if (active && !data) {
+          setError(e.message || 'Could not load student information.');
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
         }
       }
-      load();
-      return () => {
-        active = false;
-      };
     }
-  }, [token, initialData]);
+
+    load();
+
+    const onFocus = () => load();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      active = false;
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [token]);
 
   if (loading) {
     return (

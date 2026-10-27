@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
-import type { Exercise, PublicExercise } from '@/lib/types';
+import type { Exercise, PublicExercise, Submission } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,6 +51,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     if (tokenQuery || studentNameQuery) {
       let matchedStudentId: string | null = null;
       let matchedNameKey = '';
+      let matchedStudentName = '';
 
       if (tokenQuery) {
         const studentSnap = await adminDb()
@@ -59,19 +60,43 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
           .limit(1)
           .get();
         if (!studentSnap.empty) {
+          const sData = studentSnap.docs[0].data();
           matchedStudentId = studentSnap.docs[0].id;
-          matchedNameKey = studentSnap.docs[0].data().nameKey || '';
+          matchedNameKey = sData.nameKey || '';
+          matchedStudentName = sData.name || '';
         }
       }
 
-      const subsQuery = matchedStudentId
-        ? adminDb().collection('submissions').where('studentId', '==', matchedStudentId).where('exerciseId', '==', params.id).limit(5).get()
-        : adminDb().collection('submissions').where('exerciseId', '==', params.id).where('nameKey', '==', matchedNameKey || studentNameQuery.toLowerCase()).limit(5).get();
+      if (!matchedNameKey && studentNameQuery) {
+        matchedNameKey = studentNameQuery.toLowerCase().replace(/[^a-z0-9\u1780-\u17ff]/gi, '');
+      }
 
-      const subsSnap = await subsQuery;
-      const submittedDoc = subsSnap.docs
-        .map((d) => d.data())
-        .find((s) => s.status === 'submitted');
+      // Query submissions matching studentId or nameKey
+      const queries = [];
+      if (matchedStudentId) {
+        queries.push(
+          adminDb()
+            .collection('submissions')
+            .where('studentId', '==', matchedStudentId)
+            .where('exerciseId', '==', params.id)
+            .limit(10)
+            .get()
+        );
+      }
+      if (matchedNameKey) {
+        queries.push(
+          adminDb()
+            .collection('submissions')
+            .where('nameKey', '==', matchedNameKey)
+            .where('exerciseId', '==', params.id)
+            .limit(10)
+            .get()
+        );
+      }
+
+      const results = await Promise.all(queries);
+      const allDocs = results.flatMap((r) => r.docs.map((d) => d.data() as Submission));
+      const submittedDoc = allDocs.find((s) => s.status === 'submitted');
 
       if (submittedDoc) {
         submissionResult = {
@@ -80,7 +105,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
           late: !!submittedDoc.late,
           details: submittedDoc.details || [],
           studentName: submittedDoc.studentName || '',
-          className: submittedDoc.className || '',
+          className: (submittedDoc as any).className || '',
         };
       }
     }
