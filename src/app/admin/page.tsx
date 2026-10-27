@@ -52,6 +52,7 @@ import {
   Menu,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Folder,
   FolderOpen,
   FolderSymlink,
@@ -102,6 +103,14 @@ export default function AdminHome() {
   const [filter, setFilter] = useState<'all' | 'published' | 'scheduled' | 'draft'>('all');
   const [gradeFilter, setGradeFilter] = useState<string>('all');
   const [selectedChapter, setSelectedChapter] = useState<string>('all');
+  const [collapsedAdminChapters, setCollapsedAdminChapters] = useState<Record<string, boolean>>({});
+
+  const toggleAdminChapter = (chapterKey: string) => {
+    setCollapsedAdminChapters((prev) => ({
+      ...prev,
+      [chapterKey]: !prev[chapterKey],
+    }));
+  };
 
   // Modals & Popups
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
@@ -2584,8 +2593,83 @@ export default function AdminHome() {
                     </Link>
                   </div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {filteredExercises.map((r) => {
+                  (() => {
+                    // Group exercises by Chapter for the active view
+                    const groups: { [key: string]: Row[] } = {};
+                    filteredExercises.forEach((r) => {
+                      const ch = (r.chapter && r.chapter.trim()) ? r.chapter.trim() : (lang === 'KH' ? 'លំហាត់ទូទៅ (គ្មានជំពូក)' : 'General Exercises (No Chapter)');
+                      if (!groups[ch]) groups[ch] = [];
+                      groups[ch].push(r);
+                    });
+
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        {Object.entries(groups).map(([chTitle, chExercises]) => {
+                          const isGeneral = chTitle === 'លំហាត់ទូទៅ (គ្មានជំពូក)' || chTitle === 'General Exercises (No Chapter)';
+                          const isCollapsed = collapsedAdminChapters[chTitle] ?? false;
+
+                          return (
+                            <div
+                              key={chTitle}
+                              style={{
+                                backgroundColor: 'var(--theme-card-bg)',
+                                borderRadius: 16,
+                                border: '1.5px solid var(--theme-border)',
+                                overflow: 'hidden',
+                                boxShadow: 'var(--theme-shadow)',
+                              }}
+                            >
+                              {/* Chapter Accordion Header */}
+                              <div
+                                onClick={() => toggleAdminChapter(chTitle)}
+                                style={{
+                                  padding: '12px 18px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  cursor: 'pointer',
+                                  backgroundColor: isCollapsed ? 'transparent' : 'rgba(59, 130, 246, 0.05)',
+                                  borderBottom: isCollapsed ? 'none' : '1px solid var(--theme-border)',
+                                  userSelect: 'none',
+                                  transition: 'background-color 0.15s ease',
+                                }}
+                              >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                  <div
+                                    style={{
+                                      width: 32,
+                                      height: 32,
+                                      borderRadius: 8,
+                                      backgroundColor: isGeneral ? 'rgba(156, 163, 175, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+                                      color: isGeneral ? 'var(--theme-muted)' : 'var(--theme-primary)',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      fontSize: '0.95rem',
+                                    }}
+                                  >
+                                    {isGeneral ? '📂' : '📚'}
+                                  </div>
+                                  <div>
+                                    <div style={{ fontWeight: 800, fontSize: '0.98rem', color: 'var(--theme-navy)' }}>
+                                      {chTitle}
+                                    </div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--theme-muted)', marginTop: 1 }}>
+                                      {chExercises.length} {lang === 'KH' ? 'លំហាត់' : 'exercises'}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--theme-muted)', fontSize: '0.8rem', fontWeight: 600 }}>
+                                  <span>{isCollapsed ? (lang === 'KH' ? 'ពង្រីក' : 'Expand') : (lang === 'KH' ? 'បង្រួម' : 'Collapse')}</span>
+                                  {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+                                </div>
+                              </div>
+
+                              {/* Chapter Exercises Container */}
+                              {!isCollapsed && (
+                                <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                  {chExercises.map((r) => {
                       const stats = exStats.get(r.id);
                       const subCount = stats?.count ?? 0;
                       const isMenuOpen = activeMenuId === r.id;
@@ -3036,9 +3120,16 @@ export default function AdminHome() {
                             </div>
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
+                                  );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()
                 )}
               </div>
             </div>

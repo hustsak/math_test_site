@@ -15,6 +15,8 @@ import {
   QrCode,
   Copy,
   ChevronRight,
+  ChevronDown,
+  Folder,
   LogOut,
   RefreshCw,
   Sparkles,
@@ -98,6 +100,16 @@ export default function StudentPortalPage({ targetGrade }: { targetGrade?: numbe
 
   // Parent QR Modal
   const [showParentModal, setShowParentModal] = useState(false);
+
+  // Chapter collapse state
+  const [collapsedChapters, setCollapsedChapters] = useState<Record<string, boolean>>({});
+
+  const toggleChapter = (chapterKey: string) => {
+    setCollapsedChapters((prev) => ({
+      ...prev,
+      [chapterKey]: !prev[chapterKey],
+    }));
+  };
 
   function showToast(msg: string) {
     setToast(msg);
@@ -617,144 +629,226 @@ export default function StudentPortalPage({ targetGrade }: { targetGrade?: numbe
                   </p>
                 </div>
               ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
-                  {data.availableNow.map((ex) => (
-                    <div
-                      key={ex.id}
-                      style={{
-                        backgroundColor: 'var(--theme-card-bg)',
-                        borderRadius: 16,
-                        padding: 18,
-                        border: '1.5px solid var(--theme-border)',
-                        boxShadow: 'var(--theme-shadow)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'space-between',
-                        gap: 14,
-                      }}
-                    >
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
-                          <h4 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
-                            {ex.title}
-                          </h4>
-                          {ex.isSample && (
-                            <span
-                              style={{
-                                padding: '3px 8px',
-                                borderRadius: 10,
-                                backgroundColor: 'rgba(16, 185, 129, 0.15)',
-                                color: '#059669',
-                                fontSize: '0.72rem',
-                                fontWeight: 800,
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 4,
-                                flexShrink: 0,
-                              }}
-                            >
-                              🌟 លំហាត់សាកល្បង (Sample)
-                            </span>
-                          )}
-                          {ex.isLockedForPayment && (
-                            <span
-                              style={{
-                                padding: '3px 8px',
-                                borderRadius: 10,
-                                backgroundColor: 'rgba(239, 68, 68, 0.15)',
-                                color: '#dc2626',
-                                fontSize: '0.72rem',
-                                fontWeight: 800,
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 4,
-                                flexShrink: 0,
-                              }}
-                            >
-                              <Lock size={12} />
-                              <span>រង់ចាំបង់ប្រាក់</span>
-                            </span>
-                          )}
-                        </div>
-                        {(ex.chapter || ex.topic) && (
-                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-                            {ex.chapter && (
-                              <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '2px 8px', borderRadius: 6, backgroundColor: 'rgba(59, 130, 246, 0.12)', color: 'var(--theme-primary)' }}>
-                                📚 {ex.chapter}
-                              </span>
-                            )}
-                            {ex.topic && (
-                              <span style={{ fontSize: '0.75rem', fontWeight: 600, padding: '2px 8px', borderRadius: 6, backgroundColor: 'rgba(16, 185, 129, 0.12)', color: '#059669' }}>
-                                🔖 {ex.topic}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                        {ex.description && (
-                          <p style={{ margin: '0 0 10px 0', fontSize: '0.85rem', color: 'var(--theme-muted)', lineHeight: 1.4 }}>
-                            {ex.description}
-                          </p>
-                        )}
-                        <div style={{ display: 'flex', gap: 12, fontSize: '0.82rem', color: 'var(--theme-muted)', flexWrap: 'wrap' }}>
-                          <span>📝 {ex.questionCount} សំណួរ</span>
-                          <span>⭐ {ex.totalPoints} ពិន្ទុ</span>
-                          {ex.timeLimitMinutes > 0 ? (
-                            <span>⏱️ {ex.timeLimitMinutes} នាទី</span>
-                          ) : (
-                            <span>⏱️ គ្មានកំណត់ម៉ោង</span>
-                          )}
-                        </div>
-                        {ex.deadline && (
-                          <div style={{ fontSize: '0.8rem', color: '#d97706', fontWeight: 700, marginTop: 6 }}>
-                            ⏳ ផុតកំណត់ ៖ {new Date(ex.deadline).toLocaleString()}
-                          </div>
-                        )}
-                      </div>
+                (() => {
+                  // Group available exercises by Chapter
+                  const groups: { [key: string]: typeof data.availableNow } = {};
+                  data.availableNow.forEach((ex) => {
+                    const ch = (ex.chapter && ex.chapter.trim()) ? ex.chapter.trim() : 'លំហាត់ទូទៅ (General Exercises)';
+                    if (!groups[ch]) groups[ch] = [];
+                    groups[ch].push(ex);
+                  });
 
-                      {ex.isLockedForPayment ? (
-                        <div
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: 6,
-                            padding: '11px 18px',
-                            borderRadius: 12,
-                            backgroundColor: 'rgba(156, 163, 175, 0.2)',
-                            color: 'var(--theme-muted)',
-                            fontWeight: 800,
-                            fontSize: '0.92rem',
-                            cursor: 'not-allowed',
-                          }}
-                        >
-                          <Lock size={16} />
-                          <span>ចាក់សោរ (Locked — ត្រូវការអនុម័តបង់ប្រាក់)</span>
-                        </div>
-                      ) : (
-                        <Link
-                          href={data.student.studentToken ? `/e/${ex.id}?token=${encodeURIComponent(data.student.studentToken)}` : `/e/${ex.id}`}
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: 6,
-                            padding: '11px 18px',
-                            borderRadius: 12,
-                            backgroundColor: 'var(--theme-primary)',
-                            color: '#ffffff',
-                            fontWeight: 800,
-                            fontSize: '0.92rem',
-                            textDecoration: 'none',
-                            boxShadow: '0 4px 12px rgba(37,99,235,0.2)',
-                          }}
-                        >
-                          <span>{ex.isSample ? '🌟 សាកល្បងធ្វើ (Try Sample)' : 'ចាប់ផ្ដើមធ្វើ (Start Exercise)'}</span>
-                          <ChevronRight size={16} />
-                        </Link>
-                      )}
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                      {Object.entries(groups).map(([chapterTitle, chapterExercises]) => {
+                        const isGeneral = chapterTitle === 'លំហាត់ទូទៅ (General Exercises)';
+                        const isCollapsed = collapsedChapters[chapterTitle] ?? false;
+
+                        return (
+                          <div
+                            key={chapterTitle}
+                            style={{
+                              backgroundColor: 'var(--theme-card-bg)',
+                              borderRadius: 18,
+                              border: '1.5px solid var(--theme-border)',
+                              overflow: 'hidden',
+                              boxShadow: 'var(--theme-shadow)',
+                            }}
+                          >
+                            {/* Chapter Header / Toggle */}
+                            <div
+                              onClick={() => toggleChapter(chapterTitle)}
+                              style={{
+                                padding: '14px 20px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                cursor: 'pointer',
+                                backgroundColor: isCollapsed ? 'transparent' : 'rgba(59, 130, 246, 0.05)',
+                                borderBottom: isCollapsed ? 'none' : '1px solid var(--theme-border)',
+                                userSelect: 'none',
+                                transition: 'background-color 0.15s ease',
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                                <div
+                                  style={{
+                                    width: 34,
+                                    height: 34,
+                                    borderRadius: 10,
+                                    backgroundColor: isGeneral ? 'rgba(156, 163, 175, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+                                    color: isGeneral ? 'var(--theme-muted)' : 'var(--theme-primary)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  {isGeneral ? <Folder size={18} /> : <span>📚</span>}
+                                </div>
+                                <div>
+                                  <h4 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
+                                    {chapterTitle}
+                                  </h4>
+                                  <div style={{ fontSize: '0.78rem', color: 'var(--theme-muted)', marginTop: 2 }}>
+                                    {chapterExercises.length} លំហាត់ (exercises)
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--theme-muted)' }}>
+                                <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>
+                                  {isCollapsed ? 'ពង្រីក (Show)' : 'បង្រួម (Hide)'}
+                                </span>
+                                {isCollapsed ? <ChevronRight size={18} /> : <ChevronDown size={18} />}
+                              </div>
+                            </div>
+
+                            {/* Chapter Exercises List */}
+                            {!isCollapsed && (
+                              <div style={{ padding: 18 }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
+                                  {chapterExercises.map((ex) => (
+                                    <div
+                                      key={ex.id}
+                                      style={{
+                                        backgroundColor: 'var(--theme-page-bg)',
+                                        borderRadius: 14,
+                                        padding: 18,
+                                        border: '1px solid var(--theme-border)',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        justifyContent: 'space-between',
+                                        gap: 14,
+                                      }}
+                                    >
+                                      <div>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+                                          <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
+                                            {ex.title}
+                                          </h4>
+                                          {ex.isSample && (
+                                            <span
+                                              style={{
+                                                padding: '3px 8px',
+                                                borderRadius: 10,
+                                                backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                                                color: '#059669',
+                                                fontSize: '0.72rem',
+                                                fontWeight: 800,
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: 4,
+                                                flexShrink: 0,
+                                              }}
+                                            >
+                                              🌟 លំហាត់សាកល្បង (Sample)
+                                            </span>
+                                          )}
+                                          {ex.isLockedForPayment && (
+                                            <span
+                                              style={{
+                                                padding: '3px 8px',
+                                                borderRadius: 10,
+                                                backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                                                color: '#dc2626',
+                                                fontSize: '0.72rem',
+                                                fontWeight: 800,
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: 4,
+                                                flexShrink: 0,
+                                              }}
+                                            >
+                                              <Lock size={12} />
+                                              <span>រង់ចាំបង់ប្រាក់</span>
+                                            </span>
+                                          )}
+                                        </div>
+
+                                        {ex.topic && (
+                                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+                                            <span style={{ fontSize: '0.75rem', fontWeight: 600, padding: '2px 8px', borderRadius: 6, backgroundColor: 'rgba(16, 185, 129, 0.12)', color: '#059669' }}>
+                                              🔖 {ex.topic}
+                                            </span>
+                                          </div>
+                                        )}
+
+                                        {ex.description && (
+                                          <p style={{ margin: '0 0 10px 0', fontSize: '0.85rem', color: 'var(--theme-muted)', lineHeight: 1.4 }}>
+                                            {ex.description}
+                                          </p>
+                                        )}
+
+                                        <div style={{ display: 'flex', gap: 12, fontSize: '0.82rem', color: 'var(--theme-muted)', flexWrap: 'wrap' }}>
+                                          <span>📝 {ex.questionCount} សំណួរ</span>
+                                          <span>⭐ {ex.totalPoints} ពិន្ទុ</span>
+                                          {ex.timeLimitMinutes > 0 ? (
+                                            <span>⏱️ {ex.timeLimitMinutes} នាទី</span>
+                                          ) : (
+                                            <span>⏱️ គ្មានកំណត់ម៉ោង</span>
+                                          )}
+                                        </div>
+
+                                        {ex.deadline && (
+                                          <div style={{ fontSize: '0.8rem', color: '#d97706', fontWeight: 700, marginTop: 6 }}>
+                                            ⏳ ផុតកំណត់ ៖ {new Date(ex.deadline).toLocaleString()}
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      {ex.isLockedForPayment ? (
+                                        <div
+                                          style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: 6,
+                                            padding: '11px 18px',
+                                            borderRadius: 12,
+                                            backgroundColor: 'rgba(156, 163, 175, 0.2)',
+                                            color: 'var(--theme-muted)',
+                                            fontWeight: 800,
+                                            fontSize: '0.92rem',
+                                            cursor: 'not-allowed',
+                                          }}
+                                        >
+                                          <Lock size={16} />
+                                          <span>ចាក់សោរ (Locked — ត្រូវការអនុម័តបង់ប្រាក់)</span>
+                                        </div>
+                                      ) : (
+                                        <Link
+                                          href={data.student.studentToken ? `/e/${ex.id}?token=${encodeURIComponent(data.student.studentToken)}` : `/e/${ex.id}`}
+                                          style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: 6,
+                                            padding: '11px 18px',
+                                            borderRadius: 12,
+                                            backgroundColor: 'var(--theme-primary)',
+                                            color: '#ffffff',
+                                            fontWeight: 800,
+                                            fontSize: '0.92rem',
+                                            textDecoration: 'none',
+                                            boxShadow: '0 4px 12px rgba(37,99,235,0.2)',
+                                          }}
+                                        >
+                                          <span>{ex.isSample ? '🌟 សាកល្បងធ្វើ (Try Sample)' : 'ចាប់ផ្ដើមធ្វើ (Start Exercise)'}</span>
+                                          <ChevronRight size={16} />
+                                        </Link>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                  ))}
-                </div>
+                  );
+                })()
               )}
             </div>
 

@@ -10,6 +10,7 @@ import { useAdmin } from '@/lib/useAdmin';
 import MathText from '@/components/MathText';
 import type { Exercise, Question } from '@/lib/types';
 import { parseExerciseInput } from '@/lib/parseQuestions';
+import { CAMBODIAN_MATH_CURRICULUM } from '@/lib/curriculum';
 
 const SAMPLE_AI_PROMPT = `Create a mathematics exercise for Grade [GRADE] about [TOPIC] with [NUMBER] questions. Write in Khmer. Mix easy, medium, and slightly advanced questions: 40% easy, 40% medium, and 20% advanced. Create age-appropriate questions with correct answers, point values, and clear step-by-step explanations so students can understand their mistakes when they answer incorrectly. Include a suitable Khmer exercise title and a short Khmer description. Use valid LaTeX for mathematical formulas. Return ONLY valid JSON compatible with my website's existing exercise schema, including title, description, and questions. Each question must contain id, prompt, kind, answer, points, and explanation. For multiple-choice questions, include choices and ensure the correct answer matches one choice exactly. Do not include Markdown fences or extra text outside the JSON.`;
 
@@ -359,7 +360,31 @@ export default function EditExercise() {
         {/* Chapter & Topic */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
           <div>
-            <label>ជំពូក (Chapter - Optional)</label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <label style={{ margin: 0 }}>ជំពូក (Chapter - Optional)</label>
+              {(() => {
+                // If single grade is selected or target grade exists, provide quick suggestions
+                const targetGrade = (ex.gradeLevels && ex.gradeLevels.length === 1) ? ex.gradeLevels[0] : (ex.gradeLevels?.[0] || 7);
+                const curChapters = CAMBODIAN_MATH_CURRICULUM[targetGrade] || [];
+                if (curChapters.length === 0) return null;
+                return (
+                  <select
+                    style={{ fontSize: '0.72rem', padding: '2px 6px', borderRadius: 6, border: '1px solid var(--line)', background: 'var(--card)' }}
+                    value=""
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        set({ chapter: e.target.value });
+                      }
+                    }}
+                  >
+                    <option value="">ជ្រើសពីកម្មវិធីសិក្សា (ថ្នាក់ទី {targetGrade})...</option>
+                    {curChapters.map((c) => (
+                      <option key={c.id} value={c.titleKh}>{c.titleKh}</option>
+                    ))}
+                  </select>
+                );
+              })()}
+            </div>
             <input
               value={ex.chapter || ''}
               onChange={(e) => set({ chapter: e.target.value })}
@@ -367,7 +392,32 @@ export default function EditExercise() {
             />
           </div>
           <div>
-            <label>មេរៀន / ប្រធានបទ (Topic - Optional)</label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <label style={{ margin: 0 }}>មេរៀន / ប្រធានបទ (Lesson / Topic - Optional)</label>
+              {(() => {
+                const targetGrade = (ex.gradeLevels && ex.gradeLevels.length === 1) ? ex.gradeLevels[0] : (ex.gradeLevels?.[0] || 7);
+                const curChapters = CAMBODIAN_MATH_CURRICULUM[targetGrade] || [];
+                const matchedChapter = curChapters.find((c) => c.titleKh === ex.chapter);
+                const lessons = matchedChapter ? matchedChapter.lessons : curChapters.flatMap((c) => c.lessons);
+                if (lessons.length === 0) return null;
+                return (
+                  <select
+                    style={{ fontSize: '0.72rem', padding: '2px 6px', borderRadius: 6, border: '1px solid var(--line)', background: 'var(--card)' }}
+                    value=""
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        set({ topic: e.target.value });
+                      }
+                    }}
+                  >
+                    <option value="">ជ្រើសមេរៀន...</option>
+                    {lessons.map((l) => (
+                      <option key={l.id} value={l.titleKh}>{l.titleKh}</option>
+                    ))}
+                  </select>
+                );
+              })()}
+            </div>
             <input
               value={ex.topic || ''}
               onChange={(e) => set({ topic: e.target.value })}
