@@ -67,12 +67,28 @@ export default function StudentPortalView({
   if (error || !data) {
     return (
       <div className="wrap" style={{ maxWidth: 640, paddingTop: 60 }}>
-        <div className="card error stack" style={{ padding: 24, textAlign: 'center' }}>
+        <div className="card error stack" style={{ padding: 24, textAlign: 'center', backgroundColor: 'var(--theme-card-bg)', border: '1px solid var(--theme-border)', borderRadius: 20 }}>
           <AlertCircle size={40} style={{ margin: '0 auto', color: 'var(--bad)' }} />
-          <h2 style={{ margin: '8px 0 4px', fontSize: '1.35rem' }}>មិនអាចបើកតំណនេះបានទេ</h2>
-          <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.98rem' }}>
+          <h2 style={{ margin: '8px 0 4px', fontSize: '1.35rem', color: 'var(--theme-navy)' }}>មិនអាចបើកតំណនេះបានទេ</h2>
+          <p style={{ margin: 0, color: 'var(--theme-muted)', fontSize: '0.98rem' }}>
             {error || 'តំណសិស្សមិនត្រឹមត្រូវ ឬត្រូវបានបិទដំណើរការ។ សូមទាក់ទងគ្រូបង្រៀនរបស់អ្នក។'}
           </p>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 16, flexWrap: 'wrap' }}>
+            <Link
+              href="/student"
+              className="btn primary"
+              style={{ padding: '9px 18px', borderRadius: 10, fontWeight: 800, fontSize: '0.88rem' }}
+            >
+              👉 ចូលតាមឈ្មោះសិស្ស (Login by Name)
+            </Link>
+            <Link
+              href="/register"
+              className="btn secondary"
+              style={{ padding: '9px 18px', borderRadius: 10, fontWeight: 800, fontSize: '0.88rem' }}
+            >
+              ✍️ ចុះឈ្មោះថ្មី (Register)
+            </Link>
+          </div>
         </div>
       </div>
     );

@@ -27,6 +27,26 @@ export async function POST(req: Request) {
     }
 
     const currentData = snap.data();
+    const target = body?.target || 'parent'; // 'parent' or 'student'
+
+    if (target === 'student') {
+      let newStudentToken = generateToken(24);
+      while (newStudentToken === currentData?.parentToken) {
+        newStudentToken = generateToken(24);
+      }
+
+      await docRef.update({
+        studentToken: newStudentToken,
+        updatedAt: Date.now(),
+      });
+
+      return NextResponse.json({
+        success: true,
+        studentId,
+        studentToken: newStudentToken,
+      });
+    }
+
     let newParentToken = generateToken(24);
     // Ensure parentToken != studentToken
     while (newParentToken === currentData?.studentToken) {

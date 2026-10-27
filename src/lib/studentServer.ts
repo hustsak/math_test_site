@@ -14,7 +14,6 @@ export async function fetchStudentPortalData(rawToken: string): Promise<StudentV
     const studentSnap = await db
       .collection('students')
       .where('studentToken', '==', token)
-      .where('active', '!=', false)
       .limit(1)
       .get();
 
@@ -25,6 +24,13 @@ export async function fetchStudentPortalData(rawToken: string): Promise<StudentV
     const studentDoc = studentSnap.docs[0];
     const student = studentDoc.data() as Student;
     const studentId = studentDoc.id;
+
+    // Check if student access is blocked
+    const accessEnabled = student.accessEnabled !== undefined ? !!student.accessEnabled : (student as any).active !== false;
+    if (!accessEnabled) {
+      return null;
+    }
+
     const studentGrade = typeof student.grade === 'number' ? student.grade : (parseInt(String(student.grade), 10) || undefined);
 
     // Parallel fetch: cached published exercises and student's submissions

@@ -89,6 +89,25 @@ export async function GET(req: Request) {
       const status = getStudentStatus(accessEnabled, expiresAtMs, now, paymentStatus);
       const grade = typeof data.grade === 'number' ? data.grade : (parseInt(data.grade, 10) || 7);
 
+      let studentToken = data.studentToken;
+      let parentToken = data.parentToken;
+
+      // Auto-backfill studentToken or parentToken for existing students if missing
+      if (!studentToken || !parentToken) {
+        if (!studentToken) studentToken = generateToken(24);
+        if (!parentToken) {
+          parentToken = generateToken(24);
+          while (parentToken === studentToken) {
+            parentToken = generateToken(24);
+          }
+        }
+        // Save to Firestore asynchronously
+        db.collection('students').doc(d.id).set(
+          { studentToken, parentToken, active: accessEnabled },
+          { merge: true }
+        ).catch((e) => console.error('Error backfilling tokens:', e));
+      }
+
       return {
         id: d.id,
         name,
@@ -105,8 +124,8 @@ export async function GET(req: Request) {
         updatedAt,
         lastActivityAt,
         status,
-        studentToken: data.studentToken,
-        parentToken: data.parentToken,
+        studentToken,
+        parentToken,
         active: accessEnabled,
       };
     });
