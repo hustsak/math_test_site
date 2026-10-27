@@ -1378,8 +1378,10 @@ export default function StudentPage() {
                           }
                         }}
                       >
-                        <div className={`choice-circle ${checked ? 'active' : ''}`}>
-                          <div className="choice-dot" />
+                        <div className="choice-circle-wrap">
+                          <div className={`choice-circle ${checked ? 'active' : ''}`}>
+                            <div className="choice-dot" />
+                          </div>
                         </div>
                         <div
                           style={{

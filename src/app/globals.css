@@ -236,11 +236,12 @@ th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--li
 th { background: #fafbfc; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); }
 
 .choice-item {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 10px 14px;
-  border-radius: 12px;
+  gap: 16px;
+  padding: 12px 18px;
+  border-radius: 9999px; /* Google Form pill style */
   cursor: pointer;
   background: transparent;
   color: var(--theme-navy, var(--ink));
@@ -249,41 +250,69 @@ th { background: #fafbfc; font-size: 0.8rem; text-transform: uppercase; letter-s
   user-select: none;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
-  transition: background-color 0.12s ease, transform 0.08s ease;
+  transition: background-color 0.22s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
 }
 
 .choice-item:hover {
-  background: rgba(74, 103, 214, 0.05);
+  background: rgba(74, 103, 214, 0.06);
 }
 
 .choice-item:active {
-  transform: scale(0.99);
+  background: rgba(74, 103, 214, 0.12);
 }
 
 .choice-item.selected {
-  background: rgba(74, 103, 214, 0.08);
+  background: rgba(74, 103, 214, 0.1);
 }
 
 [data-theme="dark"] .choice-item:hover {
   background: rgba(92, 121, 230, 0.08);
 }
 
-[data-theme="dark"] .choice-item.selected {
-  background: rgba(92, 121, 230, 0.15);
+[data-theme="dark"] .choice-item:active {
+  background: rgba(92, 121, 230, 0.18);
 }
 
-/* Custom sleek circular radio button without rectangular box */
+[data-theme="dark"] .choice-item.selected {
+  background: rgba(92, 121, 230, 0.16);
+}
+
+/* Google Forms style ripple container */
+.choice-circle-wrap {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  margin: -6px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.choice-item:hover .choice-circle-wrap {
+  background-color: rgba(74, 103, 214, 0.08);
+}
+
+[data-theme="dark"] .choice-item:hover .choice-circle-wrap {
+  background-color: rgba(92, 121, 230, 0.12);
+}
+
+/* Custom sleek circular radio button without rectangular box - Material/Google Form */
 .choice-circle {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   border: 2px solid #94a3b8;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: border-color 0.12s cubic-bezier(0.4, 0, 0.2, 1), transform 0.1s ease, box-shadow 0.12s ease;
-  background-color: var(--theme-card-bg, #ffffff);
+  box-sizing: border-box;
+  background-color: transparent;
+  transition: border-color 0.22s cubic-bezier(0.4, 0, 0.2, 1), transform 0.15s ease;
 }
 
 .choice-item:hover .choice-circle {
@@ -292,17 +321,15 @@ th { background: #fafbfc; font-size: 0.8rem; text-transform: uppercase; letter-s
 
 .choice-circle.active {
   border-color: var(--theme-primary, #4a67d6);
-  border-width: 2.5px;
-  box-shadow: 0 0 0 3px rgba(74, 103, 214, 0.15);
 }
 
 .choice-dot {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   background-color: var(--theme-primary, #4a67d6);
   transform: scale(0);
-  transition: transform 0.14s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.22s cubic-bezier(0.0, 0, 0.2, 1);
 }
 
 .choice-circle.active .choice-dot {
@@ -311,12 +338,10 @@ th { background: #fafbfc; font-size: 0.8rem; text-transform: uppercase; letter-s
 
 [data-theme="dark"] .choice-circle {
   border-color: #64748b;
-  background-color: var(--theme-card-bg, #161e33);
 }
 
 [data-theme="dark"] .choice-circle.active {
   border-color: var(--theme-primary, #5c79e6);
-  box-shadow: 0 0 0 3px rgba(92, 121, 230, 0.25);
 }
 
 [data-theme="dark"] .choice-dot {
