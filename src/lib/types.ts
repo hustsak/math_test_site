@@ -251,6 +251,7 @@ export interface StudentViewExercise {
   isDone: boolean;
   isSample?: boolean;
   isLockedForPayment?: boolean;
+  gradeLevels?: number[];
   score?: number;
   total?: number;
   submittedAt?: number;

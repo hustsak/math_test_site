@@ -132,18 +132,19 @@ export default function StudentPortalPage({ targetGrade }: { targetGrade?: numbe
     }
   }, [targetGrade]);
 
-  async function loadPortalData(nameToFetch: string, classToFetch?: string) {
+  async function loadPortalData(nameToFetch: string, classToFetch?: string, requestedGradeOverride?: number) {
     if (!nameToFetch.trim()) return;
     setLoading(true);
     setError('');
     try {
+      const activeRequestedGrade = requestedGradeOverride !== undefined ? requestedGradeOverride : (targetGrade || undefined);
       const res = await fetch('/api/student/portal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           studentName: nameToFetch.trim(),
           className: classToFetch?.trim() || undefined,
-          ...(targetGrade ? { requestedGrade: targetGrade } : {}),
+          ...(activeRequestedGrade ? { requestedGrade: activeRequestedGrade } : {}),
         }),
       });
 
@@ -450,27 +451,42 @@ export default function StudentPortalPage({ targetGrade }: { targetGrade?: numbe
                     const rawGrades = Array.isArray(data.student.grades) && data.student.grades.length > 0
                       ? data.student.grades
                       : (data.student.grade ? [data.student.grade] : []);
-                    const enrolledGrades = Array.from(new Set(rawGrades.filter(Boolean)));
+                    const enrolledGrades = Array.from(new Set(rawGrades.filter(Boolean))).sort((a, b) => a - b);
                     
-                    return enrolledGrades.map((g) => (
-                      <span
-                        key={g}
-                        style={{
-                          padding: '4px 10px',
-                          borderRadius: 20,
-                          backgroundColor: 'rgba(74, 103, 214, 0.15)',
-                          color: 'var(--theme-primary)',
-                          fontWeight: 800,
-                          fontSize: '0.85rem',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 4,
-                        }}
-                      >
-                        <span>📚</span>
-                        <span>ថ្នាក់ទី {g} (Grade {g})</span>
-                      </span>
-                    ));
+                    return enrolledGrades.map((g) => {
+                      const isActive = data.student.grade === g;
+                      return (
+                        <button
+                          key={g}
+                          type="button"
+                          onClick={() => {
+                            if (g !== data.student.grade) {
+                              loadPortalData(studentName || data.student.name, className || data.student.className || undefined, g);
+                            }
+                          }}
+                          title={`ចុចដើម្បីប្តូរទៅមើលលំហាត់ថ្នាក់ទី ${g}`}
+                          style={{
+                            padding: '4px 12px',
+                            borderRadius: 20,
+                            backgroundColor: isActive ? 'var(--theme-primary)' : 'rgba(74, 103, 214, 0.1)',
+                            color: isActive ? '#ffffff' : 'var(--theme-primary)',
+                            border: isActive ? '1px solid var(--theme-primary)' : '1px solid rgba(74, 103, 214, 0.25)',
+                            fontWeight: 800,
+                            fontSize: '0.85rem',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 5,
+                            cursor: enrolledGrades.length > 1 ? 'pointer' : 'default',
+                            boxShadow: isActive ? '0 2px 8px rgba(37,99,235,0.25)' : 'none',
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          <span>📚</span>
+                          <span>ថ្នាក់ទី {g} (Grade {g})</span>
+                          {isActive && enrolledGrades.length > 1 && <span style={{ fontSize: '0.75rem' }}>✓</span>}
+                        </button>
+                      );
+                    });
                   })()}
                   {data.student.className && (
                     <span

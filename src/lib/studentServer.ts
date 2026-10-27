@@ -89,6 +89,7 @@ export async function fetchStudentPortalData(rawToken: string): Promise<StudentV
         isDone,
         isSample,
         isLockedForPayment,
+        gradeLevels: ex.gradeLevels || [],
         score: sub?.score,
         total: sub?.total,
         submittedAt: sub?.submittedAt,

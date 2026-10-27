@@ -95,7 +95,23 @@ export default function StudentPortalView({
     );
   }
 
-  const { student, exercises } = data;
+  const [selectedGrade, setSelectedGrade] = useState<number | 'all'>('all');
+
+  const { student, exercises: rawExercises } = data;
+
+  const rawGrades = Array.isArray(student.grades) && student.grades.length > 0
+    ? student.grades
+    : (student.grade ? [student.grade] : []);
+  const enrolledGrades = Array.from(new Set(rawGrades.filter(Boolean))).sort((a, b) => a - b);
+
+  const exercises = selectedGrade === 'all'
+    ? rawExercises
+    : rawExercises.filter((ex) => {
+        if (Array.isArray(ex.gradeLevels) && ex.gradeLevels.length > 0) {
+          return ex.gradeLevels.includes(selectedGrade);
+        }
+        return true;
+      });
 
   return (
     <div className="wrap" style={{ maxWidth: 680, padding: '24px 16px 80px' }}>
@@ -138,50 +154,84 @@ export default function StudentPortalView({
           </div>
         </div>
 
-        {(() => {
-          const rawGrades = Array.isArray(student.grades) && student.grades.length > 0
-            ? student.grades
-            : (student.grade ? [student.grade] : []);
-          const enrolledGrades = Array.from(new Set(rawGrades.filter(Boolean)));
-          
-          return (
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 10 }}>
-              {enrolledGrades.map((g) => (
-                <span
-                  key={g}
-                  style={{
-                    fontSize: '0.85rem',
-                    fontWeight: 700,
-                    padding: '4px 12px',
-                    borderRadius: 999,
-                    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-                    backdropFilter: 'blur(4px)',
-                    border: '1px solid rgba(255, 255, 255, 0.35)',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 4,
-                  }}
-                >
-                  <span>📚</span>
-                  <span>ថ្នាក់ទី {g} (Grade {g})</span>
-                </span>
-              ))}
-              {student.className && (
-                <span
-                  style={{
-                    fontSize: '0.85rem',
-                    fontWeight: 700,
-                    padding: '4px 12px',
-                    borderRadius: 999,
-                    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                  }}
-                >
-                  {student.className}
-                </span>
-              )}
-            </div>
-          );
-        })()}
+        {/* Enrolled Grade Badges / Interactive Filters */}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 12 }}>
+          {enrolledGrades.length > 1 && (
+            <button
+              type="button"
+              onClick={() => setSelectedGrade('all')}
+              style={{
+                fontSize: '0.82rem',
+                fontWeight: 800,
+                padding: '5px 12px',
+                borderRadius: 999,
+                cursor: 'pointer',
+                backgroundColor: selectedGrade === 'all' ? '#ffffff' : 'rgba(255, 255, 255, 0.15)',
+                color: selectedGrade === 'all' ? 'var(--brand)' : '#ffffff',
+                border: '1.5px solid rgba(255, 255, 255, 0.5)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <span>📋</span>
+              <span>ទាំងអស់ (All Grades)</span>
+            </button>
+          )}
+
+          {enrolledGrades.map((g) => {
+            const isSelected = selectedGrade === g || (enrolledGrades.length === 1 && selectedGrade === 'all');
+            return (
+              <button
+                key={g}
+                type="button"
+                onClick={() => setSelectedGrade(selectedGrade === g && enrolledGrades.length > 1 ? 'all' : g)}
+                title={`ចុចដើម្បីមើលលំហាត់ថ្នាក់ទី ${g}`}
+                style={{
+                  fontSize: '0.84rem',
+                  fontWeight: 800,
+                  padding: '5px 14px',
+                  borderRadius: 999,
+                  cursor: enrolledGrades.length > 1 ? 'pointer' : 'default',
+                  backgroundColor: isSelected ? '#ffffff' : 'rgba(255, 255, 255, 0.2)',
+                  color: isSelected ? 'var(--brand)' : '#ffffff',
+                  border: isSelected ? '1.5px solid #ffffff' : '1.5px solid rgba(255, 255, 255, 0.35)',
+                  boxShadow: isSelected ? '0 3px 10px rgba(0,0,0,0.18)' : 'none',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <span>📚</span>
+                <span>ថ្នាក់ទី {g} (Grade {g})</span>
+                {isSelected && enrolledGrades.length > 1 && <span style={{ fontSize: '0.75rem', opacity: 0.9 }}>✓</span>}
+              </button>
+            );
+          })}
+
+          {student.className && (
+            <span
+              style={{
+                fontSize: '0.84rem',
+                fontWeight: 700,
+                padding: '5px 12px',
+                borderRadius: 999,
+                backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                color: '#ffffff',
+              }}
+            >
+              {student.className}
+            </span>
+          )}
+        </div>
+
+        {enrolledGrades.length > 1 && (
+          <div style={{ fontSize: '0.8rem', opacity: 0.88, marginTop: 4 }}>
+            💡 <em>ចុចលើកម្រិតថ្នាក់នីមួយៗខាងលើ ដើម្បីមើលលំហាត់តាមថ្នាក់នោះ</em>
+          </div>
+        )}
 
         <p style={{ margin: '12px 0 0', fontSize: '0.95rem', opacity: 0.92, lineHeight: 1.4 }}>
           សូមជ្រើសរើសលំហាត់ខាងក្រោមដើម្បីចាប់ផ្ដើមធ្វើ។ ឈ្មោះរបស់អ្នកត្រូវបានបញ្ចូលដោយស្វ័យប្រវត្តិ។
