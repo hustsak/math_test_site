@@ -93,18 +93,18 @@ assert.equal(boundaryDate.toISOString(), '2026-10-26T17:00:00.000Z', 'Exclusive 
 // At 20:30 on October 26 in Cambodia time (which is 13:30 UTC):
 const duringDayMs = Date.UTC(2026, 9, 26, 13, 30, 0); // 20:30 Cambodia
 assert.ok(duringDayMs < boundaryMs, 'Student must remain authorized during calendar day');
-assert.equal(isStudentAuthorized(true, boundaryMs, duringDayMs), true, 'Student must be authorized on Oct 26');
+assert.equal(isStudentAuthorized(true, boundaryMs, duringDayMs).authorized, true, 'Student must be authorized on Oct 26');
 
 // At 23:59:59 on October 26 in Cambodia time (which is 16:59:59 UTC):
 const endOfDayMs = Date.UTC(2026, 9, 26, 16, 59, 59); // 23:59:59 Cambodia
 assert.ok(endOfDayMs < boundaryMs, 'Student remains authorized up to the last second of Oct 26');
-assert.equal(isStudentAuthorized(true, boundaryMs, endOfDayMs), true, 'Authorized at 23:59:59');
+assert.equal(isStudentAuthorized(true, boundaryMs, endOfDayMs).authorized, true, 'Authorized at 23:59:59');
 
 // Test 6: Access rejected after expiration boundary (starting Oct 27 in Cambodia)
 // At 00:00:01 on October 27 in Cambodia time (which is 17:00:01 UTC):
 const nextDayMs = Date.UTC(2026, 9, 26, 17, 0, 1); // 00:00:01 on Oct 27 in Cambodia
 assert.ok(nextDayMs >= boundaryMs, 'Next day in Cambodia is beyond the expiration boundary');
-assert.equal(isStudentAuthorized(true, boundaryMs, nextDayMs), false, 'Student must be expired on Oct 27');
+assert.equal(isStudentAuthorized(true, boundaryMs, nextDayMs).authorized, false, 'Student must be expired on Oct 27');
 
 // Boundary formatting back to calendar date string in Cambodia
 assert.equal(formatCambodiaDate(boundaryMs), '2026-10-26', 'Boundary must format back to 2026-10-26');
@@ -121,24 +121,24 @@ const mockNow = Date.UTC(2026, 9, 26, 10, 0, 0); // Oct 26, 2026 17:00 Cambodia
 // Active: Enabled and expires in 30 days
 const future30Boundary = getEndOfDayCambodia('2026-11-25');
 assert.equal(getStudentStatus(true, future30Boundary, mockNow), 'active');
-assert.equal(isStudentAuthorized(true, future30Boundary, mockNow), true);
+assert.equal(isStudentAuthorized(true, future30Boundary, mockNow).authorized, true);
 
 // Expiring Soon: Enabled and expires in 4 days (within 7 days)
 const future4Boundary = getEndOfDayCambodia('2026-10-30');
 assert.equal(getStudentStatus(true, future4Boundary, mockNow), 'expiring_soon');
-assert.equal(isStudentAuthorized(true, future4Boundary, mockNow), true);
+assert.equal(isStudentAuthorized(true, future4Boundary, mockNow).authorized, true);
 
 // Expired: Enabled but boundary passed yesterday
 const pastBoundary = getEndOfDayCambodia('2026-10-25');
 assert.equal(getStudentStatus(true, pastBoundary, mockNow), 'expired');
-assert.equal(isStudentAuthorized(true, pastBoundary, mockNow), false);
+assert.equal(isStudentAuthorized(true, pastBoundary, mockNow).authorized, false);
 
 // Blocked: accessEnabled === false takes precedence over all other statuses
 assert.equal(getStudentStatus(false, future30Boundary, mockNow), 'blocked');
-assert.equal(isStudentAuthorized(false, future30Boundary, mockNow), false);
+assert.equal(isStudentAuthorized(false, future30Boundary, mockNow).authorized, false);
 
 assert.equal(getStudentStatus(false, pastBoundary, mockNow), 'blocked');
-assert.equal(isStudentAuthorized(false, pastBoundary, mockNow), false);
+assert.equal(isStudentAuthorized(false, pastBoundary, mockNow).authorized, false);
 
 console.log('✓ Requirements 1-4 Passed: Active, Expiring Soon, Expired, and Blocked statuses accurately determined.');
 

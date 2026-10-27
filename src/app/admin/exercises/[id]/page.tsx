@@ -422,14 +422,14 @@ export default function EditExercise() {
 
     const raw = pasteText.trim();
     if (!raw) {
-      setImportError('Please paste JSON into the box first.');
+      setImportError('Please paste your script, JSON, or text into the box first.');
       return;
     }
 
     const parsed = parseExerciseInput(raw);
     const qs = parsed.questions;
     if (!qs || qs.length === 0) {
-      setImportError('Invalid JSON format: Could not find valid questions. Please ensure your JSON includes a "questions" array with questions.');
+      setImportError('No questions found. Please check your format (Google Apps Script FormApp, JSON, or numbered text format).');
       return;
     }
 
@@ -453,8 +453,9 @@ export default function EditExercise() {
     set(patch);
     setViewMode('published');
 
-    let msg = `✓ Successfully imported ${qs.length} question${qs.length === 1 ? '' : 's'}`;
+    let msg = `✓ Successfully converted ${qs.length} question${qs.length === 1 ? '' : 's'}`;
     if (parsed.title) msg += ` with title "${parsed.title}"`;
+    if (parsed.timeLimitMinutes) msg += ` (${parsed.timeLimitMinutes} min limit)`;
     msg += `! You can now preview and edit all questions below before saving.`;
     setImportSuccess(msg);
   }
@@ -1041,14 +1042,14 @@ export default function EditExercise() {
         />
       </div>
 
-      {/* 2. Paste AI-Generated Exercise JSON Section */}
+      {/* 2. Convert Script / JSON to Quiz Section */}
       <div className="card stack" style={{ border: '1.5px solid var(--line)', backgroundColor: 'var(--card)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: '1.4rem' }}>📋</span>
+          <span style={{ fontSize: '1.4rem' }}>⚡</span>
           <div>
-            <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>Paste AI-Generated Exercise JSON</h2>
+            <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>Convert Script / JSON / Text to Quiz</h2>
             <p style={{ margin: '2px 0 0', fontSize: '0.85rem', color: 'var(--muted)' }}>
-              Paste the complete JSON returned by ChatGPT or Claude, then click &quot;Import Exercise&quot;.
+              Paste <strong>Google Apps Script (FormApp)</strong>, <strong>JSON</strong>, or <strong>plain text questions</strong> below and convert them into interactive quiz questions instantly.
             </p>
           </div>
         </div>
@@ -1059,8 +1060,8 @@ export default function EditExercise() {
             setPasteText(e.target.value);
             if (importError) setImportError('');
           }}
-          rows={8}
-          placeholder={`Paste complete JSON returned by ChatGPT or Claude here...\n\nExample:\n{\n  "title": "លំហាត់ប្រភាគ និងសមីការ",\n  "description": "លំហាត់អនុវត្ត",\n  "questions": [\n    {\n      "id": "q1",\n      "prompt": "គណនា $2/3 + 1/4$",\n      "kind": "choice",\n      "choices": ["11/12", "3/7", "5/12", "7/12"],\n      "answer": "11/12",\n      "points": 1,\n      "explanation": "តម្រូវភាគបែងរួម 12: 8/12 + 3/12 = 11/12"\n    }\n  ]\n}`}
+          rows={9}
+          placeholder={`Paste Google Apps Script, JSON, or plain text here...\n\nExample Google Apps Script:\nfunction createQuiz() {\n  var form = FormApp.create("លំហាត់គណិតវិទ្យា");\n  form.setTimeLimit(30);\n  var item = form.addMultipleChoiceItem();\n  item.setTitle("គណនា $\\\\frac{2}{3} + \\\\frac{1}{4}$")\n      .setChoices([\n        item.createChoice("$\\\\frac{11}{12}$", true),\n        item.createChoice("$\\\\frac{3}{7}$")\n      ]);\n}\n\nOr paste JSON ({ "title": "...", "questions": [...] }) or standard numbered questions.`}
           style={{
             fontFamily: 'monospace',
             fontSize: '0.88rem',
@@ -1076,7 +1077,7 @@ export default function EditExercise() {
             onClick={importExerciseJson}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 700 }}
           >
-            ⚡ Import Exercise
+            ⚡ Convert to Quiz
           </button>
 
           {pasteText.trim() && (
