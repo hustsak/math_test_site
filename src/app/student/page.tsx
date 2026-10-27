@@ -365,29 +365,6 @@ export default function StudentPortalPage({ targetGrade }: { targetGrade?: numbe
                 />
               </div>
 
-              <div>
-                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 800, marginBottom: 6 }}>
-                  ថ្នាក់ (Class) — បើមាន (ឧ. 7A, 8B)
-                </label>
-                <input
-                  type="text"
-                  placeholder="ឧ. 7A"
-                  value={className}
-                  onChange={(e) => setClassName(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    borderRadius: 12,
-                    border: '1px solid var(--theme-border)',
-                    backgroundColor: 'var(--theme-page-bg)',
-                    color: 'var(--theme-navy)',
-                    fontSize: '0.95rem',
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                  }}
-                />
-              </div>
-
               <button
                 type="submit"
                 disabled={loading || !studentName.trim()}

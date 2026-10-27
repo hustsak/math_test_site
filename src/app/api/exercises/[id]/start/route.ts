@@ -172,7 +172,18 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       );
     }
 
-    const studentGrade = typeof studentData.grade === 'number' ? studentData.grade : (parseInt(studentData.grade, 10) || 7);
+    const rawGrades = Array.isArray(studentData.grades) && studentData.grades.length > 0
+      ? studentData.grades.map((g: any) => parseInt(g, 10)).filter((g: number) => !isNaN(g) && g >= 7 && g <= 12)
+      : null;
+    const defaultGrade = typeof studentData.grade === 'number' ? studentData.grade : (parseInt(studentData.grade, 10) || (rawGrades ? rawGrades[0] : 7));
+    const enrolledGrades: number[] = rawGrades && rawGrades.length > 0 ? Array.from(new Set(rawGrades)) : [defaultGrade];
+
+    // If exercise specifies target grade levels, pick matching grade; otherwise fallback to defaultGrade
+    let studentGrade = defaultGrade;
+    if (Array.isArray(ex.gradeLevels) && ex.gradeLevels.length > 0) {
+      const matched = enrolledGrades.find((g) => ex.gradeLevels!.includes(g));
+      if (matched) studentGrade = matched;
+    }
 
     // Verify exercise availability: scheduling (Asia/Phnom_Penh), publication, and grade level match
     const availability = evaluateExerciseAvailability(ex, studentGrade, now);

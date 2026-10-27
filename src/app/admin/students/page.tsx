@@ -75,12 +75,27 @@ export default function AdminStudentsPage() {
   // Form states for Add / Edit
   const [formName, setFormName] = useState('');
   const [formGrade, setFormGrade] = useState<number>(7);
-  const [formClass, setFormClass] = useState('');
+  const [formGrades, setFormGrades] = useState<number[]>([7]);
   const [formExpiration, setFormExpiration] = useState('');
   const [formAccessEnabled, setFormAccessEnabled] = useState(true);
   const [formPaymentStatus, setFormPaymentStatus] = useState<'approved' | 'pending'>('approved');
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
+
+  function toggleGradeSelection(g: number) {
+    setFormGrades((prev) => {
+      if (prev.includes(g)) {
+        if (prev.length === 1) return prev; // Keep at least 1 grade
+        const updated = prev.filter((item) => item !== g);
+        setFormGrade(updated[0]);
+        return updated;
+      } else {
+        const updated = [...prev, g].sort((a, b) => a - b);
+        setFormGrade(updated[0]);
+        return updated;
+      }
+    });
+  }
 
   // Payment Quick Approval state
   const [paymentTogglingId, setPaymentTogglingId] = useState<string | null>(null);
@@ -183,7 +198,7 @@ export default function AdminStudentsPage() {
   function openAddModal() {
     setFormName('');
     setFormGrade(7);
-    setFormClass('');
+    setFormGrades([7]);
     setFormExpiration(getDefaultExpirationDate());
     setFormAccessEnabled(true);
     setFormPaymentStatus('approved');
@@ -194,8 +209,9 @@ export default function AdminStudentsPage() {
   function openEditModal(s: StudentAccess) {
     setEditingStudent(s);
     setFormName(s.name);
-    setFormGrade(s.grade || 7);
-    setFormClass(s.className || '');
+    const enrolled = Array.isArray(s.grades) && s.grades.length > 0 ? s.grades : [s.grade || 7];
+    setFormGrade(enrolled[0]);
+    setFormGrades(enrolled);
     setFormExpiration(s.expirationDate);
     setFormAccessEnabled(s.accessEnabled);
     setFormPaymentStatus(s.paymentStatus || 'approved');
@@ -270,8 +286,9 @@ export default function AdminStudentsPage() {
     try {
       const res = await adminPost('/api/admin/students', {
         name: formName.trim(),
-        grade: formGrade,
-        className: formClass.trim() || null,
+        grade: formGrades[0] || formGrade,
+        grades: formGrades,
+        className: null,
         expirationDate: formExpiration,
         accessEnabled: formAccessEnabled,
         paymentStatus: formPaymentStatus,
@@ -322,8 +339,9 @@ export default function AdminStudentsPage() {
         },
         body: JSON.stringify({
           name: formName.trim(),
-          grade: formGrade,
-          className: formClass.trim() || null,
+          grade: formGrades[0] || formGrade,
+          grades: formGrades,
+          className: null,
           expirationDate: formExpiration,
           accessEnabled: formAccessEnabled,
           paymentStatus: formPaymentStatus,
@@ -567,11 +585,13 @@ export default function AdminStudentsPage() {
       }
       // Grade filter (7-12)
       if (selectedGrade !== 'all') {
-        if ((s.grade || 7) !== Number(selectedGrade)) return false;
+        const targetG = Number(selectedGrade);
+        const enrolled = Array.isArray(s.grades) && s.grades.length > 0 ? s.grades : [s.grade || 7];
+        if (!enrolled.includes(targetG)) return false;
       }
       return true;
     });
-  }, [students, searchTerm, selectedClass, selectedStatus, selectedGrade]);
+  }, [students, searchTerm, selectedStatus, selectedGrade]);
 
   // Status Badge Component
   function StatusBadge({ status }: { status: StudentAccessStatus }) {
@@ -1219,30 +1239,6 @@ export default function AdminStudentsPage() {
                   <option value="12">ថ្នាក់ទី ១២ (Grade 12)</option>
                 </select>
 
-                {/* Class Filter */}
-                <select
-                  value={selectedClass}
-                  onChange={(e) => setSelectedClass(e.target.value)}
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: 10,
-                    backgroundColor: 'var(--theme-page-bg)',
-                    border: '1px solid var(--theme-border)',
-                    color: 'var(--theme-navy)',
-                    fontSize: '0.86rem',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    outline: 'none',
-                  }}
-                >
-                  <option value="all">{lang === 'KH' ? 'គ្រប់ថ្នាក់ទាំងអស់' : 'All Classes'}</option>
-                  {uniqueClasses.map((c) => (
-                    <option key={c} value={c}>
-                      Class {c}
-                    </option>
-                  ))}
-                </select>
-
                 {/* Status Filter */}
                 <select
                   value={selectedStatus}
@@ -1392,8 +1388,7 @@ export default function AdminStudentsPage() {
                         }}
                       >
                         <th style={{ padding: '14px 18px' }}>{lang === 'KH' ? 'ឈ្មោះសិស្ស' : 'Student Name'}</th>
-                        <th style={{ padding: '14px 18px' }}>{lang === 'KH' ? 'កម្រិតថ្នាក់' : 'Grade'}</th>
-                        <th style={{ padding: '14px 18px' }}>{lang === 'KH' ? 'ថ្នាក់' : 'Class'}</th>
+                        <th style={{ padding: '14px 18px' }}>{lang === 'KH' ? 'កម្រិតថ្នាក់' : 'Enrolled Grades'}</th>
                         <th style={{ padding: '14px 18px' }}>{lang === 'KH' ? 'កាលបរិច្ឆេទផុតកំណត់' : 'Expiration Date'}</th>
                         <th style={{ padding: '14px 18px' }}>{lang === 'KH' ? 'ស្ថានភាពចូលប្រើ' : 'Access Status'}</th>
                         <th style={{ padding: '14px 18px' }}>{lang === 'KH' ? 'កែប្រែចុងក្រោយ' : 'Last Updated'}</th>
@@ -1487,41 +1482,27 @@ export default function AdminStudentsPage() {
                             )}
                           </td>
 
-                          {/* Grade */}
+                          {/* Grades */}
                           <td style={{ padding: '14px 18px' }}>
-                            <span
-                              style={{
-                                padding: '3px 8px',
-                                borderRadius: 8,
-                                backgroundColor: 'rgba(74, 103, 214, 0.12)',
-                                color: 'var(--brand)',
-                                fontWeight: 800,
-                                fontSize: '0.82rem',
-                                border: '1px solid rgba(74, 103, 214, 0.25)',
-                              }}
-                            >
-                              {lang === 'KH' ? `ថ្នាក់ទី ${s.grade || 7}` : `Grade ${s.grade || 7}`}
-                            </span>
-                          </td>
-
-                          {/* Class */}
-                          <td style={{ padding: '14px 18px' }}>
-                            {s.className ? (
-                              <span
-                                style={{
-                                  padding: '3px 8px',
-                                  borderRadius: 8,
-                                  backgroundColor: 'rgba(74, 103, 214, 0.1)',
-                                  color: 'var(--theme-primary)',
-                                  fontWeight: 700,
-                                  fontSize: '0.82rem',
-                                }}
-                              >
-                                {s.className}
-                              </span>
-                            ) : (
-                              <span style={{ color: 'var(--theme-muted)', fontSize: '0.85rem' }}>—</span>
-                            )}
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                              {(Array.isArray(s.grades) && s.grades.length > 0 ? s.grades : [s.grade || 7]).map((g) => (
+                                <span
+                                  key={g}
+                                  style={{
+                                    padding: '3px 8px',
+                                    borderRadius: 8,
+                                    backgroundColor: 'rgba(74, 103, 214, 0.12)',
+                                    color: 'var(--brand)',
+                                    fontWeight: 800,
+                                    fontSize: '0.82rem',
+                                    border: '1px solid rgba(74, 103, 214, 0.25)',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  {lang === 'KH' ? `ថ្នាក់ទី ${g}` : `Grade ${g}`}
+                                </span>
+                              ))}
+                            </div>
                           </td>
 
                           {/* Expiration Date */}
@@ -1979,58 +1960,48 @@ export default function AdminStudentsPage() {
                 />
               </div>
 
-              {/* Grade Selection (Grades 7–12) */}
+              {/* Multi-Grade Selection (Grades 7–12) */}
               <div>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 800, color: 'var(--theme-navy)', marginBottom: 6 }}>
-                  {lang === 'KH' ? 'កម្រិតថ្នាក់ (Grade 7–12) *' : 'Grade (7–12) *'}
+                  {lang === 'KH'
+                    ? 'កម្រិតថ្នាក់ដែលអនុញ្ញាត (Enrolled Grades) *'
+                    : 'Enrolled Grades (Student can enroll in 1 or more grades) *'}
                 </label>
-                <select
-                  value={formGrade}
-                  onChange={(e) => setFormGrade(Number(e.target.value))}
-                  style={{
-                    width: '100%',
-                    padding: '11px 14px',
-                    borderRadius: 10,
-                    border: '1px solid var(--theme-border)',
-                    backgroundColor: 'var(--theme-page-bg)',
-                    color: 'var(--theme-navy)',
-                    fontSize: '0.92rem',
-                    fontWeight: 700,
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {[7, 8, 9, 10, 11, 12].map((g) => (
-                    <option key={g} value={g}>
-                      {lang === 'KH' ? `ថ្នាក់ទី ${g} (Grade ${g})` : `Grade ${g}`}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Class Name */}
-              <div>
-                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 800, color: 'var(--theme-navy)', marginBottom: 6 }}>
-                  {lang === 'KH' ? 'ថ្នាក់ (Class) — មិនបង្ខំ' : 'Class — Optional'}
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. 7A, 8B"
-                  value={formClass}
-                  onChange={(e) => setFormClass(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '11px 14px',
-                    borderRadius: 10,
-                    border: '1px solid var(--theme-border)',
-                    backgroundColor: 'var(--theme-page-bg)',
-                    color: 'var(--theme-navy)',
-                    fontSize: '0.92rem',
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                  }}
-                />
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                  {[7, 8, 9, 10, 11, 12].map((g) => {
+                    const isSelected = formGrades.includes(g);
+                    return (
+                      <button
+                        key={g}
+                        type="button"
+                        onClick={() => toggleGradeSelection(g)}
+                        style={{
+                          padding: '10px 8px',
+                          borderRadius: 10,
+                          border: isSelected ? '2px solid var(--theme-primary)' : '1px solid var(--theme-border)',
+                          backgroundColor: isSelected ? 'rgba(74, 103, 214, 0.15)' : 'var(--theme-page-bg)',
+                          color: isSelected ? 'var(--theme-primary)' : 'var(--theme-navy)',
+                          fontWeight: 800,
+                          fontSize: '0.88rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        {isSelected && <Check size={14} />}
+                        <span>ថ្នាក់ទី {g}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div style={{ fontSize: '0.76rem', color: 'var(--theme-muted)', marginTop: 6 }}>
+                  {lang === 'KH'
+                    ? '💡 អ្នកអាចជ្រើសរើសបានលើសពី ១ ថ្នាក់ (ឧ. សិស្សម្នាក់អាចរៀនទាំងថ្នាក់ទី ៧ និង ថ្នាក់ទី ៨)'
+                    : '💡 You can select multiple grades (e.g. 1 student can enroll in Grade 7 and Grade 8).'}
+                </div>
               </div>
 
               {/* Expiration Date */}
@@ -2272,57 +2243,48 @@ export default function AdminStudentsPage() {
                 />
               </div>
 
-              {/* Grade Selection (Grades 7–12) */}
+              {/* Multi-Grade Selection (Grades 7–12) */}
               <div>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 800, color: 'var(--theme-navy)', marginBottom: 6 }}>
-                  {lang === 'KH' ? 'កម្រិតថ្នាក់ (Grade 7–12) *' : 'Grade (7–12) *'}
+                  {lang === 'KH'
+                    ? 'កម្រិតថ្នាក់ដែលអនុញ្ញាត (Enrolled Grades) *'
+                    : 'Enrolled Grades (Student can enroll in 1 or more grades) *'}
                 </label>
-                <select
-                  value={formGrade}
-                  onChange={(e) => setFormGrade(Number(e.target.value))}
-                  style={{
-                    width: '100%',
-                    padding: '11px 14px',
-                    borderRadius: 10,
-                    border: '1px solid var(--theme-border)',
-                    backgroundColor: 'var(--theme-page-bg)',
-                    color: 'var(--theme-navy)',
-                    fontSize: '0.92rem',
-                    fontWeight: 700,
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {[7, 8, 9, 10, 11, 12].map((g) => (
-                    <option key={g} value={g}>
-                      {lang === 'KH' ? `ថ្នាក់ទី ${g} (Grade ${g})` : `Grade ${g}`}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 800, color: 'var(--theme-navy)', marginBottom: 6 }}>
-                  {lang === 'KH' ? 'ថ្នាក់ (Class)' : 'Class'}
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. 7A"
-                  value={formClass}
-                  onChange={(e) => setFormClass(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '11px 14px',
-                    borderRadius: 10,
-                    border: '1px solid var(--theme-border)',
-                    backgroundColor: 'var(--theme-page-bg)',
-                    color: 'var(--theme-navy)',
-                    fontSize: '0.92rem',
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                  }}
-                />
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                  {[7, 8, 9, 10, 11, 12].map((g) => {
+                    const isSelected = formGrades.includes(g);
+                    return (
+                      <button
+                        key={g}
+                        type="button"
+                        onClick={() => toggleGradeSelection(g)}
+                        style={{
+                          padding: '10px 8px',
+                          borderRadius: 10,
+                          border: isSelected ? '2px solid var(--theme-primary)' : '1px solid var(--theme-border)',
+                          backgroundColor: isSelected ? 'rgba(74, 103, 214, 0.15)' : 'var(--theme-page-bg)',
+                          color: isSelected ? 'var(--theme-primary)' : 'var(--theme-navy)',
+                          fontWeight: 800,
+                          fontSize: '0.88rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        {isSelected && <Check size={14} />}
+                        <span>ថ្នាក់ទី {g}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div style={{ fontSize: '0.76rem', color: 'var(--theme-muted)', marginTop: 6 }}>
+                  {lang === 'KH'
+                    ? '💡 អ្នកអាចជ្រើសរើសបានលើសពី ១ ថ្នាក់ (ឧ. សិស្សម្នាក់អាចរៀនទាំងថ្នាក់ទី ៧ និង ថ្នាក់ទី ៨)'
+                    : '💡 You can select multiple grades (e.g. 1 student can enroll in Grade 7 and Grade 8).'}
+                </div>
               </div>
 
               <div>

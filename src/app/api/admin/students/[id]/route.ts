@@ -107,9 +107,31 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       accessEnabled = !!body.accessEnabled;
     }
 
+    let updatedGrades: number[] = Array.isArray(currentData.grades) && currentData.grades.length > 0
+      ? currentData.grades.map((g: any) => parseInt(g, 10)).filter((g: number) => !isNaN(g) && g >= 7 && g <= 12)
+      : [];
+
     let updatedGrade = typeof currentData.grade === 'number' ? currentData.grade : (parseInt(currentData.grade, 10) || 7);
-    if (body.grade !== undefined) {
+    if (body.grades !== undefined && Array.isArray(body.grades) && body.grades.length > 0) {
+      updatedGrades = Array.from(
+        new Set(
+          body.grades
+            .map((g: any) => parseInt(g, 10))
+            .filter((g: number) => !isNaN(g) && g >= 7 && g <= 12)
+        )
+      );
+      if (updatedGrades.length > 0) {
+        updatedGrade = updatedGrades[0];
+      }
+    } else if (body.grade !== undefined) {
       updatedGrade = Math.min(12, Math.max(7, parseInt(body.grade, 10) || 7));
+      if (!updatedGrades.includes(updatedGrade)) {
+        updatedGrades = [updatedGrade];
+      }
+    }
+
+    if (updatedGrades.length === 0) {
+      updatedGrades = [updatedGrade];
     }
 
     let paymentStatus = currentData.paymentStatus || 'approved';
@@ -130,6 +152,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       name: updatedName,
       nameKey,
       grade: updatedGrade,
+      grades: updatedGrades,
       className: updatedClassName,
       classKey,
       accessEnabled,
@@ -151,6 +174,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       name: updatedName,
       nameKey,
       grade: updatedGrade,
+      grades: updatedGrades,
       className: updatedClassName,
       classKey,
       accessEnabled,

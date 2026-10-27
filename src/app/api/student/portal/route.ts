@@ -98,23 +98,36 @@ export async function POST(req: Request) {
       );
     }
 
-    const studentGrade = typeof sData.grade === 'number' ? sData.grade : (parseInt(sData.grade, 10) || 7);
+    const rawGrades = Array.isArray(sData.grades) && sData.grades.length > 0
+      ? sData.grades.map((g: any) => parseInt(g, 10)).filter((g: number) => !isNaN(g) && g >= 7 && g <= 12)
+      : null;
+    const defaultGrade = typeof sData.grade === 'number' ? sData.grade : (parseInt(sData.grade, 10) || (rawGrades ? rawGrades[0] : 7));
+    const enrolledGrades: number[] = rawGrades && rawGrades.length > 0 ? Array.from(new Set(rawGrades)) : [defaultGrade];
 
-    // Security check: Verify requested grade against student's approved grade in database
+    // Security check: Verify requested grade against student's approved grades in database
     const rawRequestedGrade = body?.requestedGrade;
+    let activeGrade = defaultGrade;
+
     if (rawRequestedGrade !== undefined && rawRequestedGrade !== null) {
       const requestedGradeNum = typeof rawRequestedGrade === 'number' ? rawRequestedGrade : parseInt(String(rawRequestedGrade), 10);
-      if (!isNaN(requestedGradeNum) && requestedGradeNum !== studentGrade) {
-        return NextResponse.json(
-          {
-            error: `ឈ្មោះរបស់អ្នកស្ថិតក្នុងថ្នាក់ទី ${studentGrade}។ អ្នកមិនអាចចូលមើលលំហាត់ថ្នាក់ទី ${requestedGradeNum} បានទេ។ (Access restricted to your enrolled Grade ${studentGrade}).`,
-            code: 'GRADE_MISMATCH',
-            actualGrade: studentGrade,
-          },
-          { status: 403 }
-        );
+      if (!isNaN(requestedGradeNum)) {
+        if (!enrolledGrades.includes(requestedGradeNum)) {
+          const gradesLabel = enrolledGrades.map((g) => `ថ្នាក់ទី ${g}`).join(' និង ');
+          return NextResponse.json(
+            {
+              error: `ឈ្មោះរបស់អ្នកស្ថិតក្នុង ${gradesLabel}។ អ្នកមិនអាចចូលមើលលំហាត់ថ្នាក់ទី ${requestedGradeNum} បានទេ។ (Access restricted to your enrolled Grade ${enrolledGrades.join(', ')}).`,
+              code: 'GRADE_MISMATCH',
+              actualGrade: defaultGrade,
+              enrolledGrades,
+            },
+            { status: 403 }
+          );
+        }
+        activeGrade = requestedGradeNum;
       }
     }
+
+    const studentGrade = activeGrade;
 
     // 2. Fetch cached published exercises (avoids hammering Firestore for every student visit)
     const { getCachedPublishedExercises } = await import('@/lib/parentTrackingServer');

@@ -87,7 +87,11 @@ export async function GET(req: Request) {
       const expirationDate = formatCambodiaDate(expiresAtMs);
       const paymentStatus = data.paymentStatus || 'approved';
       const status = getStudentStatus(accessEnabled, expiresAtMs, now, paymentStatus);
-      const grade = typeof data.grade === 'number' ? data.grade : (parseInt(data.grade, 10) || 7);
+      const rawGrades = Array.isArray(data.grades) && data.grades.length > 0
+        ? data.grades.map((g: any) => parseInt(g, 10)).filter((g: number) => !isNaN(g) && g >= 7 && g <= 12)
+        : null;
+      const grade = typeof data.grade === 'number' ? data.grade : (parseInt(data.grade, 10) || (rawGrades ? rawGrades[0] : 7));
+      const grades = rawGrades && rawGrades.length > 0 ? Array.from(new Set(rawGrades)) : [grade];
 
       let studentToken = data.studentToken;
       let parentToken = data.parentToken;
@@ -113,6 +117,7 @@ export async function GET(req: Request) {
         name,
         nameKey,
         grade,
+        grades,
         className,
         classKey,
         accessEnabled,
@@ -148,7 +153,24 @@ export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
     const name = String(body?.name || '').trim();
-    const grade = Math.min(12, Math.max(7, parseInt(body?.grade, 10) || 7));
+
+    // Support single grade or multiple grades (e.g. [7, 8])
+    let parsedGrades: number[] = [];
+    if (Array.isArray(body?.grades) && body.grades.length > 0) {
+      parsedGrades = Array.from(
+        new Set(
+          body.grades
+            .map((g: any) => parseInt(g, 10))
+            .filter((g: number) => !isNaN(g) && g >= 7 && g <= 12)
+        )
+      );
+    }
+    const singleGrade = Math.min(12, Math.max(7, parseInt(body?.grade, 10) || 7));
+    if (parsedGrades.length === 0) {
+      parsedGrades = [singleGrade];
+    }
+    const primaryGrade = parsedGrades[0];
+
     const className = body?.className ? String(body.className).trim().slice(0, 40) : null;
     let expirationDate = String(body?.expirationDate || '').trim();
     const accessEnabled = body?.accessEnabled !== false;
@@ -249,7 +271,8 @@ export async function POST(req: Request) {
     const newStudentData = {
       name,
       nameKey,
-      grade,
+      grade: primaryGrade,
+      grades: parsedGrades,
       className,
       classKey,
       accessEnabled,
@@ -294,7 +317,8 @@ export async function POST(req: Request) {
       id: docId,
       name,
       nameKey,
-      grade,
+      grade: primaryGrade,
+      grades: parsedGrades,
       className,
       classKey,
       accessEnabled,

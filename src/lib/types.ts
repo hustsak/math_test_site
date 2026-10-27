@@ -123,7 +123,8 @@ export interface StudentAccess {
   id: string;
   name: string;
   nameKey: string;
-  grade: number; // Grades 7-12
+  grade: number; // Primary grade (Grades 7-12)
+  grades?: number[]; // Enrolled grades (e.g. [7, 8])
   className: string | null;
   classKey: string;
   accessEnabled: boolean;
