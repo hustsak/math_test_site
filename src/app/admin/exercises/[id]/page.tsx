@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { addDoc, collection, doc, getDoc, setDoc } from 'firebase/firestore';
@@ -12,7 +12,23 @@ import type { Exercise, Question } from '@/lib/types';
 import { parseExerciseInput } from '@/lib/parseQuestions';
 import { CAMBODIAN_MATH_CURRICULUM } from '@/lib/curriculum';
 
-const SAMPLE_AI_PROMPT = `Create a mathematics exercise for Grade [GRADE] about [TOPIC] with [NUMBER] questions. Write in Khmer. Mix easy, medium, and slightly advanced questions: 40% easy, 40% medium, and 20% advanced. Create age-appropriate questions with correct answers, point values, and clear step-by-step explanations so students can understand their mistakes when they answer incorrectly. Include a suitable Khmer exercise title and a short Khmer description. Use valid LaTeX for mathematical formulas (e.g. $inline$ or $$display$$).
+function getAiExercisePrompt(targetGrade?: number, targetTopic?: string, questionCount: number = 5): string {
+  const gStr = targetGrade ? `Grade ${targetGrade}` : 'Grade [GRADE]';
+  const tStr = targetTopic ? `"${targetTopic}"` : '[TOPIC]';
+  return `Create a high-quality mathematics exercise for ${gStr} about ${tStr} with ${questionCount} questions. Write in Khmer (ភាសាខ្មែរ). Mix easy, medium, and slightly advanced questions: 40% easy, 40% medium, and 20% advanced. Create age-appropriate questions with correct answers, point values, and clear step-by-step explanations so students can understand their mistakes when they answer incorrectly. Include a suitable Khmer exercise title and a short Khmer description.
+
+LaTeX Mathematical Formula Standards:
+1. Wrap all mathematical expressions, equations, and fractions in LaTeX using single dollar signs $...$ for inline formulas or double dollar signs $$...$$ for display formulas.
+2. Use standard LaTeX:
+   - Fractions: $\\frac{a}{b}$
+   - Powers: $x^2$, $a^{n+1}$
+   - Roots: $\\sqrt{x}$, $\\sqrt[3]{x}$
+   - Multiplication & Division: $\\times$, $\\div$
+   - Comparison & Logic: $\\le$, $\\ge$, $\\neq$, $\\approx$
+   - Equations: $2x + 5 = 15$
+   - Limits & Sums: $\\lim_{x \\to 0} f(x)$, $\\sum_{i=1}^n i$
+3. In Khmer text, keep Khmer words outside the $...$ delimiters.
+4. Escape backslashes properly in JSON (e.g. "\\\\frac{1}{2}").
 
 Return ONLY valid JSON matching this exact structure:
 {
@@ -23,12 +39,12 @@ Return ONLY valid JSON matching this exact structure:
   "questions": [
     {
       "id": "q1",
-      "prompt": "គណនា $2/3 + 1/4$",
+      "prompt": "គណនា $\\\\frac{2}{3} + \\\\frac{1}{4}$",
       "kind": "choice",
-      "choices": ["11/12", "3/7", "5/12", "7/12"],
-      "answer": "11/12",
+      "choices": ["$\\\\frac{11}{12}$", "$\\\\frac{3}{7}$", "$\\\\frac{5}{12}$", "$\\\\frac{7}{12}$"],
+      "answer": "$\\\\frac{11}{12}$",
       "points": 1,
-      "explanation": "តម្រូវភាគបែងរួម 12: 8/12 + 3/12 = 11/12"
+      "explanation": "តម្រូវភាគបែងរួម 12: $\\\\frac{8}{12} + \\\\frac{3}{12} = \\\\frac{11}{12}$"
     },
     {
       "id": "q2",
@@ -36,16 +52,18 @@ Return ONLY valid JSON matching this exact structure:
       "kind": "number",
       "answer": "6",
       "points": 1,
-      "explanation": "2x = 18 - 6 = 12 => x = 12 / 2 = 6"
+      "explanation": "$2x = 18 - 6 = 12 \\\\Rightarrow x = \\\\frac{12}{2} = 6$"
     }
   ]
 }
 
 Important Rules:
-1. For multiple-choice questions ("kind": "choice"), supply 2 to 6 choices and make sure "answer" matches one of the choices or its 0-based index.
-2. For direct-answer questions ("kind": "number" or "kind": "text"), supply the expected answer string.
-3. Keep mathematical formulas clean with LaTeX inside $...$.
-4. Return ONLY the JSON object without markdown fences or additional commentary.`;
+1. For multiple-choice questions ("kind": "choice"), provide 2 to 6 choices and make sure "answer" matches one of the choices or its 0-based index.
+2. For direct-answer questions ("kind": "number" or "kind": "text"), provide the exact correct answer.
+3. Return ONLY valid JSON with no markdown backticks (\`\`\`json) and no conversational text outside the JSON.`;
+}
+
+const SAMPLE_AI_PROMPT = getAiExercisePrompt();
 
 const newId = () => Math.random().toString(36).slice(2, 10);
 
@@ -284,8 +302,14 @@ export default function EditExercise() {
     }
   };
 
+  const currentAiPrompt = useMemo(() => {
+    const singleGrade = ex?.gradeLevels && ex.gradeLevels.length === 1 ? ex.gradeLevels[0] : (ex?.gradeLevels?.[0]);
+    const topic = ex?.topic || ex?.chapter || '';
+    return getAiExercisePrompt(singleGrade, topic, 5);
+  }, [ex?.gradeLevels, ex?.topic, ex?.chapter]);
+
   const copyPrompt = async () => {
-    await copyToClipboard(SAMPLE_AI_PROMPT);
+    await copyToClipboard(currentAiPrompt);
     setCopiedPrompt(true);
     setTimeout(() => setCopiedPrompt(false), 2000);
   };
@@ -962,8 +986,8 @@ export default function EditExercise() {
 
         <textarea
           readOnly
-          value={SAMPLE_AI_PROMPT}
-          rows={5}
+          value={currentAiPrompt}
+          rows={6}
           style={{
             fontFamily: 'monospace',
             fontSize: '0.88rem',
