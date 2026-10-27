@@ -997,6 +997,146 @@ export default function AdminStudentsPage() {
               </div>
             </div>
 
+              <div
+                style={{
+                  backgroundColor: 'var(--theme-card-bg)',
+                  borderRadius: 16,
+                  padding: '16px 18px',
+                  border: '1px solid var(--theme-border)',
+                  boxShadow: 'var(--theme-shadow)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 8,
+                        backgroundColor: 'rgba(74, 103, 214, 0.12)',
+                        color: 'var(--theme-primary)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Sparkles size={16} />
+                    </div>
+                    <div>
+                      <h3 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 900, color: 'var(--theme-navy)' }}>
+                        {lang === 'KH' ? 'តំណភ្ជាប់អចិន្ត្រៃយ៍សម្រាប់សិស្សតាមកម្រិតថ្នាក់ (Permanent Student Links)' : 'Permanent Student Links by Grade'}
+                      </h3>
+                      <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--theme-muted)' }}>
+                        {lang === 'KH'
+                          ? 'ផ្ញើតំណនេះទៅសិស្សតាមថ្នាក់នីមួយៗ (សិស្សគ្រាន់តែវាយឈ្មោះដើម្បីចូលរៀន)'
+                          : 'Send these grade-specific links to students. Students simply enter their name to access.'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                    gap: 10,
+                  }}
+                >
+                  {[7, 8, 9, 10, 11, 12].map((g) => {
+                    const gradePath = `/student/grade-${g}`;
+                    const fullGradeUrl = typeof window !== 'undefined' ? `${window.location.origin}${gradePath}` : gradePath;
+                    return (
+                      <div
+                        key={g}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 10,
+                          padding: '10px 12px',
+                          borderRadius: 10,
+                          backgroundColor: 'var(--theme-page-bg)',
+                          border: '1px solid var(--theme-border)',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                          <span
+                            style={{
+                              padding: '3px 8px',
+                              borderRadius: 6,
+                              backgroundColor: 'rgba(74, 103, 214, 0.15)',
+                              color: 'var(--theme-primary)',
+                              fontSize: '0.8rem',
+                              fontWeight: 900,
+                              flexShrink: 0,
+                            }}
+                          >
+                            ថ្នាក់ទី {g}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: '0.82rem',
+                              color: 'var(--theme-navy)',
+                              fontFamily: 'monospace',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                            title={fullGradeUrl}
+                          >
+                            {gradePath}
+                          </span>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(fullGradeUrl);
+                              setToast(lang === 'KH' ? `បានចម្លងតំណថ្នាក់ទី ${g}!` : `Copied Grade ${g} Link!`);
+                              setTimeout(() => setToast(''), 3000);
+                            }}
+                            className="btn small secondary"
+                            style={{
+                              padding: '5px 9px',
+                              borderRadius: 7,
+                              fontSize: '0.75rem',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              fontWeight: 700,
+                            }}
+                            title="Copy link"
+                          >
+                            <Copy size={13} />
+                            <span>{lang === 'KH' ? 'ចម្លង' : 'Copy'}</span>
+                          </button>
+                          <a
+                            href={gradePath}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              padding: '5px 8px',
+                              borderRadius: 7,
+                              backgroundColor: 'transparent',
+                              border: '1px solid var(--theme-border)',
+                              color: 'var(--theme-muted)',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              textDecoration: 'none',
+                            }}
+                            title="Open link in new tab"
+                          >
+                            <ExternalLink size={13} />
+                          </a>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
             {/* Action Bar: Search, Filters & Add Student Button */}
             <div
               style={{

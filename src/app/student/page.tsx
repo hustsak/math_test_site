@@ -85,7 +85,7 @@ interface PortalData {
   }>;
 }
 
-export default function StudentPortalPage() {
+export default function StudentPortalPage({ targetGrade }: { targetGrade?: number }) {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [studentName, setStudentName] = useState('');
   const [className, setClassName] = useState('');
@@ -121,14 +121,15 @@ export default function StudentPortalPage() {
 
   // Check saved name in localStorage on mount
   useEffect(() => {
-    const savedName = localStorage.getItem('math_portal_student_name');
-    const savedClass = localStorage.getItem('math_portal_student_class') || '';
+    const storagePrefix = targetGrade ? `math_portal_g${targetGrade}_` : 'math_portal_';
+    const savedName = localStorage.getItem(`${storagePrefix}student_name`) || localStorage.getItem('math_portal_student_name');
+    const savedClass = localStorage.getItem(`${storagePrefix}student_class`) || localStorage.getItem('math_portal_student_class') || '';
     if (savedName) {
       setStudentName(savedName);
       setClassName(savedClass);
       loadPortalData(savedName, savedClass);
     }
-  }, []);
+  }, [targetGrade]);
 
   async function loadPortalData(nameToFetch: string, classToFetch?: string) {
     if (!nameToFetch.trim()) return;
@@ -141,6 +142,7 @@ export default function StudentPortalPage() {
         body: JSON.stringify({
           studentName: nameToFetch.trim(),
           className: classToFetch?.trim() || undefined,
+          ...(targetGrade ? { requestedGrade: targetGrade } : {}),
         }),
       });
 
@@ -152,8 +154,11 @@ export default function StudentPortalPage() {
       setData(json);
       setIsLoggedIn(true);
       // Remember credentials in localStorage
+      const storagePrefix = targetGrade ? `math_portal_g${targetGrade}_` : 'math_portal_';
+      localStorage.setItem(`${storagePrefix}student_name`, nameToFetch.trim());
       localStorage.setItem('math_portal_student_name', nameToFetch.trim());
       if (classToFetch) {
+        localStorage.setItem(`${storagePrefix}student_class`, classToFetch.trim());
         localStorage.setItem('math_portal_student_class', classToFetch.trim());
       }
     } catch (e: any) {
@@ -171,6 +176,9 @@ export default function StudentPortalPage() {
   }
 
   function handleLogout() {
+    const storagePrefix = targetGrade ? `math_portal_g${targetGrade}_` : 'math_portal_';
+    localStorage.removeItem(`${storagePrefix}student_name`);
+    localStorage.removeItem(`${storagePrefix}student_class`);
     localStorage.removeItem('math_portal_student_name');
     localStorage.removeItem('math_portal_student_class');
     setIsLoggedIn(false);
@@ -218,10 +226,10 @@ export default function StudentPortalPage() {
             <img src="/logo.png" alt="Math Logo" style={{ height: 42, width: 'auto', objectFit: 'contain' }} />
             <div>
               <h1 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 900, color: 'var(--theme-navy)' }}>
-                មជ្ឈមណ្ឌលសិស្ស (Student Portal)
+                {targetGrade ? `មជ្ឈមណ្ឌលសិស្ស ថ្នាក់ទី ${targetGrade} (Grade ${targetGrade} Portal)` : 'មជ្ឈមណ្ឌលសិស្ស (Student Portal)'}
               </h1>
               <span style={{ fontSize: '0.8rem', color: 'var(--theme-muted)' }}>
-                លំហាត់គណិតវិទ្យាថ្នាក់ទី ៧ ដល់ ទី ១២ (Grades 7–12)
+                {targetGrade ? `លំហាត់គណិតវិទ្យាថ្នាក់ទី ${targetGrade} (Grade ${targetGrade} Mathematics)` : 'លំហាត់គណិតវិទ្យាថ្នាក់ទី ៧ ដល់ ទី ១២ (Grades 7–12)'}
               </span>
             </div>
           </div>
@@ -292,10 +300,12 @@ export default function StudentPortalPage() {
                 <UserCheck size={28} />
               </div>
               <h2 style={{ margin: '0 0 6px 0', fontSize: '1.35rem', fontWeight: 900, color: 'var(--theme-navy)' }}>
-                សូមបញ្ចូលឈ្មោះរបស់អ្នក
+                {targetGrade ? `សូមបញ្ចូលឈ្មោះរបស់អ្នកដើម្បីចូលរៀន ថ្នាក់ទី ${targetGrade}` : 'សូមបញ្ចូលឈ្មោះរបស់អ្នកដើម្បីចូលរៀន'}
               </h2>
               <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--theme-muted)' }}>
-                ប្រព័ន្ធនឹងបង្ហាញលំហាត់តាមកម្រិតថ្នាក់របស់អ្នកដោយស្វ័យប្រវត្តិ
+                {targetGrade
+                  ? `ប្រព័ន្ធនឹងផ្ទៀងផ្ទាត់បញ្ជីឈ្មោះសិស្សថ្នាក់ទី ${targetGrade} និងបង្ហាញលំហាត់ដែលត្រូវរៀន`
+                  : 'ប្រព័ន្ធនឹងបង្ហាញលំហាត់តាមកម្រិតថ្នាក់របស់អ្នកដោយស្វ័យប្រវត្តិ'}
               </p>
             </div>
 

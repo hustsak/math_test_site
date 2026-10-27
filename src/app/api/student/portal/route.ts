@@ -100,6 +100,22 @@ export async function POST(req: Request) {
 
     const studentGrade = typeof sData.grade === 'number' ? sData.grade : (parseInt(sData.grade, 10) || 7);
 
+    // Security check: Verify requested grade against student's approved grade in database
+    const rawRequestedGrade = body?.requestedGrade;
+    if (rawRequestedGrade !== undefined && rawRequestedGrade !== null) {
+      const requestedGradeNum = typeof rawRequestedGrade === 'number' ? rawRequestedGrade : parseInt(String(rawRequestedGrade), 10);
+      if (!isNaN(requestedGradeNum) && requestedGradeNum !== studentGrade) {
+        return NextResponse.json(
+          {
+            error: `ឈ្មោះរបស់អ្នកស្ថិតក្នុងថ្នាក់ទី ${studentGrade}។ អ្នកមិនអាចចូលមើលលំហាត់ថ្នាក់ទី ${requestedGradeNum} បានទេ។ (Access restricted to your enrolled Grade ${studentGrade}).`,
+            code: 'GRADE_MISMATCH',
+            actualGrade: studentGrade,
+          },
+          { status: 403 }
+        );
+      }
+    }
+
     // 2. Fetch cached published exercises (avoids hammering Firestore for every student visit)
     const { getCachedPublishedExercises } = await import('@/lib/parentTrackingServer');
     const cachedExList = await getCachedPublishedExercises();
