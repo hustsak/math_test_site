@@ -74,6 +74,44 @@ export default function EditExercise() {
   const [importError, setImportError] = useState('');
   const [importSuccess, setImportSuccess] = useState('');
   const [viewMode, setViewMode] = useState<'published' | 'edit'>('published');
+  const [customChapters, setCustomChapters] = useState<string[]>([]);
+  const [customTopics, setCustomTopics] = useState<string[]>([]);
+
+  // Load custom chapters & topics from localStorage
+  useEffect(() => {
+    try {
+      const savedCh = localStorage.getItem('custom_math_chapters');
+      if (savedCh) setCustomChapters(JSON.parse(savedCh));
+      const savedTp = localStorage.getItem('custom_math_topics');
+      if (savedTp) setCustomTopics(JSON.parse(savedTp));
+    } catch {}
+  }, []);
+
+  const rememberCustomChapter = (val: string) => {
+    const trimmed = val.trim();
+    if (!trimmed) return;
+    setCustomChapters((prev) => {
+      if (prev.includes(trimmed)) return prev;
+      const next = [trimmed, ...prev].slice(0, 50);
+      try {
+        localStorage.setItem('custom_math_chapters', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  const rememberCustomTopic = (val: string) => {
+    const trimmed = val.trim();
+    if (!trimmed) return;
+    setCustomTopics((prev) => {
+      if (prev.includes(trimmed)) return prev;
+      const next = [trimmed, ...prev].slice(0, 50);
+      try {
+        localStorage.setItem('custom_math_topics', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
 
   useEffect(() => {
     try {
@@ -297,6 +335,10 @@ export default function EditExercise() {
         }),
         updatedAt: Date.now(),
       };
+
+      if (data.chapter) rememberCustomChapter(data.chapter);
+      if (data.topic) rememberCustomTopic(data.topic);
+
       if (id === 'new') {
         const ref = await addDoc(collection(getDb(), 'exercises'), data);
         router.replace(`/admin/exercises/${ref.id}`);
@@ -366,7 +408,10 @@ export default function EditExercise() {
                 // If single grade is selected or target grade exists, provide quick suggestions
                 const targetGrade = (ex.gradeLevels && ex.gradeLevels.length === 1) ? ex.gradeLevels[0] : (ex.gradeLevels?.[0] || 7);
                 const curChapters = CAMBODIAN_MATH_CURRICULUM[targetGrade] || [];
-                if (curChapters.length === 0) return null;
+                const officialTitles = new Set(curChapters.map((c) => c.titleKh));
+                const customOnly = customChapters.filter((c) => !officialTitles.has(c));
+
+                if (curChapters.length === 0 && customOnly.length === 0) return null;
                 return (
                   <select
                     style={{ fontSize: '0.72rem', padding: '2px 6px', borderRadius: 6, border: '1px solid var(--line)', background: 'var(--card)' }}
@@ -377,10 +422,21 @@ export default function EditExercise() {
                       }
                     }}
                   >
-                    <option value="">ជ្រើសពីកម្មវិធីសិក្សា (ថ្នាក់ទី {targetGrade})...</option>
-                    {curChapters.map((c) => (
-                      <option key={c.id} value={c.titleKh}>{c.titleKh}</option>
-                    ))}
+                    <option value="">ជ្រើសរើសជំពូក...</option>
+                    {curChapters.length > 0 && (
+                      <optgroup label={`កម្មវិធីសិក្សា (ថ្នាក់ទី ${targetGrade})`}>
+                        {curChapters.map((c) => (
+                          <option key={c.id} value={c.titleKh}>{c.titleKh}</option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {customOnly.length > 0 && (
+                      <optgroup label="ជំពូកដែលអ្នកបានបន្ថែម (Custom)">
+                        {customOnly.map((title, idx) => (
+                          <option key={`custom_ch_${idx}`} value={title}>{title}</option>
+                        ))}
+                      </optgroup>
+                    )}
                   </select>
                 );
               })()}
@@ -388,6 +444,9 @@ export default function EditExercise() {
             <input
               value={ex.chapter || ''}
               onChange={(e) => set({ chapter: e.target.value })}
+              onBlur={(e) => {
+                if (e.target.value.trim()) rememberCustomChapter(e.target.value.trim());
+              }}
               placeholder="e.g. ជំពូកទី ១ ៖ ចំនួនគត់ ឬពិជគណិត"
             />
           </div>
@@ -399,7 +458,10 @@ export default function EditExercise() {
                 const curChapters = CAMBODIAN_MATH_CURRICULUM[targetGrade] || [];
                 const matchedChapter = curChapters.find((c) => c.titleKh === ex.chapter);
                 const lessons = matchedChapter ? matchedChapter.lessons : curChapters.flatMap((c) => c.lessons);
-                if (lessons.length === 0) return null;
+                const officialLessonTitles = new Set(lessons.map((l) => l.titleKh));
+                const customOnly = customTopics.filter((t) => !officialLessonTitles.has(t));
+
+                if (lessons.length === 0 && customOnly.length === 0) return null;
                 return (
                   <select
                     style={{ fontSize: '0.72rem', padding: '2px 6px', borderRadius: 6, border: '1px solid var(--line)', background: 'var(--card)' }}
@@ -410,10 +472,21 @@ export default function EditExercise() {
                       }
                     }}
                   >
-                    <option value="">ជ្រើសមេរៀន...</option>
-                    {lessons.map((l) => (
-                      <option key={l.id} value={l.titleKh}>{l.titleKh}</option>
-                    ))}
+                    <option value="">ជ្រើសរើសមេរៀន...</option>
+                    {lessons.length > 0 && (
+                      <optgroup label="កម្មវិធីសិក្សា (Curriculum)">
+                        {lessons.map((l) => (
+                          <option key={l.id} value={l.titleKh}>{l.titleKh}</option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {customOnly.length > 0 && (
+                      <optgroup label="មេរៀនដែលអ្នកបានបន្ថែម (Custom)">
+                        {customOnly.map((title, idx) => (
+                          <option key={`custom_tp_${idx}`} value={title}>{title}</option>
+                        ))}
+                      </optgroup>
+                    )}
                   </select>
                 );
               })()}
@@ -421,6 +494,9 @@ export default function EditExercise() {
             <input
               value={ex.topic || ''}
               onChange={(e) => set({ topic: e.target.value })}
+              onBlur={(e) => {
+                if (e.target.value.trim()) rememberCustomTopic(e.target.value.trim());
+              }}
               placeholder="e.g. មេរៀនទី ២ ៖ ប្រភាគ ឬសមីការដឺក្រេទី១"
             />
           </div>
