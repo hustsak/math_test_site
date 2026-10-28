@@ -4,9 +4,14 @@ import { getProfileKey, getProfileId } from '@/lib/profiles';
 import { normalizeStudentName } from '@/lib/studentAccess';
 import type { Exercise, Submission, Profile, AppSettings, ParentViewData } from '@/lib/types';
 
-// In-memory cache for published exercises and app settings (TTL 45 seconds)
+// In-memory cache for published exercises and app settings (TTL 5 seconds for fast real-time updates)
 let cachedExercises: { data: Array<{ id: string; data: Exercise }>; expiresAt: number } | null = null;
 let cachedSettings: { data: AppSettings; expiresAt: number } | null = null;
+
+export function invalidatePublishedExercisesCache() {
+  cachedExercises = null;
+  cachedSettings = null;
+}
 
 export async function getCachedPublishedExercises() {
   const now = Date.now();
@@ -19,7 +24,7 @@ export async function getCachedPublishedExercises() {
     id: doc.id,
     data: doc.data() as Exercise,
   }));
-  cachedExercises = { data, expiresAt: now + 45000 };
+  cachedExercises = { data, expiresAt: now + 5000 };
   return data;
 }
 

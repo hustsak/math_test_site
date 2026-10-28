@@ -144,9 +144,40 @@ export default function StudentPortalPage({ targetGrade }: { targetGrade?: numbe
     }
   }, [targetGrade]);
 
-  async function loadPortalData(nameToFetch: string, classToFetch?: string, requestedGradeOverride?: number) {
+  // Real-time automatic synchronization (polls every 10 seconds + on window focus/visibility)
+  useEffect(() => {
+    if (!isLoggedIn || !studentName.trim()) return;
+
+    const interval = setInterval(() => {
+      // Silently refresh data without flickering the main loader
+      loadPortalData(studentName, className, undefined, true);
+    }, 10000);
+
+    const handleFocus = () => {
+      loadPortalData(studentName, className, undefined, true);
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        loadPortalData(studentName, className, undefined, true);
+      }
+    });
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [isLoggedIn, studentName, className, targetGrade]);
+
+  async function loadPortalData(
+    nameToFetch: string,
+    classToFetch?: string,
+    requestedGradeOverride?: number,
+    silent: boolean = false
+  ) {
     if (!nameToFetch.trim()) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     setError('');
     try {
       const activeRequestedGrade = requestedGradeOverride !== undefined ? requestedGradeOverride : (targetGrade || undefined);
@@ -176,10 +207,12 @@ export default function StudentPortalPage({ targetGrade }: { targetGrade?: numbe
         localStorage.setItem('math_portal_student_class', classToFetch.trim());
       }
     } catch (e: any) {
-      setError(e.message || 'Error connecting to student portal.');
-      setIsLoggedIn(false);
+      if (!silent) {
+        setError(e.message || 'Error connecting to student portal.');
+        setIsLoggedIn(false);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }
 
@@ -249,6 +282,22 @@ export default function StudentPortalPage({ targetGrade }: { targetGrade?: numbe
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {isLoggedIn && (
+              <button
+                type="button"
+                onClick={() => {
+                  loadPortalData(studentName, className, undefined, false);
+                  showToast('🔄 ទិន្នន័យបានធ្វើបច្ចុប្បន្នភាពរួចរាល់! (Portal Updated)');
+                }}
+                disabled={loading}
+                className="btn small secondary"
+                style={{ borderRadius: 10, padding: '7px 10px', display: 'flex', alignItems: 'center', gap: 5 }}
+                title="ធ្វើបច្ចុប្បន្នភាពទិន្នន័យភ្លាមៗ (Refresh Data)"
+              >
+                <RefreshCw size={15} className={loading ? 'spin' : ''} />
+              </button>
+            )}
+
             <button
               type="button"
               onClick={toggleTheme}
