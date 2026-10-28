@@ -850,7 +850,7 @@ export default function EditExercise() {
                 style={{ marginTop: 2, accentColor: 'var(--brand)' }}
               />
               <div>
-                <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>💧 បញ្ចេញតាមថ្ងៃ (Drip Day 1–30, Mon–Fri)</div>
+                <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>💧 បញ្ចេញតាមថ្ងៃ (Drip Day 1–30)</div>
                 <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>
                   ដោះសោតាមថ្ងៃគិតពីថ្ងៃដែលសិស្សម្នាក់ៗចុះឈ្មោះ
                 </div>
@@ -905,12 +905,12 @@ export default function EditExercise() {
                 </div>
                 <span style={{ fontSize: '0.84rem', color: 'var(--muted)' }}>
                   • ថ្ងៃទី ១ = ដោះសោភ្លាមៗពេលសិស្សចុះឈ្មោះ
-                  • ថ្ងៃទី ២, ៣, ... = ដោះសោម្តងមួយថ្ងៃ ចាប់ពីម៉ោង ០០:០០ ថ្ងៃច័ន្ទ–សុក្រ (មិនរាប់ថ្ងៃសៅរ៍ និងអាទិត្យ)
+                  • ថ្ងៃទី ២, ៣, ... = ដោះសោម្តងមួយថ្ងៃ ចាប់ពីម៉ោង ០០:០០ (ថ្ងៃទី ៨ = សប្តាហ៍ក្រោយ, ថ្ងៃទី ៣០ = ចុងខែ) · បើចំថ្ងៃសៅរ៍ ឬអាទិត្យ នឹងដោះសោនៅថ្ងៃច័ន្ទ
                 </span>
               </div>
               <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '0.75rem', color: 'var(--muted)', alignSelf: 'center' }}>ជ្រើសរើសរហ័ស ៖</span>
-                {[1, 2, 3, 5, 7, 10, 15, 20, 25, 30].map((d) => (
+                {Array.from({ length: 30 }, (_, i) => i + 1).map((d) => (
                   <button
                     key={d}
                     type="button"
