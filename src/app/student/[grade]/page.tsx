@@ -8,17 +8,21 @@ interface Props {
   };
 }
 
-const VALID_GRADES: Record<string, number> = {
-  'grade-7': 7,
-  'grade-8': 8,
-  'grade-9': 9,
-  'grade-10': 10,
-  'grade-11': 11,
-  'grade-12': 12,
-};
+function parseGradeParam(raw: string): number | null {
+  if (!raw) return null;
+  const decoded = decodeURIComponent(raw).trim().toLowerCase();
+  // Match "grade-7", "grade7", "7", "g7", "ថ្នាក់ទី7", etc.
+  const match = decoded.match(/\d+/);
+  if (!match) return null;
+  const num = parseInt(match[0], 10);
+  if (num >= 1 && num <= 30) {
+    return num;
+  }
+  return null;
+}
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const gradeNum = VALID_GRADES[params.grade];
+  const gradeNum = parseGradeParam(params.grade);
   if (!gradeNum) {
     return {
       title: 'រកមិនឃើញទំព័រ (Page Not Found)',
@@ -31,7 +35,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default function GradeStudentPortalPage({ params }: Props) {
-  const gradeNum = VALID_GRADES[params.grade];
+  const gradeNum = parseGradeParam(params.grade);
   if (!gradeNum) {
     notFound();
   }

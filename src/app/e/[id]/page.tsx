@@ -606,26 +606,6 @@ export default function StudentPage() {
             )}
           </div>
 
-          <div>
-            <label style={{ display: 'block', fontWeight: 700, marginBottom: 6, fontSize: '0.92rem', color: 'var(--theme-navy)' }}>
-              Class / ថ្នាក់ (ស្រេចចិត្ត)
-            </label>
-            <input
-              value={className}
-              onChange={(e) => setClassName(e.target.value)}
-              maxLength={40}
-              placeholder="ឧទាហរណ៍៖ 7A, 9B..."
-              style={{
-                fontSize: '1.05rem',
-                fontWeight: 600,
-                padding: '11px 14px',
-                borderRadius: 12,
-                backgroundColor: 'var(--theme-card-bg)',
-                color: 'var(--theme-navy)',
-                border: '1.5px solid var(--theme-border)',
-              }}
-            />
-          </div>
 
           {savedParentLink && (
             <div style={{ textAlign: 'center', paddingTop: 4 }}>
