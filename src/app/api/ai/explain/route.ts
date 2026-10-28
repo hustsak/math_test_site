@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/adminAuth';
 import { callClaude } from '@/lib/ai';
+import { toText } from '@/lib/textValue';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -10,8 +11,8 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const prompt = String(body?.prompt ?? '').trim().slice(0, 2000);
-    const answer = String(body?.answer ?? '').trim().slice(0, 500);
+    const prompt = toText(body?.prompt).trim().slice(0, 2000);
+    const answer = toText(body?.answer).trim().slice(0, 500);
     const lang: 'km' | 'en' = body?.language === 'en' ? 'en' : 'km';
     if (!prompt || !answer) {
       return NextResponse.json({ error: 'Add the question and its correct answer first.' }, { status: 400 });

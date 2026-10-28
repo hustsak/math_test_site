@@ -1,4 +1,5 @@
 import type { Question } from './types';
+import { toText, resolveChoiceIndex } from './textValue';
 
 const newId = () => Math.random().toString(36).slice(2, 10);
 
@@ -159,14 +160,20 @@ function parseJsonQuestions(text: string): ParsedExerciseData | null {
     const out: Question[] = [];
     for (const item of parsed) {
       if (!item || typeof item !== 'object') continue;
-      let prompt = String(item.prompt || item.question || item.title || '').trim();
+      // toText (not String) so a prompt given as an object/array never becomes "[object Object]"
+      let prompt = (toText(item.prompt) || toText(item.question) || toText(item.title)).trim();
       if (!prompt) continue;
       // Strip leading question numbering like "39. ", "1) ", "Question 1: "
       prompt = prompt.replace(/^\s*(?:Q(?:uestion)?\s*)?\d+\s*[.):]\s*/i, '').trim() || prompt;
 
+      // Choices may be plain strings or objects like { "id": "A", "text": "5 + 5i" }.
+      // Keep the raw entries so an answer given as an id/letter can still be matched.
+      const rawChoices: unknown[] | undefined = Array.isArray(item.choices || item.options)
+        ? (item.choices || item.options)
+        : undefined;
       let choices: string[] | undefined = undefined;
-      if (Array.isArray(item.choices || item.options)) {
-        choices = (item.choices || item.options).map((c: any) => String(c).trim());
+      if (rawChoices) {
+        choices = rawChoices.map((c) => toText(c).trim());
       }
 
       let kind: Question['kind'] = item.kind || item.type || 'text';
@@ -174,31 +181,14 @@ function parseJsonQuestions(text: string): ParsedExerciseData | null {
         kind = 'choice';
       }
 
-      let answer = String(item.answer !== undefined ? item.answer : item.correctAnswer || item.correct || '').trim();
+      const rawAnswer: unknown = item.answer !== undefined ? item.answer : item.correctAnswer || item.correct || '';
+      let answer = toText(rawAnswer).trim();
 
       if (kind === 'choice' && choices && choices.length > 0) {
-        // Exact choice text match
-        const exactIdx = choices.findIndex((c) => c === answer);
-        if (exactIdx >= 0) {
-          answer = String(exactIdx);
-        } else {
-          // Case-insensitive choice match
-          const caseIdx = choices.findIndex((c) => c.toLowerCase() === answer.toLowerCase());
-          if (caseIdx >= 0) {
-            answer = String(caseIdx);
-          } else {
-            // If answer is letter A, B, C...
-            const letterMatch = answer.match(/^[A-Fa-f]$/);
-            if (letterMatch) {
-              const idx = letterMatch[0].toUpperCase().charCodeAt(0) - 65;
-              answer = String(idx >= 0 && idx < choices.length ? idx : 0);
-            } else if (!isNaN(Number(answer)) && Number(answer) >= 0 && Number(answer) < choices.length) {
-              answer = String(Math.floor(Number(answer)));
-            } else {
-              answer = '0';
-            }
-          }
-        }
+        // Matches by choice id/letter, exact text, case-insensitive text, letter position, or 0-based index.
+        // Same fallbacks as before: an unmatched answer defaults to the first choice.
+        const idx = resolveChoiceIndex(rawAnswer, rawChoices ?? choices);
+        answer = String(idx >= 0 ? idx : 0);
       } else if (kind !== 'choice' && NUMERIC.test(answer.split('|')[0].trim())) {
         kind = 'number';
       }
@@ -210,7 +200,7 @@ function parseJsonQuestions(text: string): ParsedExerciseData | null {
         choices,
         answer,
         points: Math.max(0, Number(item.points) || 1),
-        explanation: String(item.explanation || item.solution || '').trim(),
+        explanation: (toText(item.explanation) || toText(item.solution)).trim(),
       });
     }
 
@@ -222,8 +212,8 @@ function parseJsonQuestions(text: string): ParsedExerciseData | null {
     let shuffleQuestions: boolean | undefined = undefined;
 
     if (rawObj && typeof rawObj === 'object' && !Array.isArray(rawObj)) {
-      if (rawObj.title) title = String(rawObj.title).trim();
-      if (rawObj.description) description = String(rawObj.description).trim();
+      if (rawObj.title) title = toText(rawObj.title).trim();
+      if (rawObj.description) description = toText(rawObj.description).trim();
       if (rawObj.timeLimitMinutes || rawObj.timeLimit || rawObj.duration) {
         timeLimitMinutes = Number(rawObj.timeLimitMinutes || rawObj.timeLimit || rawObj.duration);
       }

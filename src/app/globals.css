@@ -278,6 +278,20 @@ th { background: #fafbfc; font-size: 0.8rem; text-transform: uppercase; letter-s
   background: rgba(92, 121, 230, 0.16);
 }
 
+.choice-text {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.55em;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.choice-label {
+  flex-shrink: 0;
+  font-weight: 700;
+  min-width: 1.1em;
+}
+
 /* Google Forms style ripple container */
 .choice-circle-wrap {
   position: relative;

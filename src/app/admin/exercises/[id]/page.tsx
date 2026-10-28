@@ -8,8 +8,10 @@ import { Moon, Sun, Copy, Check, Sparkles } from 'lucide-react';
 import { getDb } from '@/lib/firebaseClient';
 import { useAdmin } from '@/lib/useAdmin';
 import MathText from '@/components/MathText';
+import ChoiceText from '@/components/ChoiceText';
 import type { Exercise, Question } from '@/lib/types';
 import { parseExerciseInput } from '@/lib/parseQuestions';
+import { toText } from '@/lib/textValue';
 import { CAMBODIAN_MATH_CURRICULUM } from '@/lib/curriculum';
 
 function getAiExercisePrompt(targetGrade?: number, targetTopic?: string, questionCount: number = 5): string {
@@ -248,12 +250,12 @@ export default function EditExercise() {
         // Normalize loaded questions to guarantee array integrity and string fields
         const safeQuestions: Question[] = (Array.isArray(data.questions) ? data.questions : []).map((q, idx) => ({
           id: String(q?.id || `q_${idx}_${newId()}`),
-          prompt: String(q?.prompt ?? ''),
+          prompt: toText(q?.prompt),
           kind: q?.kind === 'choice' ? 'choice' : q?.kind === 'number' ? 'number' : 'text',
-          choices: Array.isArray(q?.choices) ? q.choices.map((c) => String(c ?? '')) : undefined,
-          answer: String(q?.answer ?? ''),
+          choices: Array.isArray(q?.choices) ? q.choices.map((c) => toText(c)) : undefined,
+          answer: toText(q?.answer),
           points: Math.max(0, Number(q?.points) || 1),
-          explanation: String(q?.explanation ?? ''),
+          explanation: toText(q?.explanation),
           aiGenerated: Boolean(q?.aiGenerated),
         }));
         if (safeQuestions.length === 0) {
@@ -1326,7 +1328,7 @@ export default function EditExercise() {
               {q.kind === 'choice' ? (
                 <div className="stack" style={{ gap: 10 }}>
                   {(q.choices ?? []).map((c, k) => {
-                    const isKey = Number(q.answer) === k || String(q.answer).trim() === String(c).trim();
+                    const isKey = Number(q.answer) === k || String(q.answer).trim() === toText(c).trim();
                     return (
                       <div
                         key={k}
@@ -1352,7 +1354,7 @@ export default function EditExercise() {
                           }}
                         />
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                          <MathText text={c} />
+                          <ChoiceText choice={c} index={k} />
                           {isKey && (
                             <span style={{ fontSize: '0.75rem', color: 'var(--good)', fontWeight: 600, background: 'var(--good-bg)', padding: '2px 7px', borderRadius: 4 }}>
                               Answer Key

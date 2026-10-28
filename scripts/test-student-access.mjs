@@ -11,6 +11,7 @@ const tmp = mkdtempSync(join(tmpdir(), 'student-access-test-'));
 
 cpSync(new URL('grade.ts', lib), join(tmp, 'grade.ts'));
 cpSync(new URL('types.ts', lib), join(tmp, 'types.ts'));
+cpSync(new URL('textValue.ts', lib), join(tmp, 'textValue.ts'));
 writeFileSync(
   join(tmp, 'studentAccess.ts'),
   readFileSync(new URL('studentAccess.ts', lib), 'utf8').replace("from './grade'", "from './grade.ts'")
@@ -24,6 +25,7 @@ writeFileSync(
   readFileSync(new URL('gradeExercise.ts', lib), 'utf8')
     .replace("from './grade'", "from './grade.ts'")
     .replace("from './types'", "from './types.ts'")
+    .replace("from './textValue'", "from './textValue.ts'")
 );
 
 const {

@@ -9,6 +9,7 @@ import type {
   Exercise,
   Submission,
 } from './types';
+import { toText } from './textValue';
 
 const KH_WEEKDAYS = ['អាទិត្យ', 'ច័ន្ទ', 'អង្គារ', 'ពុធ', 'ព្រហស្បតិ៍', 'សុក្រ', 'សៅរ៍'];
 const KH_MONTHS = [
@@ -253,13 +254,14 @@ export function buildParentViewData(input: BuildParentDataInput): ParentViewData
       // Build question breakdown from child's submission details only
       const questions: ParentQuestionDetail[] = (sub.details || []).map((d) => ({
         id: d.id,
-        prompt: (ex.questions.find((q) => q.id === d.id)?.prompt) || '',
+        prompt: toText(ex.questions.find((q) => q.id === d.id)?.prompt),
         points: d.points,
         correct: !!d.correct,
         earned: d.earned,
-        childAnswer: d.given ?? '',
-        correctAnswer: d.correctAnswer ?? '',
-        explanation: d.explanation ?? '',
+        // toText: older stored results may hold a choice object instead of its text
+        childAnswer: toText(d.given),
+        correctAnswer: toText(d.correctAnswer),
+        explanation: toText(d.explanation),
       }));
 
       exercises.push({
@@ -313,9 +315,10 @@ export function buildParentViewData(input: BuildParentDataInput): ParentViewData
         points: d.points,
         correct: !!d.correct,
         earned: d.earned,
-        childAnswer: d.given ?? '',
-        correctAnswer: d.correctAnswer ?? '',
-        explanation: d.explanation ?? '',
+        // toText: older stored results may hold a choice object instead of its text
+        childAnswer: toText(d.given),
+        correctAnswer: toText(d.correctAnswer),
+        explanation: toText(d.explanation),
       }));
 
       exercises.push({
