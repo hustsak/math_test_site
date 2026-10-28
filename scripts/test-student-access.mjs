@@ -38,6 +38,8 @@ const {
   addDaysToCambodiaDate,
   getStudentStatus,
   isStudentAuthorized,
+  getDripUnlockMs,
+  evaluateExerciseAvailability,
   ACCESS_ERRORS,
   CAMBODIA_OFFSET_HOURS,
   CAMBODIA_OFFSET_MS,
@@ -244,6 +246,68 @@ assert.equal(parentId.length, 64);
 
 console.log('✓ Requirements 13-15 Passed: Server-side grading, profile generation, and history preserved.');
 
+// -----------------------------------------------------------------------------
+// DRIP: 1 exercise per school day, 5 days per week (Mon-Fri, Cambodia time)
+// -----------------------------------------------------------------------------
+console.log('\n--- TEST 8: Weekday Drip (1 exercise/day, Mon-Fri) ---');
+
+const DAY = 24 * 60 * 60 * 1000;
+const local = (y, m, d, h = 0, mi = 0) => Date.UTC(y, m - 1, d, h, mi) - CAMBODIA_OFFSET_MS;
+const localWeekday = (ms) => new Date(ms + CAMBODIA_OFFSET_MS).getUTCDay();
+
+// Registered Wednesday 28 Oct 2026, 15:30 Cambodia time
+const regWed = local(2026, 10, 28, 15, 30);
+assert.equal(getDripUnlockMs(regWed, 1), regWed, 'Day 1 unlocks immediately');
+assert.equal(getDripUnlockMs(regWed, 2), local(2026, 10, 29), 'Day 2 = Thursday 00:00');
+assert.equal(getDripUnlockMs(regWed, 3), local(2026, 10, 30), 'Day 3 = Friday 00:00');
+assert.equal(getDripUnlockMs(regWed, 4), local(2026, 11, 2), 'Day 4 skips the weekend -> Monday');
+assert.equal(getDripUnlockMs(regWed, 8), local(2026, 11, 6), 'Day 8 = Friday');
+assert.equal(getDripUnlockMs(regWed, 9), local(2026, 11, 9), 'Day 9 = next Monday');
+
+// Registered on a weekend: Day 1 right away, Day 2 on Monday
+const regSat = local(2026, 10, 31, 10, 0);
+assert.equal(getDripUnlockMs(regSat, 1), regSat);
+assert.equal(getDripUnlockMs(regSat, 2), local(2026, 11, 2));
+assert.equal(getDripUnlockMs(regSat, 6), local(2026, 11, 6));
+assert.equal(getDripUnlockMs(local(2026, 11, 1, 23, 59), 2), local(2026, 11, 2), 'Sunday night -> Monday');
+
+// Registered late Friday night: Day 2 is Monday, not Saturday
+assert.equal(getDripUnlockMs(local(2026, 10, 30, 23, 50), 2), local(2026, 11, 2));
+
+// The Cambodia date is used, not UTC (00:30 Cambodia Monday is still Sunday in UTC)
+assert.equal(getDripUnlockMs(local(2026, 11, 2, 0, 30), 2), local(2026, 11, 3));
+
+// Every Day 2..40 lands on Mon-Fri at midnight, one per school day, 5 per week
+for (const reg of [regWed, regSat, local(2026, 10, 26, 8, 0), local(2026, 10, 30, 23, 50)]) {
+  let previous = getDripUnlockMs(reg, 2);
+  for (let n = 2; n <= 40; n++) {
+    const t = getDripUnlockMs(reg, n);
+    assert.ok([1, 2, 3, 4, 5].includes(localWeekday(t)), `Day ${n} must not unlock on a weekend`);
+    assert.equal((t + CAMBODIA_OFFSET_MS) % DAY, 0, `Day ${n} unlocks at 00:00 Cambodia time`);
+    if (n > 2) assert.ok(t > previous && t - previous <= 3 * DAY, 'one exercise per school day');
+    if (n > 2) assert.equal(getDripUnlockMs(reg, n + 5), t + 7 * DAY, '5 exercises per 7-day week');
+    previous = t;
+  }
+}
+
+// Bad input never hangs or goes backwards
+assert.equal(getDripUnlockMs(regWed, 0), regWed);
+assert.equal(getDripUnlockMs(regWed, NaN), regWed);
+assert.ok(Number.isFinite(getDripUnlockMs(regWed, 1e12)));
+
+// Availability check uses the same rule: Day 4 is locked over the weekend, open on Monday 00:00
+const dripEx = { published: true, publicationMode: 'drip', dripDay: 4, gradeLevels: [7] };
+const satNoon = local(2026, 10, 31, 12, 0);
+const monStart = local(2026, 11, 2, 0, 0);
+const lockedRes = evaluateExerciseAvailability(dripEx, 7, satNoon, regWed);
+assert.equal(lockedRes.available, false);
+assert.equal(lockedRes.upcoming, true);
+assert.equal(lockedRes.dripUnlockMs, monStart);
+assert.equal(evaluateExerciseAvailability(dripEx, 7, monStart - 1, regWed).available, false);
+assert.equal(evaluateExerciseAvailability(dripEx, 7, monStart, regWed).available, true);
+
+console.log('✓ Weekday drip passed: Day 1 immediate, then 1 exercise per school day, Mon-Fri, no weekends.');
+
 console.log('\n================================================================');
-console.log('ALL 15 STUDENT ACCESS CONTROL TESTS PASSED! 🎉');
+console.log('ALL 16 STUDENT ACCESS CONTROL TESTS PASSED! 🎉');
 console.log('================================================================');

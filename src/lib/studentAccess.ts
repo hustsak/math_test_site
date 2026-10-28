@@ -6,6 +6,36 @@ export const CAMBODIA_OFFSET_HOURS = 7;
 export const CAMBODIA_OFFSET_MS = 7 * 60 * 60 * 1000;
 export const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
+/** Days of the week (0 = Sunday) on which a drip exercise can unlock: Monday to Friday. */
+export const DRIP_SCHOOL_WEEKDAYS = [1, 2, 3, 4, 5];
+
+/**
+ * When drip Day N unlocks for a student who registered at `registeredAtMs` (UTC ms).
+ *
+ * - Day 1 unlocks immediately, at the moment of registration.
+ * - Every later day unlocks at 00:00 Cambodia time (Asia/Phnom_Penh) on the next school
+ *   day (Monday to Friday), so students get 1 exercise per day, 5 days per week,
+ *   and nothing new unlocks on Saturday or Sunday.
+ *
+ * Example: registered Wednesday -> Day 2 Thursday, Day 3 Friday, Day 4 Monday.
+ * Registered on a weekend -> Day 1 right away, Day 2 on Monday.
+ */
+export function getDripUnlockMs(registeredAtMs: number, dripDay: number): number {
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const day = Math.min(Math.max(Math.floor(Number(dripDay)) || 1, 1), 1000);
+  if (day <= 1) return registeredAtMs;
+
+  // Midnight (Cambodia time) at the start of the registration day.
+  let cursor = Math.floor((registeredAtMs + CAMBODIA_OFFSET_MS) / DAY_MS) * DAY_MS - CAMBODIA_OFFSET_MS;
+  let remaining = day - 1;
+  while (remaining > 0) {
+    cursor += DAY_MS;
+    const weekday = new Date(cursor + CAMBODIA_OFFSET_MS).getUTCDay();
+    if (DRIP_SCHOOL_WEEKDAYS.includes(weekday)) remaining--;
+  }
+  return cursor;
+}
+
 export type StudentAccessStatus = 'active' | 'expiring_soon' | 'expired' | 'blocked' | 'pending_payment';
 
 export interface StudentAccess {
@@ -64,10 +94,8 @@ export function evaluateExerciseAvailability(
   // Drip Mode Check: unlocks on Day N relative to student's own registration date
   if ((ex.publicationMode === 'drip' || (typeof ex.dripDay === 'number' && ex.dripDay > 0)) && typeof ex.dripDay === 'number' && ex.dripDay > 0) {
     if (studentCreatedAt) {
-      // Day 1 unlocks immediately upon registration (0 ms offset)
-      // Day N unlocks after (N - 1) calendar days (24h blocks or Cambodia day boundary)
-      const daysOffsetMs = (ex.dripDay - 1) * 24 * 60 * 60 * 1000;
-      const dripUnlockMs = studentCreatedAt + daysOffsetMs;
+      // Day 1 unlocks immediately; later days unlock on the next school days (Mon-Fri, Cambodia time)
+      const dripUnlockMs = getDripUnlockMs(studentCreatedAt, ex.dripDay);
 
       if (nowMs < dripUnlockMs) {
         return {

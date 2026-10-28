@@ -850,7 +850,7 @@ export default function EditExercise() {
                 style={{ marginTop: 2, accentColor: 'var(--brand)' }}
               />
               <div>
-                <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>💧 បញ្ចេញតាមថ្ងៃ (Drip Day 1–30)</div>
+                <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>💧 បញ្ចេញតាមថ្ងៃ (Drip Day 1–30, Mon–Fri)</div>
                 <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>
                   ដោះសោតាមថ្ងៃគិតពីថ្ងៃដែលសិស្សម្នាក់ៗចុះឈ្មោះ
                 </div>
@@ -905,7 +905,7 @@ export default function EditExercise() {
                 </div>
                 <span style={{ fontSize: '0.84rem', color: 'var(--muted)' }}>
                   • ថ្ងៃទី ១ = ដោះសោភ្លាមៗពេលសិស្សចុះឈ្មោះ
-                  • ថ្ងៃទី ២ = ដោះសោ ២៤ ម៉ោងក្រោយមក ...
+                  • ថ្ងៃទី ២, ៣, ... = ដោះសោម្តងមួយថ្ងៃ ចាប់ពីម៉ោង ០០:០០ ថ្ងៃច័ន្ទ–សុក្រ (មិនរាប់ថ្ងៃសៅរ៍ និងអាទិត្យ)
                 </span>
               </div>
               <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>

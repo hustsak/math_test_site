@@ -1,6 +1,7 @@
 import { adminDb } from '@/lib/firebaseAdmin';
 import { normalize } from '@/lib/grade';
 import { getCachedPublishedExercises } from '@/lib/parentTrackingServer';
+import { getDripUnlockMs } from '@/lib/studentAccess';
 import type { Student, Submission, StudentViewData, StudentViewExercise } from '@/lib/types';
 
 export async function fetchStudentPortalData(rawToken: string): Promise<StudentViewData | null> {
@@ -84,8 +85,7 @@ export async function fetchStudentPortalData(rawToken: string): Promise<StudentV
       let dripUnlockMs: number | null = null;
       if (!isDone && (ex.publicationMode === 'drip' || (typeof ex.dripDay === 'number' && ex.dripDay > 0)) && typeof ex.dripDay === 'number' && ex.dripDay > 0) {
         if (studentCreatedAt) {
-          const offsetMs = (ex.dripDay - 1) * 24 * 60 * 60 * 1000;
-          dripUnlockMs = studentCreatedAt + offsetMs;
+          dripUnlockMs = getDripUnlockMs(studentCreatedAt, ex.dripDay);
           if (now < dripUnlockMs) {
             isDripLocked = true;
           }
