@@ -254,14 +254,18 @@ function StudentRegisterForm() {
                   <strong style={{ color: 'var(--theme-navy)' }}>{registeredStudent.className}</strong>
                 </div>
               )}
-              {registeredStudent.expirationDate && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.88rem', borderTop: '1px solid var(--theme-border)', paddingTop: 8 }}>
-                  <span style={{ color: 'var(--theme-muted)' }}>សុពលភាព (Valid until) ៖</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.88rem', borderTop: '1px solid var(--theme-border)', paddingTop: 8 }}>
+                <span style={{ color: 'var(--theme-muted)' }}>សុពលភាព (Validity) ៖</span>
+                {registeredStudent.paymentStatus === 'pending' ? (
+                  <span style={{ color: '#d97706', fontWeight: 700 }}>
+                    ⏳ រយៈពេល ១ ខែ (ចាប់ផ្ដើមគិតពីថ្ងៃគ្រូអនុម័ត)
+                  </span>
+                ) : (
                   <span style={{ color: '#059669', fontWeight: 700 }}>
                     📅 {registeredStudent.expirationDate} (Asia/Phnom_Penh)
                   </span>
-                </div>
-              )}
+                )}
+              </div>
             </div>
 
             {/* Student's Unique Personal Link Card */}

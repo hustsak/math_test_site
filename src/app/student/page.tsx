@@ -519,7 +519,11 @@ export default function StudentPortalPage({ targetGrade }: { targetGrade?: numbe
 
                 <div style={{ fontSize: '0.82rem', color: 'var(--theme-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <Clock size={14} />
-                  <span>ការអនុញ្ញាតចូលប្រើមានសុពលភាពដល់ ៖ <strong>{data.student.expirationDate}</strong></span>
+                  {data.student.paymentStatus === 'pending' ? (
+                    <span>សុពលភាព ៖ <strong style={{ color: '#d97706' }}>រង់ចាំអនុម័ត (មានសុពលភាព ១ខែ ចាប់ពីថ្ងៃគ្រូអនុម័ត)</strong></span>
+                  ) : (
+                    <span>ការអនុញ្ញាតចូលប្រើមានសុពលភាពដល់ ៖ <strong style={{ color: '#059669' }}>{data.student.expirationDate}</strong></span>
+                  )}
                 </div>
               </div>
 

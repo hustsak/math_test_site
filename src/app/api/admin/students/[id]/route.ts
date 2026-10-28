@@ -138,8 +138,15 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     let paidAt = currentData.paidAt || null;
     if (body.paymentStatus !== undefined) {
       paymentStatus = body.paymentStatus === 'pending' ? 'pending' : 'approved';
-      if (paymentStatus === 'approved' && !paidAt) {
-        paidAt = Date.now();
+      if (paymentStatus === 'approved') {
+        const now = Date.now();
+        paidAt = now;
+        // If an explicit expirationDate was NOT provided in the payload,
+        // automatically start 30 days (1 month) validity from the approval day in Cambodia
+        if (!body.expirationDate && !body.extensionDays) {
+          const newExpDateStr = addDaysToCambodiaDate(getTodayCambodiaDate(now), 30);
+          expiresAtMs = getEndOfDayCambodia(newExpDateStr);
+        }
       } else if (paymentStatus === 'pending') {
         paidAt = null;
       }
