@@ -630,45 +630,7 @@ function StudentRegisterForm() {
                 </select>
               </div>
 
-              {/* Class / Group Name (Optional, e.g. 12A, 12B, Evening Batch, Room 1) */}
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <label style={{ fontSize: '0.88rem', fontWeight: 800, color: 'var(--theme-navy)', margin: 0 }}>
-                    បន្ទប់ ឬឈ្មោះក្រុម / ថ្នាក់ (Class / Group Name)
-                  </label>
-                  <span style={{ fontSize: '0.74rem', color: 'var(--theme-muted)' }}>ស្រេចចិត្ត (Optional)</span>
-                </div>
-                <input
-                  type="text"
-                  list="registered-classes-list"
-                  value={className}
-                  onChange={(e) => setClassName(e.target.value)}
-                  placeholder="ឧទាហរណ៍៖ 12A, 12B, ក្រុមពេលល្ងាច, Math Olympiad"
-                  maxLength={50}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    borderRadius: 12,
-                    border: '1.5px solid var(--theme-border)',
-                    backgroundColor: 'var(--theme-page-bg)',
-                    color: 'var(--theme-navy)',
-                    fontSize: '0.96rem',
-                    fontWeight: 600,
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                  }}
-                />
-                {customClasses.length > 0 && (
-                  <datalist id="registered-classes-list">
-                    {customClasses.map((c) => (
-                      <option key={c} value={c} />
-                    ))}
-                  </datalist>
-                )}
-                <span style={{ fontSize: '0.76rem', color: 'var(--theme-muted)', marginTop: 4, display: 'block' }}>
-                  ជួយលោកគ្រូចែកក្រុម និងស្រង់ពិន្ទុតាមបន្ទប់ ឬក្រុមរៀនបានយ៉ាងងាយស្រួល។
-                </span>
-              </div>
+
 
 
               <button
