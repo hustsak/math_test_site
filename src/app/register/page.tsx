@@ -38,7 +38,7 @@ function StudentRegisterForm() {
   const [error, setError] = useState('');
 
   // Settings
-  const [customGrades, setCustomGrades] = useState<number[]>([7, 8, 9, 10, 11, 12]);
+  const [customGrades, setCustomGrades] = useState<(number | string)[]>([7, 8, 9, 10, 11, 12]);
   const [customClasses, setCustomClasses] = useState<string[]>([]);
 
   // Success state
@@ -60,7 +60,8 @@ function StudentRegisterForm() {
           const data = s.data();
           if (Array.isArray(data.customGrades) && data.customGrades.length > 0) {
             setCustomGrades(data.customGrades);
-            setGrade((prev) => (data.customGrades.includes(prev) ? prev : data.customGrades[0]));
+            const firstNum = data.customGrades.map((x: any) => typeof x === 'number' ? x : (Number(x) || 7))[0];
+            setGrade((prev) => (data.customGrades.includes(prev) ? prev : firstNum));
           }
           if (Array.isArray(data.customClasses)) {
             setCustomClasses(data.customClasses);
@@ -612,11 +613,16 @@ function StudentRegisterForm() {
                     cursor: 'pointer',
                   }}
                 >
-                  {(customGrades.length > 0 ? customGrades : [7, 8, 9, 10, 11, 12]).map((g) => (
-                    <option key={g} value={g}>
-                      ថ្នាក់ទី {g} (Grade {g})
-                    </option>
-                  ))}
+                  {(customGrades.length > 0 ? customGrades : [7, 8, 9, 10, 11, 12]).map((g) => {
+                    const isNum = typeof g === 'number' || (!isNaN(Number(g)) && String(g).trim() !== '');
+                    const label = isNum ? `ថ្នាក់ទី ${g} (Grade ${g})` : String(g);
+                    const val = typeof g === 'number' ? g : (Number(g) || 7);
+                    return (
+                      <option key={String(g)} value={val}>
+                        {label}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 

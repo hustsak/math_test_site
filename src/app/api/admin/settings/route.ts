@@ -45,14 +45,29 @@ export async function POST(req: Request) {
     }
 
     if (Array.isArray(body.customGrades)) {
-      // Validate array of positive integers, deduplicate & sort
-      const validGrades = Array.from(
-        new Set<number>(
-          body.customGrades
-            .map((g: any) => parseInt(g, 10))
-            .filter((g: number) => !isNaN(g) && g >= 1 && g <= 30)
-        )
-      ).sort((a: number, b: number) => a - b);
+      // Validate array of grades (can be numbers or text names, e.g. 7, 8, "Foundation", "12A")
+      const seen = new Set<string>();
+      const validGrades: (number | string)[] = [];
+      for (const item of body.customGrades) {
+        if (typeof item === 'number' && !isNaN(item) && item >= 1 && item <= 100) {
+          const key = String(item);
+          if (!seen.has(key)) {
+            seen.add(key);
+            validGrades.push(item);
+          }
+        } else if (typeof item === 'string') {
+          const trimmed = item.trim();
+          if (trimmed.length > 0 && trimmed.length <= 40) {
+            const num = Number(trimmed);
+            const val = !isNaN(num) && Number.isInteger(num) && num >= 1 && num <= 100 ? num : trimmed;
+            const key = String(val).toLowerCase();
+            if (!seen.has(key)) {
+              seen.add(key);
+              validGrades.push(val);
+            }
+          }
+        }
+      }
       updatePayload.customGrades = validGrades.length > 0 ? validGrades : [7, 8, 9, 10, 11, 12];
     }
 

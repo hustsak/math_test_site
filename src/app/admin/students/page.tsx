@@ -54,7 +54,7 @@ export default function AdminStudentsPage() {
   const [loadingProfiles, setLoadingProfiles] = useState(false);
   const [showHiddenProfiles, setShowHiddenProfiles] = useState(false);
   const [showClassAverage, setShowClassAverage] = useState(false);
-  const [customGrades, setCustomGrades] = useState<number[]>([7, 8, 9, 10, 11, 12]);
+  const [customGrades, setCustomGrades] = useState<(number | string)[]>([7, 8, 9, 10, 11, 12]);
   const [customClasses, setCustomClasses] = useState<string[]>([]);
 
   // Filters & Search (Access tab)
@@ -85,15 +85,16 @@ export default function AdminStudentsPage() {
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
 
-  function toggleGradeSelection(g: number) {
+  function toggleGradeSelection(g: number | string) {
+    const val = typeof g === 'number' ? g : (Number(g) || 7);
     setFormGrades((prev) => {
-      if (prev.includes(g)) {
+      if (prev.includes(val)) {
         if (prev.length === 1) return prev; // Keep at least 1 grade
-        const updated = prev.filter((item) => item !== g);
+        const updated = prev.filter((item) => item !== val);
         setFormGrade(updated[0]);
         return updated;
       } else {
-        const updated = [...prev, g].sort((a, b) => a - b);
+        const updated = [...prev, val].sort((a, b) => a - b);
         setFormGrade(updated[0]);
         return updated;
       }
@@ -1074,11 +1075,13 @@ export default function AdminStudentsPage() {
                   }}
                 >
                   {(customGrades.length > 0 ? customGrades : [7, 8, 9, 10, 11, 12]).map((g) => {
-                    const gradePath = `/student/grade-${g}`;
+                    const isNum = typeof g === 'number' || (!isNaN(Number(g)) && String(g).trim() !== '');
+                    const gradePath = isNum ? `/student/grade-${g}` : `/student/${encodeURIComponent(String(g).toLowerCase())}`;
                     const fullGradeUrl = typeof window !== 'undefined' ? `${window.location.origin}${gradePath}` : gradePath;
+                    const label = isNum ? `ថ្នាក់ទី ${g}` : String(g);
                     return (
                       <div
-                        key={g}
+                        key={String(g)}
                         style={{
                           display: 'flex',
                           alignItems: 'center',
@@ -1102,7 +1105,7 @@ export default function AdminStudentsPage() {
                               flexShrink: 0,
                             }}
                           >
-                            ថ្នាក់ទី {g}
+                            {label}
                           </span>
                           <span
                             style={{
@@ -2020,10 +2023,13 @@ export default function AdminStudentsPage() {
                 </label>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(90px, 1fr))', gap: 8 }}>
                   {(customGrades.length > 0 ? customGrades : [7, 8, 9, 10, 11, 12]).map((g) => {
-                    const isSelected = formGrades.includes(g);
+                    const val = typeof g === 'number' ? g : (Number(g) || 7);
+                    const isSelected = formGrades.includes(val);
+                    const isNum = typeof g === 'number' || (!isNaN(Number(g)) && String(g).trim() !== '');
+                    const label = isNum ? `ថ្នាក់ទី ${g}` : String(g);
                     return (
                       <button
-                        key={g}
+                        key={String(g)}
                         type="button"
                         onClick={() => toggleGradeSelection(g)}
                         style={{
@@ -2043,7 +2049,7 @@ export default function AdminStudentsPage() {
                         }}
                       >
                         {isSelected && <Check size={14} />}
-                        <span>ថ្នាក់ទី {g}</span>
+                        <span>{label}</span>
                       </button>
                     );
                   })}
@@ -2353,10 +2359,13 @@ export default function AdminStudentsPage() {
                 </label>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(90px, 1fr))', gap: 8 }}>
                   {(customGrades.length > 0 ? customGrades : [7, 8, 9, 10, 11, 12]).map((g) => {
-                    const isSelected = formGrades.includes(g);
+                    const val = typeof g === 'number' ? g : (Number(g) || 7);
+                    const isSelected = formGrades.includes(val);
+                    const isNum = typeof g === 'number' || (!isNaN(Number(g)) && String(g).trim() !== '');
+                    const label = isNum ? `ថ្នាក់ទី ${g}` : String(g);
                     return (
                       <button
-                        key={g}
+                        key={String(g)}
                         type="button"
                         onClick={() => toggleGradeSelection(g)}
                         style={{
@@ -2376,7 +2385,7 @@ export default function AdminStudentsPage() {
                         }}
                       >
                         {isSelected && <Check size={14} />}
-                        <span>ថ្នាក់ទី {g}</span>
+                        <span>{label}</span>
                       </button>
                     );
                   })}

@@ -134,13 +134,13 @@ export default function AdminHome() {
   const [addTeacherBusy, setAddTeacherBusy] = useState(false);
 
   // Dynamic Grades & Classes Management
-  const [customGrades, setCustomGrades] = useState<number[]>([7, 8, 9, 10, 11, 12]);
+  const [customGrades, setCustomGrades] = useState<(number | string)[]>([7, 8, 9, 10, 11, 12]);
   const [customClasses, setCustomClasses] = useState<string[]>([]);
   const [showManageModal, setShowManageModal] = useState(false);
   const [newGradeInput, setNewGradeInput] = useState<string>('');
   const [newClassInput, setNewClassInput] = useState<string>('');
   const [gradeClassBusy, setGradeClassBusy] = useState(false);
-  const [gradeDeleteConfirm, setGradeDeleteConfirm] = useState<number | null>(null);
+  const [gradeDeleteConfirm, setGradeDeleteConfirm] = useState<number | string | null>(null);
 
   // Toast feedback
   const [toastMsg, setToastMsg] = useState('');
@@ -272,22 +272,30 @@ export default function AdminHome() {
     }
   }
 
-  async function handleAddGrade(gNumber: number) {
-    if (isNaN(gNumber) || gNumber < 1 || gNumber > 30) {
-      alert(lang === 'KH' ? 'សូមបញ្ចូលកម្រិតថ្នាក់ត្រឹមត្រូវ (1–30)' : 'Please enter a valid grade number (1–30)');
+  async function handleAddGrade(rawInput: string) {
+    const trimmed = (rawInput || '').trim();
+    if (!trimmed) {
+      alert(lang === 'KH' ? 'សូមបញ្ចូលឈ្មោះកម្រិតថ្នាក់ ឬលេខថ្នាក់' : 'Please enter a grade name or number');
       return;
     }
-    if (customGrades.includes(gNumber)) {
-      alert(lang === 'KH' ? `ថ្នាក់ទី ${gNumber} មានរួចរាល់ហើយ!` : `Grade ${gNumber} already exists!`);
+    const num = Number(trimmed);
+    const finalGrade: number | string = (!isNaN(num) && Number.isInteger(num) && num >= 1 && num <= 100) ? num : trimmed;
+    
+    // Check if duplicate exists (case-insensitive for words)
+    const exists = customGrades.some((g) => String(g).toLowerCase() === String(finalGrade).toLowerCase());
+    if (exists) {
+      alert(lang === 'KH' ? `ថតថ្នាក់ "${finalGrade}" មានរួចរាល់ហើយ!` : `Grade folder "${finalGrade}" already exists!`);
       return;
     }
-    const nextGrades = [...customGrades, gNumber].sort((a, b) => a - b);
+
+    const nextGrades = [...customGrades, finalGrade];
     setGradeClassBusy(true);
     try {
       await adminPost('/api/admin/settings', { customGrades: nextGrades });
       setCustomGrades(nextGrades);
       setNewGradeInput('');
-      showToast(lang === 'KH' ? `បានបន្ថែម ថ្នាក់ទី ${gNumber} ជោគជ័យ!` : `Grade ${gNumber} added successfully!`);
+      const displayLabel = typeof finalGrade === 'number' ? `ថ្នាក់ទី ${finalGrade} (Grade ${finalGrade})` : finalGrade;
+      showToast(lang === 'KH' ? `បានបន្ថែម ${displayLabel} ជោគជ័យ!` : `Grade "${finalGrade}" added successfully!`);
     } catch (e: any) {
       alert('Failed to save grade: ' + (e?.message || 'Error'));
     } finally {
@@ -295,21 +303,22 @@ export default function AdminHome() {
     }
   }
 
-  async function handleRemoveGrade(gNumber: number) {
+  async function handleRemoveGrade(targetGrade: number | string) {
     if (customGrades.length <= 1) {
       alert(lang === 'KH' ? 'អ្នកត្រូវទុកយ៉ាងហោចណាស់កម្រិតថ្នាក់ ១ ក្នុងប្រព័ន្ធ!' : 'You must keep at least 1 grade folder in the system!');
       return;
     }
-    const nextGrades = customGrades.filter((g) => g !== gNumber);
+    const nextGrades = customGrades.filter((g) => String(g).toLowerCase() !== String(targetGrade).toLowerCase());
     setGradeClassBusy(true);
     try {
       await adminPost('/api/admin/settings', { customGrades: nextGrades });
       setCustomGrades(nextGrades);
-      if (gradeFilter === String(gNumber)) {
+      if (gradeFilter.toLowerCase() === String(targetGrade).toLowerCase()) {
         setGradeFilter('all');
       }
       setGradeDeleteConfirm(null);
-      showToast(lang === 'KH' ? `បានលុប ថ្នាក់ទី ${gNumber} រួចរាល់!` : `Grade ${gNumber} removed!`);
+      const displayLabel = typeof targetGrade === 'number' ? `ថ្នាក់ទី ${targetGrade}` : targetGrade;
+      showToast(lang === 'KH' ? `បានលុប ${displayLabel} រួចរាល់!` : `Grade "${targetGrade}" removed!`);
     } catch (e: any) {
       alert('Failed to delete grade: ' + (e?.message || 'Error'));
     } finally {
@@ -627,13 +636,24 @@ export default function AdminHome() {
     const list = customGrades.length > 0 ? customGrades : [7, 8, 9, 10, 11, 12];
     return list.map((g, idx) => {
       const color = GRADE_PALETTE[idx % GRADE_PALETTE.length];
-      const khmerNum = String(g).split('').map((ch) => KHMER_DIGITS[ch] || ch).join('');
+      const isNum = typeof g === 'number' || (!isNaN(Number(g)) && String(g).trim() !== '');
+      if (isNum) {
+        const numStr = String(g);
+        const khmerNum = numStr.split('').map((ch) => KHMER_DIGITS[ch] || ch).join('');
+        return {
+          grade: g,
+          labelKh: `ថ្នាក់ទី ${khmerNum}`,
+          labelEn: `Grade ${g}`,
+          color,
+          bg: `${color}14`, // ~8% opacity
+        };
+      }
       return {
         grade: g,
-        labelKh: `ថ្នាក់ទី ${khmerNum}`,
-        labelEn: `Grade ${g}`,
+        labelKh: String(g),
+        labelEn: String(g),
         color,
-        bg: `${color}14`, // ~8% opacity
+        bg: `${color}14`,
       };
     });
   }, [customGrades]);
@@ -2490,13 +2510,18 @@ export default function AdminHome() {
                       )}
                     </div>
                   </div>
-
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
                     {GRADE_FOLDERS.map((gf) => {
-                      const isOpen = gradeFilter === String(gf.grade);
-                      const gradeExs = (exercises || []).filter(
-                        (e) => !e.gradeLevels || e.gradeLevels.length === 0 || e.gradeLevels.includes(gf.grade)
-                      );
+                      const isOpen = gradeFilter.toLowerCase() === String(gf.grade).toLowerCase();
+                      const isNum = typeof gf.grade === 'number' || (!isNaN(Number(gf.grade)) && String(gf.grade).trim() !== '');
+                      const gradeExs = (exercises || []).filter((e) => {
+                        if (!e.gradeLevels || e.gradeLevels.length === 0) return true;
+                        if (isNum) {
+                          const num = Number(gf.grade);
+                          return (e.gradeLevels as any[]).some((gl) => Number(gl) === num || String(gl).toLowerCase() === String(gf.grade).toLowerCase());
+                        }
+                        return (e.gradeLevels as any[]).some((gl) => String(gl).toLowerCase() === String(gf.grade).toLowerCase());
+                      });
                       const totalCount = gradeExs.length;
                       const pubCount = gradeExs.filter(
                         (e) => e.published && e.publicationMode !== 'draft' && (!e.scheduledPublishAt || new Date(e.scheduledPublishAt).getTime() <= Date.now())
@@ -2505,7 +2530,7 @@ export default function AdminHome() {
 
                       return (
                         <div
-                          key={gf.grade}
+                          key={String(gf.grade)}
                           style={{
                             padding: '14px 14px',
                             borderRadius: 14,
@@ -2593,73 +2618,77 @@ export default function AdminHome() {
                 </div>
 
                 {/* Active Folder Breadcrumb Bar */}
-                {gradeFilter !== 'all' && (
-                  <div
-                    style={{
-                      padding: '12px 16px',
-                      borderRadius: 14,
-                      backgroundColor: 'rgba(59, 130, 246, 0.08)',
-                      border: '1px solid rgba(59, 130, 246, 0.25)',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      flexWrap: 'wrap',
-                      gap: 10,
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.92rem', fontWeight: 700, color: 'var(--theme-navy)' }}>
-                      <span>📁 {lang === 'KH' ? 'បណ្ណាល័យលំហាត់' : 'Exercise Library'}</span>
-                      <ChevronRight size={16} color="var(--theme-muted)" />
-                      <span style={{ color: 'var(--theme-primary)' }}>
-                        📂 ថ្នាក់ទី {gradeFilter} (Grade {gradeFilter})
-                      </span>
-                    </div>
+                {gradeFilter !== 'all' && (() => {
+                  const activeGf = GRADE_FOLDERS.find((f) => String(f.grade).toLowerCase() === gradeFilter.toLowerCase());
+                  const activeLabel = activeGf ? (lang === 'KH' ? activeGf.labelKh : activeGf.labelEn) : (lang === 'KH' ? `ថ្នាក់ទី ${gradeFilter}` : `Grade ${gradeFilter}`);
+                  return (
+                    <div
+                      style={{
+                        padding: '12px 16px',
+                        borderRadius: 14,
+                        backgroundColor: 'rgba(59, 130, 246, 0.08)',
+                        border: '1px solid rgba(59, 130, 246, 0.25)',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: 10,
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.92rem', fontWeight: 700, color: 'var(--theme-navy)' }}>
+                        <span>📁 {lang === 'KH' ? 'បណ្ណាល័យលំហាត់' : 'Exercise Library'}</span>
+                        <ChevronRight size={16} color="var(--theme-muted)" />
+                        <span style={{ color: 'var(--theme-primary)' }}>
+                          📂 {activeLabel}
+                        </span>
+                      </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                      {availableChapters.length > 0 && (
-                        <select
-                          value={selectedChapter}
-                          onChange={(e) => setSelectedChapter(e.target.value)}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        {availableChapters.length > 0 && (
+                          <select
+                            value={selectedChapter}
+                            onChange={(e) => setSelectedChapter(e.target.value)}
+                            style={{
+                              padding: '6px 12px',
+                              borderRadius: 10,
+                              fontSize: '0.82rem',
+                              fontWeight: 600,
+                              backgroundColor: 'var(--theme-card-bg)',
+                              color: 'var(--theme-navy)',
+                              border: '1px solid var(--theme-border)',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <option value="all">គ្រប់ជំពូក (All Chapters)</option>
+                            {availableChapters.map((ch) => (
+                              <option key={ch} value={ch}>📚 {ch}</option>
+                            ))}
+                          </select>
+                        )}
+
+                        <Link
+                          href={`/admin/exercises/new?grade=${encodeURIComponent(gradeFilter)}`}
+                          className="btn small"
                           style={{
-                            padding: '6px 12px',
+                            backgroundColor: 'var(--theme-primary)',
+                            color: '#fff',
                             borderRadius: 10,
-                            fontSize: '0.82rem',
-                            fontWeight: 600,
-                            backgroundColor: 'var(--theme-card-bg)',
-                            color: 'var(--theme-navy)',
-                            border: '1px solid var(--theme-border)',
-                            cursor: 'pointer',
+                            fontSize: '0.84rem',
+                            fontWeight: 700,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            textDecoration: 'none',
+                            boxShadow: '0 2px 8px rgba(37,99,235,0.25)',
                           }}
                         >
-                          <option value="all">គ្រប់ជំពូក (All Chapters)</option>
-                          {availableChapters.map((ch) => (
-                            <option key={ch} value={ch}>📚 {ch}</option>
-                          ))}
-                        </select>
-                      )}
-
-                      <Link
-                        href={`/admin/exercises/new?grade=${gradeFilter}`}
-                        className="btn small"
-                        style={{
-                          backgroundColor: 'var(--theme-primary)',
-                          color: '#fff',
-                          borderRadius: 10,
-                          fontSize: '0.84rem',
-                          fontWeight: 700,
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 6,
-                          textDecoration: 'none',
-                          boxShadow: '0 2px 8px rgba(37,99,235,0.25)',
-                        }}
-                      >
-                        <Plus size={16} />
-                        <span>+ {lang === 'KH' ? `បង្កើតលំហាត់ថ្នាក់ទី ${gradeFilter}` : `New Grade ${gradeFilter} Exercise`}</span>
-                      </Link>
+                          <Plus size={16} />
+                          <span>+ {lang === 'KH' ? `បង្កើតលំហាត់ ${activeLabel}` : `New ${activeLabel} Exercise`}</span>
+                        </Link>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
                   <div>
@@ -4145,10 +4174,12 @@ export default function AdminHome() {
                 </label>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
                   {(customGrades.length > 0 ? customGrades : [7, 8, 9, 10, 11, 12]).map((g) => {
-                    const isChecked = moveGrades.includes(g);
+                    const isChecked = moveGrades.some((mg) => String(mg).toLowerCase() === String(g).toLowerCase());
+                    const isNum = typeof g === 'number' || (!isNaN(Number(g)) && String(g).trim() !== '');
+                    const label = isNum ? `ថ្នាក់ទី ${g}` : String(g);
                     return (
                       <label
-                        key={g}
+                        key={String(g)}
                         style={{
                           display: 'flex',
                           alignItems: 'center',
@@ -4167,15 +4198,16 @@ export default function AdminHome() {
                           type="checkbox"
                           checked={isChecked}
                           onChange={(e) => {
+                            const val = typeof g === 'number' ? g : (Number(g) || 7);
                             if (e.target.checked) {
-                              setMoveGrades((prev) => [...prev, g].sort((a, b) => a - b));
+                              setMoveGrades((prev) => [...prev.filter((item) => item !== val), val].sort((a, b) => a - b));
                             } else {
-                              setMoveGrades((prev) => prev.filter((item) => item !== g));
+                              setMoveGrades((prev) => prev.filter((item) => item !== val));
                             }
                           }}
                           style={{ accentColor: 'var(--theme-primary)' }}
                         />
-                        <span>ថ្នាក់ទី {g}</span>
+                        <span>{label}</span>
                       </label>
                     );
                   })}
@@ -4378,12 +4410,11 @@ export default function AdminHome() {
               {/* Add Grade Input Form */}
               <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
                 <input
-                  type="number"
-                  min={1}
-                  max={30}
+                  type="text"
+                  maxLength={40}
                   value={newGradeInput}
                   onChange={(e) => setNewGradeInput(e.target.value)}
-                  placeholder={lang === 'KH' ? 'បញ្ចូលលេខថ្នាក់ (ឧ. 6, 13)...' : 'Enter grade number (e.g. 6, 13)...'}
+                  placeholder={lang === 'KH' ? 'បញ្ចូលឈ្មោះកម្រិតថ្នាក់ ឬលេខ (ឧ. 13, ថ្នាក់ត្រៀម, Foundation)...' : 'Enter grade name or number (e.g. 13, Foundation, Olympiad)...'}
                   style={{
                     flex: 1,
                     padding: '8px 12px',
@@ -4397,14 +4428,14 @@ export default function AdminHome() {
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
-                      handleAddGrade(parseInt(newGradeInput, 10));
+                      handleAddGrade(newGradeInput);
                     }
                   }}
                 />
                 <button
                   type="button"
-                  disabled={gradeClassBusy || !newGradeInput}
-                  onClick={() => handleAddGrade(parseInt(newGradeInput, 10))}
+                  disabled={gradeClassBusy || !newGradeInput.trim()}
+                  onClick={() => handleAddGrade(newGradeInput)}
                   className="btn"
                   style={{
                     borderRadius: 10,
@@ -4417,7 +4448,7 @@ export default function AdminHome() {
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: 6,
-                    cursor: gradeClassBusy || !newGradeInput ? 'not-allowed' : 'pointer',
+                    cursor: gradeClassBusy || !newGradeInput.trim() ? 'not-allowed' : 'pointer',
                   }}
                 >
                   <Plus size={15} />
@@ -4427,42 +4458,46 @@ export default function AdminHome() {
 
               {/* Current Active Grades Badges */}
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {customGrades.map((g) => (
-                  <div
-                    key={g}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      padding: '6px 10px',
-                      borderRadius: 10,
-                      backgroundColor: 'var(--theme-card-bg)',
-                      border: '1px solid var(--theme-border)',
-                      fontSize: '0.84rem',
-                      fontWeight: 700,
-                      color: 'var(--theme-navy)',
-                    }}
-                  >
-                    <span>ថ្នាក់ទី {g} (Grade {g})</span>
-                    <button
-                      type="button"
-                      disabled={gradeClassBusy || customGrades.length <= 1}
-                      onClick={() => setGradeDeleteConfirm(g)}
-                      title={lang === 'KH' ? `លុបថ្នាក់ទី ${g}` : `Delete Grade ${g}`}
+                {customGrades.map((g) => {
+                  const isNum = typeof g === 'number' || (!isNaN(Number(g)) && String(g).trim() !== '');
+                  const label = isNum ? `ថ្នាក់ទី ${g} (Grade ${g})` : String(g);
+                  return (
+                    <div
+                      key={String(g)}
                       style={{
-                        background: 'none',
-                        border: 'none',
-                        padding: 2,
-                        cursor: customGrades.length <= 1 ? 'not-allowed' : 'pointer',
-                        color: customGrades.length <= 1 ? 'var(--theme-border)' : '#ef4444',
-                        display: 'flex',
+                        display: 'inline-flex',
                         alignItems: 'center',
+                        gap: 8,
+                        padding: '6px 10px',
+                        borderRadius: 10,
+                        backgroundColor: 'var(--theme-card-bg)',
+                        border: '1px solid var(--theme-border)',
+                        fontSize: '0.84rem',
+                        fontWeight: 700,
+                        color: 'var(--theme-navy)',
                       }}
                     >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                ))}
+                      <span>{label}</span>
+                      <button
+                        type="button"
+                        disabled={gradeClassBusy || customGrades.length <= 1}
+                        onClick={() => setGradeDeleteConfirm(g)}
+                        title={lang === 'KH' ? `លុបថត ${label}` : `Delete Folder "${g}"`}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          padding: 2,
+                          cursor: customGrades.length <= 1 ? 'not-allowed' : 'pointer',
+                          color: customGrades.length <= 1 ? 'var(--theme-border)' : '#ef4444',
+                          display: 'flex',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -4621,13 +4656,23 @@ export default function AdminHome() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#ef4444', marginBottom: 12 }}>
               <AlertTriangle size={24} />
               <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800 }}>
-                {lang === 'KH' ? `លុបថតថ្នាក់ទី ${gradeDeleteConfirm}?` : `Delete Grade ${gradeDeleteConfirm} Folder?`}
+                {(() => {
+                  const isNum = typeof gradeDeleteConfirm === 'number' || (!isNaN(Number(gradeDeleteConfirm)) && String(gradeDeleteConfirm).trim() !== '');
+                  const titleLabel = isNum ? `ថ្នាក់ទី ${gradeDeleteConfirm}` : String(gradeDeleteConfirm);
+                  const titleEn = isNum ? `Grade ${gradeDeleteConfirm}` : `"${gradeDeleteConfirm}"`;
+                  return lang === 'KH' ? `លុបថត ${titleLabel}?` : `Delete ${titleEn} Folder?`;
+                })()}
               </h3>
             </div>
             <p style={{ margin: '0 0 16px 0', fontSize: '0.88rem', color: 'var(--theme-muted)', lineHeight: 1.5 }}>
-              {lang === 'KH'
-                ? `តើអ្នកប្រាកដជាចង់ដកថតថ្នាក់ទី ${gradeDeleteConfirm} ចេញពីបណ្ណាល័យមែនទេ? លំហាត់ដែលមានស្រាប់នឹងមិនត្រូវបានលុបចោលឡើយ។`
-                : `Are you sure you want to remove Grade ${gradeDeleteConfirm} folder? Exercises assigned to it will remain safe in the library.`}
+              {(() => {
+                const isNum = typeof gradeDeleteConfirm === 'number' || (!isNaN(Number(gradeDeleteConfirm)) && String(gradeDeleteConfirm).trim() !== '');
+                const folderLabel = isNum ? `ថ្នាក់ទី ${gradeDeleteConfirm}` : `"${gradeDeleteConfirm}"`;
+                const folderEn = isNum ? `Grade ${gradeDeleteConfirm}` : `"${gradeDeleteConfirm}"`;
+                return lang === 'KH'
+                  ? `តើអ្នកប្រាកដជាចង់ដកថត ${folderLabel} ចេញពីបណ្ណាល័យមែនទេ? លំហាត់ដែលមានស្រាប់នឹងមិនត្រូវបានលុបចោលឡើយ។`
+                  : `Are you sure you want to remove ${folderEn} folder? Exercises assigned to it will remain safe in the library.`;
+              })()}
             </p>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <button
