@@ -6,6 +6,37 @@ export const CAMBODIA_OFFSET_HOURS = 7;
 export const CAMBODIA_OFFSET_MS = 7 * 60 * 60 * 1000;
 export const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
+/**
+ * Turns whatever Firestore gives us for a date into UTC milliseconds, or null.
+ * Students are saved with a Firestore Timestamp (toMillis / _seconds), but older or
+ * test data may hold a plain number, a Date or an ISO string.
+ */
+export function timestampToMs(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (value instanceof Date) {
+    const t = value.getTime();
+    return Number.isFinite(t) ? t : null;
+  }
+  if (typeof value === 'string') {
+    const t = Date.parse(value);
+    return Number.isFinite(t) ? t : null;
+  }
+  if (typeof value === 'object') {
+    const v = value as { toMillis?: () => number; _seconds?: number; seconds?: number; _nanoseconds?: number; nanoseconds?: number };
+    if (typeof v.toMillis === 'function') {
+      const t = v.toMillis();
+      return Number.isFinite(t) ? t : null;
+    }
+    const sec = typeof v._seconds === 'number' ? v._seconds : v.seconds;
+    if (typeof sec === 'number' && Number.isFinite(sec)) {
+      const ns = typeof v._nanoseconds === 'number' ? v._nanoseconds : (v.nanoseconds ?? 0);
+      return sec * 1000 + Math.floor((Number(ns) || 0) / 1e6);
+    }
+  }
+  return null;
+}
+
 /** Days of the week (0 = Sunday) on which a drip exercise can unlock: Monday to Friday. */
 export const DRIP_SCHOOL_WEEKDAYS = [1, 2, 3, 4, 5];
 
@@ -22,6 +53,8 @@ export const DRIP_SCHOOL_WEEKDAYS = [1, 2, 3, 4, 5];
  */
 export function getDripUnlockMs(registeredAtMs: number, dripDay: number): number {
   const DAY_MS = 24 * 60 * 60 * 1000;
+  // Never loop on a bad date (NaN would otherwise never reach a weekday).
+  if (!Number.isFinite(registeredAtMs)) return registeredAtMs;
   const day = Math.min(Math.max(Math.floor(Number(dripDay)) || 1, 1), 1000);
   if (day <= 1) return registeredAtMs;
 
@@ -78,7 +111,7 @@ export function evaluateExerciseAvailability(
   },
   studentGrade?: number,
   nowMs: number = Date.now(),
-  studentCreatedAt?: number | null
+  studentCreatedAt?: unknown
 ): {
   available: boolean;
   upcoming: boolean;
@@ -93,9 +126,10 @@ export function evaluateExerciseAvailability(
 
   // Drip Mode Check: unlocks on Day N relative to student's own registration date
   if ((ex.publicationMode === 'drip' || (typeof ex.dripDay === 'number' && ex.dripDay > 0)) && typeof ex.dripDay === 'number' && ex.dripDay > 0) {
-    if (studentCreatedAt) {
+    const registeredAtMs = timestampToMs(studentCreatedAt);
+    if (registeredAtMs) {
       // Day 1 unlocks immediately; later days unlock on the next school days (Mon-Fri, Cambodia time)
-      const dripUnlockMs = getDripUnlockMs(studentCreatedAt, ex.dripDay);
+      const dripUnlockMs = getDripUnlockMs(registeredAtMs, ex.dripDay);
 
       if (nowMs < dripUnlockMs) {
         return {

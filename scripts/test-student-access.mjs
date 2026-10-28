@@ -39,6 +39,7 @@ const {
   getStudentStatus,
   isStudentAuthorized,
   getDripUnlockMs,
+  timestampToMs,
   evaluateExerciseAvailability,
   ACCESS_ERRORS,
   CAMBODIA_OFFSET_HOURS,
@@ -345,6 +346,27 @@ assert.equal(isStudentAuthorized(true, validUntil, local(2026, 11, 28, 0, 0), 'a
 let unlockedInMonth = 0;
 for (let n = 1; n <= 60; n++) if (getDripUnlockMs(reg28, n) < validUntil) unlockedInMonth++;
 assert.equal(unlockedInMonth, 23);
+
+// Students are stored with a Firestore Timestamp, not a number. Every shape must give the same schedule.
+const tsMethod = { toMillis: () => reg28 };                                   // Firestore Timestamp
+const tsPlain = { _seconds: Math.floor(reg28 / 1000), _nanoseconds: 0 };      // Timestamp after JSON
+const tsDate = new Date(reg28);
+const tsIso = new Date(reg28).toISOString();
+for (const shape of [reg28, tsMethod, tsPlain, tsDate, tsIso]) {
+  assert.equal(timestampToMs(shape), reg28);
+  const lockedTonight = evaluateExerciseAvailability(dayEx(2), 7, local(2026, 10, 28, 23, 59), shape);
+  assert.equal(lockedTonight.available, false, 'exercise 2 is locked on registration day');
+  assert.equal(lockedTonight.dripUnlockMs, local(2026, 10, 29, 0, 0));
+  assert.equal(evaluateExerciseAvailability(dayEx(2), 7, local(2026, 10, 29, 0, 0), shape).available, true);
+}
+assert.equal(timestampToMs(null), null);
+assert.equal(timestampToMs(undefined), null);
+assert.equal(timestampToMs({}), null);
+assert.equal(timestampToMs('not a date'), null);
+// Missing or broken registration date: never lock, never hang
+assert.equal(evaluateExerciseAvailability(dayEx(5), 7, reg28, null).available, true);
+assert.equal(evaluateExerciseAvailability(dayEx(5), 7, reg28, {}).available, true);
+assert.ok(Number.isNaN(getDripUnlockMs(NaN, 5)));
 
 console.log('✓ Drip follows the registration day (1/day, Mon-Fri) and access ends after 1 month.');
 

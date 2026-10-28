@@ -1,7 +1,7 @@
 import { adminDb } from '@/lib/firebaseAdmin';
 import { normalize } from '@/lib/grade';
 import { getCachedPublishedExercises } from '@/lib/parentTrackingServer';
-import { getDripUnlockMs } from '@/lib/studentAccess';
+import { getDripUnlockMs, timestampToMs } from '@/lib/studentAccess';
 import type { Student, Submission, StudentViewData, StudentViewExercise } from '@/lib/types';
 
 export async function fetchStudentPortalData(rawToken: string): Promise<StudentViewData | null> {
@@ -70,7 +70,7 @@ export async function fetchStudentPortalData(rawToken: string): Promise<StudentV
 
     const paymentStatus = student.paymentStatus || 'approved';
     const isUnpaid = paymentStatus === 'pending';
-    const studentCreatedAt = student.createdAt || null;
+    const studentCreatedAt = timestampToMs(student.createdAt);
 
     const now = Date.now();
     const exercises: StudentViewExercise[] = exList.map(({ id, data: ex }) => {
