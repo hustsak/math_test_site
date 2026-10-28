@@ -41,38 +41,53 @@ export function timestampToMs(value: unknown): number | null {
 export const DRIP_SCHOOL_WEEKDAYS = [1, 2, 3, 4, 5];
 
 /**
+ * Which school day (1 = the registration day, 2 = the next Monday-Friday, ...) a drip Day
+ * number belongs to. Day numbers are written in 7-day weeks so that Day 8 is "next week"
+ * and Day 30 is the end of a month, but only Mon-Fri carry exercises:
+ *
+ *   Day 1-5  -> school day 1-5      Day 6-7  -> weekend numbers, skipped
+ *   Day 8-12 -> school day 6-10     Day 13-14 -> weekend numbers, skipped
+ *   Day 15-19 -> school day 11-15   Day 20-21, 27-28 -> weekend numbers, skipped ...
+ *
+ * A weekend number (6, 7, 13, 14, 20, 21, 27, 28 ...) is not meant to hold an exercise;
+ * if one does, it opens together with the next real day (Day 8, 15, 22 ...).
+ */
+export function dripSchoolDayIndex(dripDay: number): number {
+  const day = Math.min(Math.max(Math.floor(Number(dripDay)) || 1, 1), 1000);
+  const week = Math.floor((day - 1) / 7);
+  const pos = (day - 1) % 7; // 0-4 = Mon-Fri slot, 5-6 = weekend slot
+  return pos <= 4 ? week * 5 + pos + 1 : (week + 1) * 5 + 1;
+}
+
+/**
  * When drip Day N unlocks for a student who registered at `registeredAtMs` (UTC ms).
  *
- * Days are calendar days counted from the registration day, so Day 8 is the same weekday
- * one week later and Day 30 is the end of a 30-day month:
  * - Day 1 unlocks immediately, at the moment of registration.
- * - Day N unlocks at 00:00 Cambodia time (Asia/Phnom_Penh), (N - 1) days after the
- *   registration day.
- * - Nothing unlocks on Saturday or Sunday: a day that lands on a weekend unlocks at
- *   00:00 on the following Monday instead.
+ * - Every later school day (Monday to Friday) unlocks the next exercise at 00:00 Cambodia
+ *   time (Asia/Phnom_Penh): 1 exercise per day, 5 days per week, never on Saturday/Sunday.
+ * - Day numbers skip the weekend (see dripSchoolDayIndex), so Day 8 is the same weekday
+ *   one week after Day 1 and Day 30 fits inside a 1-month (30-day) validity.
  *
- * Example (registered Wednesday): Day 2 Thursday, Day 3 Friday, Day 4 and Day 5
- * (Saturday, Sunday) and Day 6 all on Monday, Day 8 next Wednesday.
+ * Example (registered Wednesday 28/10): Day 1 Wed, Day 2 Thu, Day 3 Fri, Day 4 Mon,
+ * Day 5 Tue, Day 8 Wed 4/11, Day 30 Thu 26/11, Day 31 Fri 27/11.
  */
 export function getDripUnlockMs(registeredAtMs: number, dripDay: number): number {
   const DAY_MS = 24 * 60 * 60 * 1000;
   // Never loop on a bad date.
   if (!Number.isFinite(registeredAtMs)) return registeredAtMs;
-  const day = Math.min(Math.max(Math.floor(Number(dripDay)) || 1, 1), 1000);
-  if (day <= 1) return registeredAtMs;
+  const schoolDay = dripSchoolDayIndex(dripDay);
+  if (schoolDay <= 1) return registeredAtMs;
 
-  // Midnight (Cambodia time) at the start of the registration day, plus (day - 1) days.
-  const registrationMidnight =
-    Math.floor((registeredAtMs + CAMBODIA_OFFSET_MS) / DAY_MS) * DAY_MS - CAMBODIA_OFFSET_MS;
-  let unlockMs = registrationMidnight + (day - 1) * DAY_MS;
-
-  // Weekend -> wait until Monday 00:00 (at most 2 steps).
-  for (let i = 0; i < 7; i++) {
-    const weekday = new Date(unlockMs + CAMBODIA_OFFSET_MS).getUTCDay();
-    if (DRIP_SCHOOL_WEEKDAYS.includes(weekday)) break;
-    unlockMs += DAY_MS;
+  // Midnight (Cambodia time) at the start of the registration day, then step forward
+  // over school days only.
+  let cursor = Math.floor((registeredAtMs + CAMBODIA_OFFSET_MS) / DAY_MS) * DAY_MS - CAMBODIA_OFFSET_MS;
+  let remaining = schoolDay - 1;
+  while (remaining > 0) {
+    cursor += DAY_MS;
+    const weekday = new Date(cursor + CAMBODIA_OFFSET_MS).getUTCDay();
+    if (DRIP_SCHOOL_WEEKDAYS.includes(weekday)) remaining--;
   }
-  return unlockMs;
+  return cursor;
 }
 
 export type StudentAccessStatus = 'active' | 'expiring_soon' | 'expired' | 'blocked' | 'pending_payment';
@@ -134,7 +149,7 @@ export function evaluateExerciseAvailability(
   if ((ex.publicationMode === 'drip' || (typeof ex.dripDay === 'number' && ex.dripDay > 0)) && typeof ex.dripDay === 'number' && ex.dripDay > 0) {
     const registeredAtMs = timestampToMs(studentCreatedAt);
     if (registeredAtMs) {
-      // Day 1 unlocks immediately; Day N unlocks N-1 calendar days later at 00:00 (weekends wait for Monday)
+      // Day 1 unlocks immediately; later days unlock one per school day (Mon-Fri, Cambodia time)
       const dripUnlockMs = getDripUnlockMs(registeredAtMs, ex.dripDay);
 
       if (nowMs < dripUnlockMs) {
