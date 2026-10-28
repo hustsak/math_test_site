@@ -235,14 +235,14 @@ export default function AdminHome() {
       setExercises(exList);
       setSubmissions(subList);
 
-      if (profilesSnap && !profilesSnap.empty) {
+      if (legacyStudentsSnap && !legacyStudentsSnap.empty) {
+        const sList = legacyStudentsSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+        setRosterStudents(sList);
+      } else if (profilesSnap && !profilesSnap.empty) {
         const pList = profilesSnap.docs
           .map((d) => ({ id: d.id, ...(d.data() as any) }))
           .filter((p) => !p.hidden);
         setRosterStudents(pList as any);
-      } else if (legacyStudentsSnap) {
-        const sList = legacyStudentsSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
-        setRosterStudents(sList);
       }
 
       if (settingsSnap && settingsSnap.exists()) {
@@ -3067,31 +3067,6 @@ export default function AdminHome() {
 
                           {/* Action Buttons */}
                           <div className="exercise-row-actions" style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
-                            {/* Unsubmitted Students Button (if roster exists) */}
-                            {rosterStudents.length > 0 && (
-                              <button
-                                type="button"
-                                onClick={() => setUnsubmittedModalEx(r)}
-                                style={{
-                                  padding: '6px 11px',
-                                  borderRadius: 10,
-                                  backgroundColor: unsubmittedList.length > 0 ? 'rgba(239, 68, 68, 0.08)' : 'var(--good-bg)',
-                                  color: unsubmittedList.length > 0 ? 'var(--theme-danger)' : 'var(--theme-success)',
-                                  border: '1px solid currentColor',
-                                  fontSize: '0.78rem',
-                                  fontWeight: 700,
-                                  cursor: 'pointer',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: 6,
-                                  whiteSpace: 'nowrap',
-                                }}
-                                title="View roster students who haven't submitted"
-                              >
-                                <UserX size={13} />
-                                <span>{unsubmittedList.length} Not Done</span>
-                              </button>
-                            )}
 
                             {/* QR Code Button */}
                             <button
