@@ -8,6 +8,7 @@ import { getDb } from '@/lib/firebaseClient';
 import { useAdmin } from '@/lib/useAdmin';
 import { adminPost } from '@/lib/authFetch';
 import MathText from '@/components/MathText';
+import { toText } from '@/lib/textValue';
 import { normalize } from '@/lib/grade';
 import type { Exercise, Submission, Profile } from '@/lib/types';
 
@@ -393,7 +394,7 @@ export default function Results() {
                                     <span className={d?.correct ? 'badge live' : 'badge warn'}>
                                       {d?.correct
                                         ? '✓ Correct'
-                                        : `✕ Wrong (Answer: ${d?.correctAnswer ?? q.answer.split('|')[0]})`}
+                                        : `✕ Wrong (Answer: ${d?.correctAnswer != null ? toText(d.correctAnswer) : toText(q.answer).split('|')[0]})`}
                                     </span>
                                   </div>
                                 </div>

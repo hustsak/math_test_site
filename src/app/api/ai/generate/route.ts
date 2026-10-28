@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/adminAuth';
 import { callClaude } from '@/lib/ai';
 import { parseNumber } from '@/lib/grade';
+import { toText, resolveChoiceIndex } from '@/lib/textValue';
 import type { Question } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -65,13 +66,21 @@ ${langRule}`;
 
     const questions: Question[] = [];
     for (const r of raw.slice(0, count)) {
-      const prompt = String(r?.prompt ?? '').trim();
+      const prompt = toText(r?.prompt).trim();
       if (!prompt) continue;
-      const explanation = String(r?.explanation ?? '').trim();
+      const explanation = toText(r?.explanation).trim();
 
       if (r?.kind === 'choice' && Array.isArray(r.choices)) {
-        const choices = r.choices.map((c: unknown) => String(c ?? '').trim()).filter(Boolean).slice(0, 6);
-        const idx = Number(r.answer);
+        const rawChoices = (r.choices as unknown[]).filter((c) => toText(c).trim() !== '').slice(0, 6);
+        const choices = rawChoices.map((c) => toText(c).trim());
+        // "answer" is the 0-based index (as the prompt asks). That stays the first rule so numeric choices
+        // like ["1","2","3"] can never be re-interpreted. Only if it is not a valid index do we also accept
+        // a letter ("C"), a choice id or a choice object.
+        const asNumber = r.answer !== null && typeof r.answer === 'object' ? NaN : Number(r.answer);
+        const idx =
+          Number.isInteger(asNumber) && asNumber >= 0 && asNumber < choices.length
+            ? asNumber
+            : resolveChoiceIndex(r.answer, rawChoices);
         if (choices.length < 2 || !Number.isInteger(idx) || idx < 0 || idx >= choices.length) continue;
         questions.push({
           id: newId(),
@@ -84,7 +93,7 @@ ${langRule}`;
           aiGenerated: true,
         });
       } else {
-        const answer = String(r?.answer ?? '').trim();
+        const answer = toText(r?.answer).trim();
         if (!answer) continue;
         // If the answer is not a clean number/fraction, store it as a text answer instead.
         const kind = parseNumber(answer) !== null ? 'number' : 'text';

@@ -1,5 +1,6 @@
 import katex from 'katex';
 import { splitAutoMath, toLatex } from '@/lib/autoMath';
+import { toText } from '@/lib/textValue';
 
 /**
  * Normalizes LaTeX math input:
@@ -69,7 +70,8 @@ function normalizeMathDelimiters(text: string): string {
  */
 export default function MathText({ text }: { text?: any }) {
   if (text === null || text === undefined) return null;
-  const rawStr = typeof text === 'string' ? text : String(text);
+  // toText, not String(): an object such as { id: "A", text: "5 + 5i" } must show its text, never "[object Object]".
+  const rawStr = toText(text);
   if (!rawStr) return null;
 
   try {

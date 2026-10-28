@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
+import { toText } from '@/lib/textValue';
 import type { Exercise, PublicExercise, Submission } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -37,9 +38,10 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       isSample: !!ex.isSample,
       questions: ex.questions.map((q) => ({
         id: q.id,
-        prompt: q.prompt,
+        prompt: toText(q.prompt),
         kind: q.kind,
-        ...(q.kind === 'choice' ? { choices: q.choices ?? [] } : {}),
+        // Choices are sent as plain text (a stored { id, text } object becomes its text).
+        ...(q.kind === 'choice' ? { choices: (q.choices ?? []).map((c) => toText(c)) } : {}),
         points: q.points,
       })),
     };

@@ -12,13 +12,14 @@ const tmp = mkdtempSync(join(tmpdir(), 'parent-tracking-test-'));
 
 cpSync(new URL('grade.ts', lib), join(tmp, 'grade.ts'));
 cpSync(new URL('types.ts', lib), join(tmp, 'types.ts'));
+cpSync(new URL('textValue.ts', lib), join(tmp, 'textValue.ts'));
 writeFileSync(
   join(tmp, 'profiles.ts'),
   readFileSync(new URL('profiles.ts', lib), 'utf8').replace("from './grade'", "from './grade.ts'")
 );
 writeFileSync(
   join(tmp, 'parentTracking.ts'),
-  readFileSync(new URL('parentTracking.ts', lib), 'utf8').replace("from './types'", "from './types.ts'")
+  readFileSync(new URL('parentTracking.ts', lib), 'utf8').replace("from './types'", "from './types.ts'").replace("from './textValue'", "from './textValue.ts'")
 );
 
 const { normalize } = await import(pathToFileURL(join(tmp, 'grade.ts')).href);

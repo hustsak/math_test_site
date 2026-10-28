@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { QRCodeSVG } from 'qrcode.react';
 import { Sun, Moon } from 'lucide-react';
 import MathText from '@/components/MathText';
+import ChoiceText from '@/components/ChoiceText';
 import ScreenGuard, { withGuardPaused } from '@/components/ScreenGuard';
 import type { PublicExercise, PublicQuestion, QuestionResult } from '@/lib/types';
 
@@ -1372,7 +1373,7 @@ export default function StudentPage() {
                             transition: 'color 0.12s ease',
                           }}
                         >
-                          <MathText text={c} />
+                          <ChoiceText choice={c} index={cIdx} />
                         </div>
                       </div>
                     );
