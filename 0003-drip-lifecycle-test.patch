@@ -1,0 +1,69 @@
+From 2a4217f8838cd97ae65f918df072a48d9382f521 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 28 Oct 2026 05:31:06 +0000
+Subject: [PATCH] Test: drip follows registration day and access ends after 1
+ month
+
+Encodes the 28 Oct example: only exercise 1 opens on 28/10, exercise 2
+opens 29/10, nothing new on the weekend, exercise 23 is the last one
+that opens before the 1-month validity ends on 27/11, and access is
+blocked from 28/11. Test only, no app code changed.
+---
+ scripts/test-student-access.mjs | 42 ++++++++++++++++++++++++++++++++-
+ 1 file changed, 41 insertions(+), 1 deletion(-)
+
+diff --git a/scripts/test-student-access.mjs b/scripts/test-student-access.mjs
+index 03ca332..aa61f64 100644
+--- a/scripts/test-student-access.mjs
++++ b/scripts/test-student-access.mjs
+@@ -308,6 +308,46 @@ assert.equal(evaluateExerciseAvailability(dripEx, 7, monStart, regWed).available
+ 
+ console.log('✓ Weekday drip passed: Day 1 immediate, then 1 exercise per school day, Mon-Fri, no weekends.');
+ 
++// -----------------------------------------------------------------------------
++// Full lifecycle: unlock follows the registration day, access ends after 1 month
++// -----------------------------------------------------------------------------
++console.log('\n--- TEST 9: Registration-day drip + 1-month validity (28 Oct example) ---');
++
++const reg28 = local(2026, 10, 28, 9, 0); // student registers (and pays) Wednesday 28/10 at 09:00
++const validUntil = getEndOfDayCambodia(addDaysToCambodiaDate(getTodayCambodiaDate(reg28), 30));
++assert.equal(validUntil, local(2026, 11, 28, 0, 0), '1 month from 28/10: last valid day is 27/11');
++
++const dayEx = (n) => ({ published: true, publicationMode: 'drip', dripDay: n, gradeLevels: [7] });
++const openAt = (n, t) => evaluateExerciseAvailability(dayEx(n), 7, t, reg28).available;
++const canEnter = (t) => isStudentAuthorized(true, validUntil, t, 'approved').authorized;
++
++// 28/10: only exercise 1 is open
++assert.equal(openAt(1, local(2026, 10, 28, 9, 1)), true);
++assert.equal(openAt(2, local(2026, 10, 28, 23, 59)), false);
++// 29/10: exercise 2 opens automatically at midnight, exercise 3 is still closed
++assert.equal(openAt(2, local(2026, 10, 29, 0, 0)), true);
++assert.equal(openAt(3, local(2026, 10, 29, 23, 59)), false);
++// 30/10 (Fri): exercise 3. Weekend: nothing new. Monday 2/11: exercise 4
++assert.equal(openAt(3, local(2026, 10, 30, 0, 0)), true);
++assert.equal(openAt(4, local(2026, 11, 1, 23, 59)), false);
++assert.equal(openAt(4, local(2026, 11, 2, 0, 0)), true);
++// Earlier exercises stay open once unlocked
++assert.equal(openAt(1, local(2026, 11, 2, 12, 0)), true);
++
++// Last valid day 27/11 (Fri): exercise 23 is the last one that opens in time
++assert.equal(canEnter(local(2026, 11, 27, 23, 59)), true);
++assert.equal(openAt(23, local(2026, 11, 27, 0, 0)), true);
++assert.equal(openAt(24, local(2026, 11, 27, 23, 59)), false);
++assert.equal(canEnter(local(2026, 11, 28, 0, 0)), false, 'expired from 28/11 00:00');
++assert.equal(isStudentAuthorized(true, validUntil, local(2026, 11, 28, 0, 0), 'approved').reason, 'expired');
++
++// A student registered on a Wednesday gets exactly 23 exercises in 1 month
++let unlockedInMonth = 0;
++for (let n = 1; n <= 60; n++) if (getDripUnlockMs(reg28, n) < validUntil) unlockedInMonth++;
++assert.equal(unlockedInMonth, 23);
++
++console.log('✓ Drip follows the registration day (1/day, Mon-Fri) and access ends after 1 month.');
++
+ console.log('\n================================================================');
+-console.log('ALL 16 STUDENT ACCESS CONTROL TESTS PASSED! 🎉');
++console.log('ALL 17 STUDENT ACCESS CONTROL TESTS PASSED! 🎉');
+ console.log('================================================================');
+-- 
+2.43.0
+

@@ -299,7 +299,7 @@ export async function POST(req: Request) {
         paymentStatus,
       },
       availableNow,
-      upcoming,
+      upcoming: [], // hidden: students must not see future/locked exercises
       completed,
       closed,
     });

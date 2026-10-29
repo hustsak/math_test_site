@@ -282,9 +282,6 @@ export default function StudentPortalPage({ targetGrade }: { targetGrade?: numbe
               <h1 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 900, color: 'var(--theme-navy)' }}>
                 {targetGrade ? `មជ្ឈមណ្ឌលសិស្ស ${targetNameKh} (${targetNameEn} Portal)` : 'មជ្ឈមណ្ឌលសិស្ស (Student Portal)'}
               </h1>
-              <span style={{ fontSize: '0.8rem', color: 'var(--theme-muted)' }}>
-                {targetGrade ? `លំហាត់គណិតវិទ្យា${targetNameKh} (${targetNameEn} Mathematics)` : 'លំហាត់គណិតវិទ្យាថ្នាក់ទី ៧ ដល់ ទី ១២ (Grades 7–12)'}
-              </span>
             </div>
           </div>
 
@@ -573,14 +570,6 @@ export default function StudentPortalPage({ targetGrade }: { targetGrade?: numbe
                   )}
                 </div>
 
-                <div style={{ fontSize: '0.82rem', color: 'var(--theme-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Clock size={14} />
-                  {data.student.paymentStatus === 'pending' ? (
-                    <span>សុពលភាព ៖ <strong style={{ color: '#d97706' }}>រង់ចាំអនុម័ត (មានសុពលភាព ១ខែ ចាប់ពីថ្ងៃគ្រូអនុម័ត)</strong></span>
-                  ) : (
-                    <span>ការអនុញ្ញាតចូលប្រើមានសុពលភាពដល់ ៖ <strong style={{ color: '#059669' }}>{data.student.expirationDate}</strong></span>
-                  )}
-                </div>
               </div>
 
               {/* Parent Link Shortcut */}
@@ -668,7 +657,7 @@ export default function StudentPortalPage({ targetGrade }: { targetGrade?: numbe
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                 <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#059669' }} />
                 <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900, color: 'var(--theme-navy)' }}>
-                  លំហាត់អាចធ្វើបានឥឡូវនេះ (Available Now — {data.availableNow.length})
+                  លំហាត់ (Exercises)
                 </h3>
               </div>
 
@@ -751,7 +740,6 @@ export default function StudentPortalPage({ targetGrade }: { targetGrade?: numbe
                                     {chapterTitle}
                                   </h4>
                                   <div style={{ fontSize: '0.78rem', color: 'var(--theme-muted)', marginTop: 2 }}>
-                                    {chapterExercises.length} លំហាត់ (exercises)
                                   </div>
                                 </div>
                               </div>
@@ -766,140 +754,41 @@ export default function StudentPortalPage({ targetGrade }: { targetGrade?: numbe
 
                             {/* Chapter Exercises List */}
                             {!isCollapsed && (
-                              <div style={{ padding: 18 }}>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
-                                  {chapterExercises.map((ex) => (
-                                    <div
-                                      key={ex.id}
-                                      style={{
-                                        backgroundColor: 'var(--theme-page-bg)',
-                                        borderRadius: 14,
-                                        padding: 18,
-                                        border: '1px solid var(--theme-border)',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        justifyContent: 'space-between',
-                                        gap: 14,
-                                      }}
-                                    >
-                                      <div>
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
-                                          <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
-                                            {ex.title}
-                                          </h4>
-                                          {ex.isSample && (
-                                            <span
-                                              style={{
-                                                padding: '3px 8px',
-                                                borderRadius: 10,
-                                                backgroundColor: 'rgba(16, 185, 129, 0.15)',
-                                                color: '#059669',
-                                                fontSize: '0.72rem',
-                                                fontWeight: 800,
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: 4,
-                                                flexShrink: 0,
-                                              }}
-                                            >
-                                              🌟 លំហាត់សាកល្បង (Sample)
-                                            </span>
-                                          )}
-                                          {ex.isLockedForPayment && (
-                                            <span
-                                              style={{
-                                                padding: '3px 8px',
-                                                borderRadius: 10,
-                                                backgroundColor: 'rgba(239, 68, 68, 0.15)',
-                                                color: '#dc2626',
-                                                fontSize: '0.72rem',
-                                                fontWeight: 800,
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: 4,
-                                                flexShrink: 0,
-                                              }}
-                                            >
-                                              <Lock size={12} />
-                                              <span>រង់ចាំបង់ប្រាក់</span>
-                                            </span>
-                                          )}
-                                        </div>
-
-                                        {ex.topic && (
-                                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-                                            <span style={{ fontSize: '0.75rem', fontWeight: 600, padding: '2px 8px', borderRadius: 6, backgroundColor: 'rgba(16, 185, 129, 0.12)', color: '#059669' }}>
-                                              🔖 {ex.topic}
-                                            </span>
+                              <div style={{ padding: 12 }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                  {chapterExercises.map((ex) => {
+                                    const href = data.student.studentToken ? `/e/${ex.id}?token=${encodeURIComponent(data.student.studentToken)}` : `/e/${ex.id}`;
+                                    const row: React.CSSProperties = {
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'space-between',
+                                      gap: 10,
+                                      padding: '10px 14px',
+                                      borderRadius: 12,
+                                      backgroundColor: 'var(--theme-page-bg)',
+                                      border: '1px solid var(--theme-border)',
+                                      textDecoration: 'none',
+                                      color: 'var(--theme-navy)',
+                                    };
+                                    const inner = (
+                                      <>
+                                        <div style={{ minWidth: 0 }}>
+                                          <div style={{ fontWeight: 800, fontSize: '0.95rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            {ex.isSample ? '🌟 ' : ''}{ex.title}
                                           </div>
-                                        )}
-
-                                        {ex.description && (
-                                          <p style={{ margin: '0 0 10px 0', fontSize: '0.85rem', color: 'var(--theme-muted)', lineHeight: 1.4 }}>
-                                            {ex.description}
-                                          </p>
-                                        )}
-
-                                        <div style={{ display: 'flex', gap: 12, fontSize: '0.82rem', color: 'var(--theme-muted)', flexWrap: 'wrap' }}>
-                                          <span>📝 {ex.questionCount} សំណួរ</span>
-                                          <span>⭐ {ex.totalPoints} ពិន្ទុ</span>
-                                          {ex.timeLimitMinutes > 0 ? (
-                                            <span>⏱️ {ex.timeLimitMinutes} នាទី</span>
-                                          ) : (
-                                            <span>⏱️ គ្មានកំណត់ម៉ោង</span>
-                                          )}
-                                        </div>
-
-                                        {ex.deadline && (
-                                          <div style={{ fontSize: '0.8rem', color: '#d97706', fontWeight: 700, marginTop: 6 }}>
-                                            ⏳ ផុតកំណត់ ៖ {new Date(ex.deadline).toLocaleString()}
+                                          <div style={{ fontSize: '0.76rem', color: 'var(--theme-muted)', marginTop: 2 }}>
+                                            {ex.questionCount} សំណួរ{ex.timeLimitMinutes > 0 ? ` • ${ex.timeLimitMinutes} នាទី` : ''}
                                           </div>
-                                        )}
-                                      </div>
-
-                                      {ex.isLockedForPayment ? (
-                                        <div
-                                          style={{
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            gap: 6,
-                                            padding: '11px 18px',
-                                            borderRadius: 12,
-                                            backgroundColor: 'rgba(156, 163, 175, 0.2)',
-                                            color: 'var(--theme-muted)',
-                                            fontWeight: 800,
-                                            fontSize: '0.92rem',
-                                            cursor: 'not-allowed',
-                                          }}
-                                        >
-                                          <Lock size={16} />
-                                          <span>ចាក់សោរ (Locked — ត្រូវការអនុម័តបង់ប្រាក់)</span>
                                         </div>
-                                      ) : (
-                                        <Link
-                                          href={data.student.studentToken ? `/e/${ex.id}?token=${encodeURIComponent(data.student.studentToken)}` : `/e/${ex.id}`}
-                                          style={{
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            gap: 6,
-                                            padding: '11px 18px',
-                                            borderRadius: 12,
-                                            backgroundColor: 'var(--theme-primary)',
-                                            color: '#ffffff',
-                                            fontWeight: 800,
-                                            fontSize: '0.92rem',
-                                            textDecoration: 'none',
-                                            boxShadow: '0 4px 12px rgba(37,99,235,0.2)',
-                                          }}
-                                        >
-                                          <span>{ex.isSample ? '🌟 សាកល្បងធ្វើ (Try Sample)' : 'ចាប់ផ្ដើមធ្វើ (Start Exercise)'}</span>
-                                          <ChevronRight size={16} />
-                                        </Link>
-                                      )}
-                                    </div>
-                                  ))}
+                                        {ex.isLockedForPayment ? <Lock size={16} color="var(--theme-muted)" /> : <ChevronRight size={18} color="var(--theme-primary)" />}
+                                      </>
+                                    );
+                                    return ex.isLockedForPayment ? (
+                                      <div key={ex.id} style={{ ...row, opacity: 0.6, cursor: 'not-allowed' }}>{inner}</div>
+                                    ) : (
+                                      <Link key={ex.id} href={href} style={row}>{inner}</Link>
+                                    );
+                                  })}
                                 </div>
                               </div>
                             )}
@@ -911,78 +800,6 @@ export default function StudentPortalPage({ targetGrade }: { targetGrade?: numbe
                 })()
               )}
             </div>
-
-            {/* SECTION 2: UPCOMING SCHEDULED EXERCISES */}
-            {data.upcoming.length > 0 && (
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                  <Calendar size={18} color="#8b5cf6" />
-                  <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900, color: 'var(--theme-navy)' }}>
-                    លំហាត់គ្រោងទុកខាងមុខ (Upcoming Scheduled — {data.upcoming.length})
-                  </h3>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
-                  {data.upcoming.map((ex) => (
-                    <div
-                      key={ex.id}
-                      style={{
-                        backgroundColor: 'var(--theme-card-bg)',
-                        borderRadius: 16,
-                        padding: 16,
-                        border: '1px solid var(--theme-border)',
-                        opacity: 0.9,
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-                        <h4 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
-                          {ex.title}
-                        </h4>
-                        <span
-                          style={{
-                            padding: '3px 8px',
-                            borderRadius: 12,
-                            backgroundColor: 'rgba(139, 92, 246, 0.12)',
-                            color: '#8b5cf6',
-                            fontSize: '0.75rem',
-                            fontWeight: 800,
-                          }}
-                        >
-                          គ្រោងទុក
-                        </span>
-                      </div>
-
-                      {(ex.chapter || ex.topic) && (
-                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
-                          {ex.chapter && (
-                            <span style={{ fontSize: '0.72rem', fontWeight: 700, padding: '2px 7px', borderRadius: 6, backgroundColor: 'rgba(139, 92, 246, 0.12)', color: '#8b5cf6' }}>
-                              📚 {ex.chapter}
-                            </span>
-                          )}
-                          {ex.topic && (
-                            <span style={{ fontSize: '0.72rem', fontWeight: 600, padding: '2px 7px', borderRadius: 6, backgroundColor: 'rgba(16, 185, 129, 0.12)', color: '#059669' }}>
-                              🔖 {ex.topic}
-                            </span>
-                          )}
-                        </div>
-                      )}
-
-                      <div style={{ fontSize: '0.82rem', color: '#8b5cf6', fontWeight: 700, marginBottom: 6 }}>
-                        📅 នឹងបើកនៅ ៖{' '}
-                        {ex.scheduledPublishAt
-                          ? new Date(ex.scheduledPublishAt).toLocaleString()
-                          : 'ឆាប់ៗនេះ'}
-                      </div>
-
-                      <div style={{ display: 'flex', gap: 12, fontSize: '0.8rem', color: 'var(--theme-muted)' }}>
-                        <span>{ex.questionCount} សំណួរ</span>
-                        <span>{ex.totalPoints} ពិន្ទុ</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
             {/* SECTION 3: COMPLETED EXERCISES & SCORES */}
             {data.completed.length > 0 && (
