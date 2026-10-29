@@ -267,9 +267,7 @@ export interface StudentViewExercise {
   isDone: boolean;
   isSample?: boolean;
   isLockedForPayment?: boolean;
-  isDripLocked?: boolean;
   dripDay?: number | null;
-  dripUnlockMs?: number | null;
   gradeLevels?: number[];
   score?: number;
   total?: number;

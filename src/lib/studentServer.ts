@@ -73,26 +73,21 @@ export async function fetchStudentPortalData(rawToken: string): Promise<StudentV
     const studentCreatedAt = timestampToMs(student.createdAt);
 
     const now = Date.now();
-    const exercises: StudentViewExercise[] = exList.map(({ id, data: ex }) => {
+    const exercises: StudentViewExercise[] = [];
+    for (const { id, data: ex } of exList) {
       const sub = submissionMap.get(id);
       const isClosed = !!(ex.deadline && now > new Date(ex.deadline).getTime());
       const isDone = sub?.status === 'submitted';
       const isSample = !!ex.isSample;
       const isLockedForPayment = isUnpaid && !isSample;
 
-      // Check Drip lock relative to student.createdAt
-      let isDripLocked = false;
-      let dripUnlockMs: number | null = null;
-      if (!isDone && (ex.publicationMode === 'drip' || (typeof ex.dripDay === 'number' && ex.dripDay > 0)) && typeof ex.dripDay === 'number' && ex.dripDay > 0) {
-        if (studentCreatedAt) {
-          dripUnlockMs = getDripUnlockMs(studentCreatedAt, ex.dripDay);
-          if (now < dripUnlockMs) {
-            isDripLocked = true;
-          }
-        }
+      // Drip: exercises unlock automatically (1 school day per exercise).
+      // Locked ones are hidden completely so students never see how many exist.
+      if (!isDone && typeof ex.dripDay === 'number' && ex.dripDay > 0 && studentCreatedAt) {
+        if (now < getDripUnlockMs(studentCreatedAt, ex.dripDay)) continue;
       }
 
-      return {
+      exercises.push({
         id,
         title: ex.title,
         description: ex.description || '',
@@ -105,15 +100,13 @@ export async function fetchStudentPortalData(rawToken: string): Promise<StudentV
         isDone,
         isSample,
         isLockedForPayment,
-        isDripLocked,
         dripDay: ex.dripDay || null,
-        dripUnlockMs,
         gradeLevels: ex.gradeLevels || [],
         score: sub?.score,
         total: sub?.total,
         submittedAt: sub?.submittedAt,
-      };
-    });
+      });
+    }
 
     // Sort: open & sample/not-locked first, then done, then locked, then closed
     exercises.sort((a, b) => {
@@ -125,8 +118,6 @@ export async function fetchStudentPortalData(rawToken: string): Promise<StudentV
       if (!a.isSample && b.isSample) return 1;
       if (!a.isLockedForPayment && b.isLockedForPayment) return -1;
       if (a.isLockedForPayment && !b.isLockedForPayment) return 1;
-      if (!a.isDripLocked && b.isDripLocked) return -1;
-      if (a.isDripLocked && !b.isDripLocked) return 1;
       if (!a.isDone && b.isDone) return -1;
       if (a.isDone && !b.isDone) return 1;
       if (!a.isClosed && b.isClosed) return -1;
