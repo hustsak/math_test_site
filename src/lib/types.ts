@@ -171,6 +171,7 @@ export interface AppSettings {
   showClassAverageToParents?: boolean;
   customGrades?: (number | string)[]; // List of active grades/folders (e.g. [7, 8, 9, 10, 11, 12] or names like ['Foundation', '12A'])
   customClasses?: string[]; // List of custom class/group names (e.g. ['12A', '12B', 'Room 1'])
+  gradeCodes?: Record<string, number>; // Permanent grade number of each named class, e.g. { 'វិញ្ញាសាពេទ្យ': 30 }
 }
 
 export type FaceRating = 'happy' | 'neutral' | 'sad';

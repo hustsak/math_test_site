@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/adminAuth';
 import { adminDb } from '@/lib/firebaseAdmin';
 import type { AppSettings } from '@/lib/types';
+import { assignGradeCodes, findGradeCodeConflict, missingGradeCodes } from '@/lib/gradeLabels';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,12 +15,21 @@ export async function GET(req: Request) {
     const db = adminDb();
     const snap = await db.collection('settings').doc('app').get();
     const data = (snap.exists ? snap.data() : {}) as AppSettings;
+    const customGrades = Array.isArray(data.customGrades) && data.customGrades.length > 0
+      ? data.customGrades
+      : [7, 8, 9, 10, 11, 12];
+
+    // A named class (e.g. វិញ្ញាសាពេទ្យ) needs its own grade number; hand one out once.
+    let gradeCodes = data.gradeCodes || {};
+    if (missingGradeCodes(customGrades, gradeCodes)) {
+      gradeCodes = assignGradeCodes(customGrades, gradeCodes);
+      await db.collection('settings').doc('app').set({ gradeCodes }, { merge: true });
+    }
 
     return NextResponse.json({
       showClassAverageToParents: !!data.showClassAverageToParents,
-      customGrades: Array.isArray(data.customGrades) && data.customGrades.length > 0
-        ? data.customGrades
-        : [7, 8, 9, 10, 11, 12],
+      customGrades,
+      gradeCodes,
       customClasses: Array.isArray(data.customClasses) ? data.customClasses : [],
     });
   } catch (e: any) {
@@ -68,7 +78,20 @@ export async function POST(req: Request) {
           }
         }
       }
-      updatePayload.customGrades = validGrades.length > 0 ? validGrades : [7, 8, 9, 10, 11, 12];
+      const finalGrades = validGrades.length > 0 ? validGrades : [7, 8, 9, 10, 11, 12];
+
+      // Every named class keeps one permanent grade number; a numbered grade cannot reuse it.
+      const currentSnap = await adminDb().collection('settings').doc('app').get();
+      const currentCodes = ((currentSnap.exists ? currentSnap.data() : {}) as AppSettings).gradeCodes || {};
+      const conflict = findGradeCodeConflict(finalGrades, currentCodes);
+      if (conflict) {
+        return NextResponse.json(
+          { error: `Grade ${conflict.grade} is already used by the class "${conflict.name}". Please use another number.` },
+          { status: 400 }
+        );
+      }
+      updatePayload.customGrades = finalGrades;
+      updatePayload.gradeCodes = assignGradeCodes(finalGrades, currentCodes);
     }
 
     if (Array.isArray(body.customClasses)) {
@@ -95,6 +118,7 @@ export async function POST(req: Request) {
       customGrades: Array.isArray(data.customGrades) && data.customGrades.length > 0
         ? data.customGrades
         : [7, 8, 9, 10, 11, 12],
+      gradeCodes: data.gradeCodes || {},
       customClasses: Array.isArray(data.customClasses) ? data.customClasses : [],
     });
   } catch (e: any) {

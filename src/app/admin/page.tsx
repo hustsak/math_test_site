@@ -61,6 +61,8 @@ import {
 import { getAuthClient, getDb } from '@/lib/firebaseClient';
 import { useAdmin } from '@/lib/useAdmin';
 import { adminPost } from '@/lib/authFetch';
+import { ensureGradeCodes } from '@/lib/gradeCodesClient';
+import { gradeCode, gradeListLabel, gradeNameForCode, isNumericGrade, type GradeCodes } from '@/lib/gradeLabels';
 import { CAMBODIAN_MATH_CURRICULUM } from '@/lib/curriculum';
 import type { Exercise, Submission, Student } from '@/lib/types';
 
@@ -135,6 +137,15 @@ export default function AdminHome() {
 
   // Dynamic Grades & Classes Management
   const [customGrades, setCustomGrades] = useState<(number | string)[]>([7, 8, 9, 10, 11, 12]);
+  const [gradeCodes, setGradeCodes] = useState<GradeCodes>({});
+
+  // A named class (e.g. វិញ្ញាសាពេទ្យ) needs its own grade number; the server hands one out once.
+  useEffect(() => {
+    if (!isAdmin) return;
+    ensureGradeCodes(customGrades, gradeCodes).then((codes) => {
+      if (codes) setGradeCodes(codes);
+    });
+  }, [isAdmin, customGrades, gradeCodes]);
   const [customClasses, setCustomClasses] = useState<string[]>([]);
   const [showManageModal, setShowManageModal] = useState(false);
   const [newGradeInput, setNewGradeInput] = useState<string>('');
@@ -251,6 +262,9 @@ export default function AdminHome() {
         if (Array.isArray(sData.customGrades) && sData.customGrades.length > 0) {
           setCustomGrades(sData.customGrades);
         }
+        if (sData.gradeCodes && typeof sData.gradeCodes === 'object') {
+          setGradeCodes(sData.gradeCodes as GradeCodes);
+        }
         if (Array.isArray(sData.customClasses)) {
           setCustomClasses(sData.customClasses);
         }
@@ -291,8 +305,9 @@ export default function AdminHome() {
     const nextGrades = [...customGrades, finalGrade];
     setGradeClassBusy(true);
     try {
-      await adminPost('/api/admin/settings', { customGrades: nextGrades });
+      const saved = await adminPost<{ gradeCodes?: GradeCodes }>('/api/admin/settings', { customGrades: nextGrades });
       setCustomGrades(nextGrades);
+      if (saved?.gradeCodes) setGradeCodes(saved.gradeCodes);
       setNewGradeInput('');
       const displayLabel = typeof finalGrade === 'number' ? `ថ្នាក់ទី ${finalGrade} (Grade ${finalGrade})` : finalGrade;
       showToast(lang === 'KH' ? `បានបន្ថែម ${displayLabel} ជោគជ័យ!` : `Grade "${finalGrade}" added successfully!`);
@@ -311,8 +326,9 @@ export default function AdminHome() {
     const nextGrades = customGrades.filter((g) => String(g).toLowerCase() !== String(targetGrade).toLowerCase());
     setGradeClassBusy(true);
     try {
-      await adminPost('/api/admin/settings', { customGrades: nextGrades });
+      const saved = await adminPost<{ gradeCodes?: GradeCodes }>('/api/admin/settings', { customGrades: nextGrades });
       setCustomGrades(nextGrades);
+      if (saved?.gradeCodes) setGradeCodes(saved.gradeCodes);
       if (gradeFilter.toLowerCase() === String(targetGrade).toLowerCase()) {
         setGradeFilter('all');
       }
@@ -534,7 +550,14 @@ export default function AdminHome() {
         updatedAt: Date.now(),
       });
       const chMsg = trimmedChapter ? (lang === 'KH' ? ` ក្នុង${trimmedChapter}` : ` to chapter "${trimmedChapter}"`) : '';
-      showToast(lang === 'KH' ? `បានប្តូរទៅថ្នាក់ទី ${newGrades.join(', ')}${chMsg} ដោយជោគជ័យ!` : `Moved to Grade ${newGrades.join(', ')}${chMsg}!`);
+      const movedLabel = newGrades.some((c) => gradeNameForCode(c, gradeCodes))
+        ? gradeListLabel(newGrades, gradeCodes, lang === 'KH' ? 'KH' : 'EN')
+        : null;
+      showToast(
+        lang === 'KH'
+          ? `បានប្តូរទៅ${movedLabel ?? `ថ្នាក់ទី ${newGrades.join(', ')}`}${chMsg} ដោយជោគជ័យ!`
+          : `Moved to ${movedLabel ?? `Grade ${newGrades.join(', ')}`}${chMsg}!`
+      );
       setMoveModalEx(null);
       loadData();
     } catch (e: any) {
@@ -663,7 +686,7 @@ export default function AdminHome() {
     const list: string[] = [];
     (exercises || []).forEach((e) => {
       if (gradeFilter !== 'all') {
-        const gNum = Number(gradeFilter);
+        const gNum = gradeCode(gradeFilter, gradeCodes) ?? NaN;
         if (e.gradeLevels && e.gradeLevels.length > 0 && !e.gradeLevels.includes(gNum)) return;
       }
       if (e.chapter && e.chapter.trim() && !list.includes(e.chapter.trim())) {
@@ -671,7 +694,7 @@ export default function AdminHome() {
       }
     });
     return list;
-  }, [exercises, gradeFilter]);
+  }, [exercises, gradeFilter, gradeCodes]);
 
   // Filtered exercises list
   const filteredExercises = useMemo(() => {
@@ -690,7 +713,7 @@ export default function AdminHome() {
 
       // Grade filter (7-12)
       if (gradeFilter !== 'all') {
-        const gNum = Number(gradeFilter);
+        const gNum = gradeCode(gradeFilter, gradeCodes) ?? NaN;
         if (r.gradeLevels && r.gradeLevels.length > 0 && !r.gradeLevels.includes(gNum)) {
           return false;
         }
@@ -712,7 +735,7 @@ export default function AdminHome() {
       }
       return true;
     });
-  }, [exercises, filter, gradeFilter, selectedChapter, search]);
+  }, [exercises, filter, gradeFilter, gradeCodes, selectedChapter, search]);
 
   const teacherName = useMemo(() => {
     if (!user?.email) return 'Teacher';
@@ -2514,13 +2537,12 @@ export default function AdminHome() {
                     {GRADE_FOLDERS.map((gf) => {
                       const isOpen = gradeFilter.toLowerCase() === String(gf.grade).toLowerCase();
                       const isNum = typeof gf.grade === 'number' || (!isNaN(Number(gf.grade)) && String(gf.grade).trim() !== '');
+                      const gfCode = gradeCode(gf.grade, gradeCodes);
                       const gradeExs = (exercises || []).filter((e) => {
                         if (!e.gradeLevels || e.gradeLevels.length === 0) return true;
-                        if (isNum) {
-                          const num = Number(gf.grade);
-                          return (e.gradeLevels as any[]).some((gl) => Number(gl) === num || String(gl).toLowerCase() === String(gf.grade).toLowerCase());
-                        }
-                        return (e.gradeLevels as any[]).some((gl) => String(gl).toLowerCase() === String(gf.grade).toLowerCase());
+                        return (e.gradeLevels as any[]).some(
+                          (gl) => (gfCode !== null && Number(gl) === gfCode) || String(gl).toLowerCase() === String(gf.grade).toLowerCase()
+                        );
                       });
                       const totalCount = gradeExs.length;
                       const pubCount = gradeExs.filter(
@@ -2667,7 +2689,7 @@ export default function AdminHome() {
                         )}
 
                         <Link
-                          href={`/admin/exercises/new?grade=${encodeURIComponent(gradeFilter)}`}
+                          href={`/admin/exercises/new?grade=${encodeURIComponent(String(gradeCode(gradeFilter, gradeCodes) ?? gradeFilter))}`}
                           className="btn small"
                           style={{
                             backgroundColor: 'var(--theme-primary)',
@@ -2695,7 +2717,9 @@ export default function AdminHome() {
                     <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
                       {gradeFilter === 'all'
                         ? (lang === 'KH' ? 'លំហាត់ទាំងអស់ (All Exercises)' : 'My Exercises')
-                        : (lang === 'KH' ? `លំហាត់ថ្នាក់ទី ${gradeFilter}` : `Grade ${gradeFilter} Exercises`)}
+                        : isNumericGrade(gradeFilter)
+                          ? (lang === 'KH' ? `លំហាត់ថ្នាក់ទី ${gradeFilter}` : `Grade ${gradeFilter} Exercises`)
+                          : (lang === 'KH' ? `លំហាត់ ${gradeFilter}` : `${gradeFilter} Exercises`)}
                     </h3>
                     <span style={{ fontSize: '0.82rem', color: 'var(--theme-muted)' }}>
                       Manage tests, view live submissions, copy links, or print QR codes
@@ -2923,7 +2947,9 @@ export default function AdminHome() {
                                   border: '1px solid rgba(74, 103, 214, 0.25)',
                                 }}
                               >
-                                {r.gradeLevels && r.gradeLevels.length > 0 && r.gradeLevels.length < 6
+                                {r.gradeLevels && r.gradeLevels.length > 0 && r.gradeLevels.some((c) => gradeNameForCode(c, gradeCodes))
+                                  ? gradeListLabel(r.gradeLevels, gradeCodes, 'KH')
+                                  : r.gradeLevels && r.gradeLevels.length > 0 && r.gradeLevels.length < 6
                                   ? `ថ្នាក់ទី ${r.gradeLevels.join(', ')}`
                                   : 'ថ្នាក់ទី ៧–១២'}
                               </span>
@@ -4174,9 +4200,9 @@ export default function AdminHome() {
                 </label>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
                   {(customGrades.length > 0 ? customGrades : [7, 8, 9, 10, 11, 12]).map((g) => {
-                    const isChecked = moveGrades.some((mg) => String(mg).toLowerCase() === String(g).toLowerCase());
-                    const isNum = typeof g === 'number' || (!isNaN(Number(g)) && String(g).trim() !== '');
-                    const label = isNum ? `ថ្នាក់ទី ${g}` : String(g);
+                    const gCode = gradeCode(g, gradeCodes);
+                    const isChecked = gCode !== null && moveGrades.includes(gCode);
+                    const label = isNumericGrade(g) ? `ថ្នាក់ទី ${g}` : String(g);
                     return (
                       <label
                         key={String(g)}
@@ -4197,8 +4223,10 @@ export default function AdminHome() {
                         <input
                           type="checkbox"
                           checked={isChecked}
+                          disabled={gCode === null}
                           onChange={(e) => {
-                            const val = typeof g === 'number' ? g : (Number(g) || 7);
+                            const val = gCode;
+                            if (val === null) return;
                             if (e.target.checked) {
                               setMoveGrades((prev) => [...prev.filter((item) => item !== val), val].sort((a, b) => a - b));
                             } else {

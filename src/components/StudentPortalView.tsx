@@ -5,6 +5,8 @@ import Link from 'next/link';
 import MathText from '@/components/MathText';
 import { formatKhmerCountdown } from '@/lib/parentTracking';
 import type { StudentViewData } from '@/lib/types';
+import { useGradeCodes } from '@/lib/useGradeCodes';
+import { gradeLabelBoth, gradeLabelKh } from '@/lib/gradeLabels';
 import { CheckCircle2, Clock, Lock, BookOpen, AlertCircle, ArrowRight, Copy, Check } from 'lucide-react';
 
 export default function StudentPortalView({
@@ -18,6 +20,7 @@ export default function StudentPortalView({
   const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState('');
   const [copiedLink, setCopiedLink] = useState(false);
+  const gradeCodes = useGradeCodes();
 
   useEffect(() => {
     let active = true;
@@ -187,7 +190,7 @@ export default function StudentPortalView({
                 key={g}
                 type="button"
                 onClick={() => setSelectedGrade(selectedGrade === g && enrolledGrades.length > 1 ? 'all' : g)}
-                title={`ចុចដើម្បីមើលលំហាត់ថ្នាក់ទី ${g}`}
+                title={`ចុចដើម្បីមើលលំហាត់${gradeLabelKh(g, gradeCodes)}`}
                 style={{
                   fontSize: '0.84rem',
                   fontWeight: 800,
@@ -205,7 +208,7 @@ export default function StudentPortalView({
                 }}
               >
                 <span>📚</span>
-                <span>ថ្នាក់ទី {g} (Grade {g})</span>
+                <span>{gradeLabelBoth(g, gradeCodes)}</span>
                 {isSelected && enrolledGrades.length > 1 && <span style={{ fontSize: '0.75rem', opacity: 0.9 }}>✓</span>}
               </button>
             );

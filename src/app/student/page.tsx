@@ -25,6 +25,9 @@ import {
   Check,
 } from 'lucide-react';
 
+import { useGradeCodes } from '@/lib/useGradeCodes';
+import { gradeLabelBoth, gradeLabelEn, gradeLabelKh } from '@/lib/gradeLabels';
+
 interface PortalData {
   student: {
     id: string;
@@ -97,6 +100,10 @@ export default function StudentPortalPage({ targetGrade }: { targetGrade?: numbe
   const [error, setError] = useState('');
   const [data, setData] = useState<PortalData | null>(null);
   const [toast, setToast] = useState('');
+  const gradeCodes = useGradeCodes();
+  // "ថ្នាក់ទី 7" / "Grade 7", or the class name (e.g. វិញ្ញាសាពេទ្យ) for a named class
+  const targetNameKh = targetGrade ? gradeLabelKh(targetGrade, gradeCodes) : '';
+  const targetNameEn = targetGrade ? gradeLabelEn(targetGrade, gradeCodes) : '';
 
   // Parent QR Modal
   const [showParentModal, setShowParentModal] = useState(false);
@@ -273,10 +280,10 @@ export default function StudentPortalPage({ targetGrade }: { targetGrade?: numbe
             <img src="/logo.png" alt="Math Logo" style={{ height: 42, width: 'auto', objectFit: 'contain' }} />
             <div>
               <h1 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 900, color: 'var(--theme-navy)' }}>
-                {targetGrade ? `មជ្ឈមណ្ឌលសិស្ស ថ្នាក់ទី ${targetGrade} (Grade ${targetGrade} Portal)` : 'មជ្ឈមណ្ឌលសិស្ស (Student Portal)'}
+                {targetGrade ? `មជ្ឈមណ្ឌលសិស្ស ${targetNameKh} (${targetNameEn} Portal)` : 'មជ្ឈមណ្ឌលសិស្ស (Student Portal)'}
               </h1>
               <span style={{ fontSize: '0.8rem', color: 'var(--theme-muted)' }}>
-                {targetGrade ? `លំហាត់គណិតវិទ្យាថ្នាក់ទី ${targetGrade} (Grade ${targetGrade} Mathematics)` : 'លំហាត់គណិតវិទ្យាថ្នាក់ទី ៧ ដល់ ទី ១២ (Grades 7–12)'}
+                {targetGrade ? `លំហាត់គណិតវិទ្យា${targetNameKh} (${targetNameEn} Mathematics)` : 'លំហាត់គណិតវិទ្យាថ្នាក់ទី ៧ ដល់ ទី ១២ (Grades 7–12)'}
               </span>
             </div>
           </div>
@@ -363,11 +370,11 @@ export default function StudentPortalPage({ targetGrade }: { targetGrade?: numbe
                 <UserCheck size={28} />
               </div>
               <h2 style={{ margin: '0 0 6px 0', fontSize: '1.35rem', fontWeight: 900, color: 'var(--theme-navy)' }}>
-                {targetGrade ? `សូមបញ្ចូលឈ្មោះរបស់អ្នកដើម្បីចូលរៀន ថ្នាក់ទី ${targetGrade}` : 'សូមបញ្ចូលឈ្មោះរបស់អ្នកដើម្បីចូលរៀន'}
+                {targetGrade ? `សូមបញ្ចូលឈ្មោះរបស់អ្នកដើម្បីចូលរៀន ${targetNameKh}` : 'សូមបញ្ចូលឈ្មោះរបស់អ្នកដើម្បីចូលរៀន'}
               </h2>
               <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--theme-muted)' }}>
                 {targetGrade
-                  ? `ប្រព័ន្ធនឹងផ្ទៀងផ្ទាត់បញ្ជីឈ្មោះសិស្សថ្នាក់ទី ${targetGrade} និងបង្ហាញលំហាត់ដែលត្រូវរៀន`
+                  ? `ប្រព័ន្ធនឹងផ្ទៀងផ្ទាត់បញ្ជីឈ្មោះសិស្ស${targetNameKh} និងបង្ហាញលំហាត់ដែលត្រូវរៀន`
                   : 'ប្រព័ន្ធនឹងបង្ហាញលំហាត់តាមកម្រិតថ្នាក់របស់អ្នកដោយស្វ័យប្រវត្តិ'}
               </p>
             </div>
@@ -525,7 +532,7 @@ export default function StudentPortalPage({ targetGrade }: { targetGrade?: numbe
                               loadPortalData(studentName || data.student.name, className || data.student.className || undefined, g);
                             }
                           }}
-                          title={`ចុចដើម្បីប្តូរទៅមើលលំហាត់ថ្នាក់ទី ${g}`}
+                          title={`ចុចដើម្បីប្តូរទៅមើលលំហាត់${gradeLabelKh(g, gradeCodes)}`}
                           style={{
                             padding: '4px 12px',
                             borderRadius: 20,
@@ -543,7 +550,7 @@ export default function StudentPortalPage({ targetGrade }: { targetGrade?: numbe
                           }}
                         >
                           <span>📚</span>
-                          <span>ថ្នាក់ទី {g} (Grade {g})</span>
+                          <span>{gradeLabelBoth(g, gradeCodes)}</span>
                           {isActive && enrolledGrades.length > 1 && <span style={{ fontSize: '0.75rem' }}>✓</span>}
                         </button>
                       );
@@ -678,7 +685,7 @@ export default function StudentPortalPage({ targetGrade }: { targetGrade?: numbe
                 >
                   <CheckCircle2 size={32} color="#059669" style={{ margin: '0 auto 8px', opacity: 0.8 }} />
                   <p style={{ margin: 0, fontWeight: 700 }}>
-                    អ្នកបានបញ្ចប់រាល់លំហាត់ដែលបានបើកសម្រាប់ថ្នាក់ទី {data.student.grade} ហើយ!
+                    អ្នកបានបញ្ចប់រាល់លំហាត់ដែលបានបើកសម្រាប់{gradeLabelKh(data.student.grade, gradeCodes)} ហើយ!
                   </p>
                 </div>
               ) : (

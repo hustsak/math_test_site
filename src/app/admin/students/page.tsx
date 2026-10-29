@@ -6,6 +6,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { useAdmin } from '@/lib/useAdmin';
 import { adminPost } from '@/lib/authFetch';
 import type { StudentAccess, StudentAccessStatus, ProfileWithStats } from '@/lib/types';
+import { gradeCode, gradeLabelEn, gradeLabelKh, isNumericGrade, type GradeCodes } from '@/lib/gradeLabels';
 import {
   Users,
   Search,
@@ -55,6 +56,7 @@ export default function AdminStudentsPage() {
   const [showHiddenProfiles, setShowHiddenProfiles] = useState(false);
   const [showClassAverage, setShowClassAverage] = useState(false);
   const [customGrades, setCustomGrades] = useState<(number | string)[]>([7, 8, 9, 10, 11, 12]);
+  const [gradeCodes, setGradeCodes] = useState<GradeCodes>({});
   const [customClasses, setCustomClasses] = useState<string[]>([]);
 
   // Filters & Search (Access tab)
@@ -86,7 +88,8 @@ export default function AdminStudentsPage() {
   const [formError, setFormError] = useState('');
 
   function toggleGradeSelection(g: number | string) {
-    const val = typeof g === 'number' ? g : (Number(g) || 7);
+    const val = gradeCode(g, gradeCodes);
+    if (val === null) return; // named class without a grade number yet
     setFormGrades((prev) => {
       if (prev.includes(val)) {
         if (prev.length === 1) return prev; // Keep at least 1 grade
@@ -180,6 +183,9 @@ export default function AdminStudentsPage() {
         setShowClassAverage(!!sData.showClassAverageToParents);
         if (Array.isArray(sData.customGrades) && sData.customGrades.length > 0) {
           setCustomGrades(sData.customGrades);
+        }
+        if (sData.gradeCodes && typeof sData.gradeCodes === 'object') {
+          setGradeCodes(sData.gradeCodes as GradeCodes);
         }
         if (Array.isArray(sData.customClasses)) {
           setCustomClasses(sData.customClasses);
@@ -1075,8 +1081,9 @@ export default function AdminStudentsPage() {
                   }}
                 >
                   {(customGrades.length > 0 ? customGrades : [7, 8, 9, 10, 11, 12]).map((g) => {
-                    const isNum = typeof g === 'number' || (!isNaN(Number(g)) && String(g).trim() !== '');
-                    const gradePath = isNum ? `/student/grade-${g}` : `/student/${encodeURIComponent(String(g).toLowerCase())}`;
+                    const isNum = isNumericGrade(g);
+                    const linkCode = gradeCode(g, gradeCodes);
+                    const gradePath = linkCode !== null ? `/student/grade-${linkCode}` : `/student/${encodeURIComponent(String(g).toLowerCase())}`;
                     const fullGradeUrl = typeof window !== 'undefined' ? `${window.location.origin}${gradePath}` : gradePath;
                     const label = isNum ? `ថ្នាក់ទី ${g}` : String(g);
                     return (
@@ -1127,7 +1134,7 @@ export default function AdminStudentsPage() {
                             type="button"
                             onClick={() => {
                               navigator.clipboard.writeText(fullGradeUrl);
-                              setToast(lang === 'KH' ? `បានចម្លងតំណថ្នាក់ទី ${g}!` : `Copied Grade ${g} Link!`);
+                              setToast(lang === 'KH' ? `បានចម្លងតំណ ${isNum ? `ថ្នាក់ទី ${g}` : String(g)}!` : `Copied ${isNum ? `Grade ${g}` : String(g)} Link!`);
                               setTimeout(() => setToast(''), 3000);
                             }}
                             className="btn small secondary"
@@ -1553,7 +1560,7 @@ export default function AdminStudentsPage() {
                                     whiteSpace: 'nowrap',
                                   }}
                                 >
-                                  {lang === 'KH' ? `ថ្នាក់ទី ${g}` : `Grade ${g}`}
+                                  {lang === 'KH' ? gradeLabelKh(g, gradeCodes) : gradeLabelEn(g, gradeCodes)}
                                 </span>
                               ))}
                             </div>
@@ -2023,10 +2030,9 @@ export default function AdminStudentsPage() {
                 </label>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(90px, 1fr))', gap: 8 }}>
                   {(customGrades.length > 0 ? customGrades : [7, 8, 9, 10, 11, 12]).map((g) => {
-                    const val = typeof g === 'number' ? g : (Number(g) || 7);
-                    const isSelected = formGrades.includes(val);
-                    const isNum = typeof g === 'number' || (!isNaN(Number(g)) && String(g).trim() !== '');
-                    const label = isNum ? `ថ្នាក់ទី ${g}` : String(g);
+                    const val = gradeCode(g, gradeCodes);
+                    const isSelected = val !== null && formGrades.includes(val);
+                    const label = isNumericGrade(g) ? `ថ្នាក់ទី ${g}` : String(g);
                     return (
                       <button
                         key={String(g)}
@@ -2359,10 +2365,9 @@ export default function AdminStudentsPage() {
                 </label>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(90px, 1fr))', gap: 8 }}>
                   {(customGrades.length > 0 ? customGrades : [7, 8, 9, 10, 11, 12]).map((g) => {
-                    const val = typeof g === 'number' ? g : (Number(g) || 7);
-                    const isSelected = formGrades.includes(val);
-                    const isNum = typeof g === 'number' || (!isNaN(Number(g)) && String(g).trim() !== '');
-                    const label = isNum ? `ថ្នាក់ទី ${g}` : String(g);
+                    const val = gradeCode(g, gradeCodes);
+                    const isSelected = val !== null && formGrades.includes(val);
+                    const label = isNumericGrade(g) ? `ថ្នាក់ទី ${g}` : String(g);
                     return (
                       <button
                         key={String(g)}
@@ -3150,7 +3155,7 @@ export default function AdminStudentsPage() {
                   {lang === 'KH' ? `📜 ប្រវត្តិធ្វើលំហាត់ ៖ ${historyStudent.name}` : `📜 Submission History: ${historyStudent.name}`}
                 </h3>
                 <span style={{ fontSize: '0.82rem', color: 'var(--theme-muted)' }}>
-                  ថ្នាក់ទី {historyStudent.grade || 7} {historyStudent.className ? `(Class ${historyStudent.className})` : ''} · ចូលប្រើបានរហូតដល់ {historyStudent.expirationDate}
+                  {gradeLabelKh(historyStudent.grade || 7, gradeCodes)} {historyStudent.className ? `(Class ${historyStudent.className})` : ''} · ចូលប្រើបានរហូតដល់ {historyStudent.expirationDate}
                 </span>
               </div>
               <button

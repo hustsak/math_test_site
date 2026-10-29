@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { doc, getDoc } from 'firebase/firestore';
 import { getDb } from '@/lib/firebaseClient';
+import { gradeCode, gradeLabelBoth, isNumericGrade, type GradeCodes } from '@/lib/gradeLabels';
 import {
   UserPlus,
   CheckCircle2,
@@ -39,6 +40,7 @@ function StudentRegisterForm() {
 
   // Settings
   const [customGrades, setCustomGrades] = useState<(number | string)[]>([7, 8, 9, 10, 11, 12]);
+  const [gradeCodes, setGradeCodes] = useState<GradeCodes>({});
   const [customClasses, setCustomClasses] = useState<string[]>([]);
 
   // Success state
@@ -59,9 +61,14 @@ function StudentRegisterForm() {
         if (s.exists()) {
           const data = s.data();
           if (Array.isArray(data.customGrades) && data.customGrades.length > 0) {
+            const codes = (data.gradeCodes && typeof data.gradeCodes === 'object' ? data.gradeCodes : {}) as GradeCodes;
             setCustomGrades(data.customGrades);
-            const firstNum = data.customGrades.map((x: any) => typeof x === 'number' ? x : (Number(x) || 7))[0];
-            setGrade((prev) => (data.customGrades.includes(prev) ? prev : firstNum));
+            setGradeCodes(codes);
+            // Only classes that have a grade number can be chosen (named classes get one from the admin page)
+            const available = data.customGrades
+              .map((x: any) => gradeCode(x, codes))
+              .filter((c: number | null): c is number => c !== null);
+            setGrade((prev) => (available.includes(prev) ? prev : (available[0] ?? 7)));
           }
           if (Array.isArray(data.customClasses)) {
             setCustomClasses(data.customClasses);
@@ -245,7 +252,7 @@ function StudentRegisterForm() {
                     fontSize: '0.82rem',
                   }}
                 >
-                  ថ្នាក់ទី {registeredStudent.grade} (Grade {registeredStudent.grade})
+                  {gradeLabelBoth(registeredStudent.grade, gradeCodes)}
                 </span>
               </div>
               {registeredStudent.className && (
@@ -598,7 +605,7 @@ function StudentRegisterForm() {
               {/* Grade Selection (7–12) */}
               <div>
                 <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 800, color: 'var(--theme-navy)', marginBottom: 6 }}>
-                  កម្រិតថ្នាក់ (Grade 7–12) *
+                  កម្រិតថ្នាក់ (Grade / Class) *
                 </label>
                 <select
                   value={grade}
@@ -618,9 +625,9 @@ function StudentRegisterForm() {
                   }}
                 >
                   {(customGrades.length > 0 ? customGrades : [7, 8, 9, 10, 11, 12]).map((g) => {
-                    const isNum = typeof g === 'number' || (!isNaN(Number(g)) && String(g).trim() !== '');
-                    const label = isNum ? `ថ្នាក់ទី ${g} (Grade ${g})` : String(g);
-                    const val = typeof g === 'number' ? g : (Number(g) || 7);
+                    const val = gradeCode(g, gradeCodes);
+                    if (val === null) return null; // named class without a grade number yet
+                    const label = isNumericGrade(g) ? `ថ្នាក់ទី ${g} (Grade ${g})` : String(g);
                     return (
                       <option key={String(g)} value={val}>
                         {label}
