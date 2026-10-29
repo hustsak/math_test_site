@@ -778,9 +778,31 @@ export default function StudentPortalPage({ targetGrade }: { targetGrade?: numbe
                                           </div>
                                           <div style={{ fontSize: '0.76rem', color: 'var(--theme-muted)', marginTop: 2 }}>
                                             {ex.questionCount} សំណួរ{ex.timeLimitMinutes > 0 ? ` • ${ex.timeLimitMinutes} នាទី` : ''}
+                                            {ex.isSample && (
+                                              <div style={{ color: '#059669', fontWeight: 800, marginTop: 2 }}>🌟 លំហាត់សាកល្បងឥតគិតថ្លៃ (Free Trial)</div>
+                                            )}
                                           </div>
                                         </div>
-                                        {ex.isLockedForPayment ? <Lock size={16} color="var(--theme-muted)" /> : <ChevronRight size={18} color="var(--theme-primary)" />}
+                                        {ex.isLockedForPayment ? (
+                                          <Lock size={16} color="var(--theme-muted)" />
+                                        ) : (
+                                          <span
+                                            style={{
+                                              display: 'inline-flex',
+                                              alignItems: 'center',
+                                              gap: 6,
+                                              padding: '7px 14px',
+                                              borderRadius: 10,
+                                              backgroundColor: ex.isSample ? '#10b981' : 'var(--theme-primary)',
+                                              color: '#ffffff',
+                                              fontWeight: 800,
+                                              fontSize: '0.88rem',
+                                              flexShrink: 0,
+                                            }}
+                                          >
+                                            ចូលធ្វើ <ChevronRight size={15} />
+                                          </span>
+                                        )}
                                       </>
                                     );
                                     return ex.isLockedForPayment ? (
