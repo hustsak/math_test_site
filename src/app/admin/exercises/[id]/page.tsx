@@ -13,9 +13,11 @@ import type { Exercise, Question } from '@/lib/types';
 import { parseExerciseInput } from '@/lib/parseQuestions';
 import { toText } from '@/lib/textValue';
 import { CAMBODIAN_MATH_CURRICULUM } from '@/lib/curriculum';
+import { gradeCode, gradeLabelBoth, gradeLabelEn, isNumericGrade, type GradeCodes } from '@/lib/gradeLabels';
+import { ensureGradeCodes } from '@/lib/gradeCodesClient';
 
-function getAiExercisePrompt(targetGrade?: number, targetTopic?: string, questionCount: number = 5): string {
-  const gStr = targetGrade ? `Grade ${targetGrade}` : 'Grade [GRADE]';
+function getAiExercisePrompt(targetGradeLabel?: string, targetTopic?: string, questionCount: number = 5): string {
+  const gStr = targetGradeLabel || 'Grade [GRADE]';
   const tStr = targetTopic ? `"${targetTopic}"` : '[TOPIC]';
   return `Create a high-quality mathematics exercise for ${gStr} about ${tStr} with ${questionCount} questions. Write in Khmer (ភាសាខ្មែរ). Mix easy, medium, and slightly advanced questions: 40% easy, 40% medium, and 20% advanced. Create age-appropriate questions with correct answers, point values, and clear step-by-step explanations so students can understand their mistakes when they answer incorrectly. Include a suitable Khmer exercise title and a short Khmer description.
 
@@ -132,6 +134,7 @@ export default function EditExercise() {
   const [customChapters, setCustomChapters] = useState<string[]>([]);
   const [customTopics, setCustomTopics] = useState<string[]>([]);
   const [customGrades, setCustomGrades] = useState<(number | string)[]>([7, 8, 9, 10, 11, 12]);
+  const [gradeCodes, setGradeCodes] = useState<GradeCodes>({});
 
   const [origin, setOrigin] = useState('');
 
@@ -142,6 +145,9 @@ export default function EditExercise() {
           const data = s.data();
           if (Array.isArray(data.customGrades) && data.customGrades.length > 0) {
             setCustomGrades(data.customGrades);
+          }
+          if (data.gradeCodes && typeof data.gradeCodes === 'object') {
+            setGradeCodes(data.gradeCodes as GradeCodes);
           }
         }
       })
@@ -212,8 +218,16 @@ export default function EditExercise() {
   const currentAiPrompt = useMemo(() => {
     const singleGrade = ex?.gradeLevels && ex.gradeLevels.length === 1 ? ex.gradeLevels[0] : (ex?.gradeLevels?.[0]);
     const topic = ex?.topic || ex?.chapter || '';
-    return getAiExercisePrompt(singleGrade, topic, 5);
-  }, [ex?.gradeLevels, ex?.topic, ex?.chapter]);
+    return getAiExercisePrompt(singleGrade ? gradeLabelEn(singleGrade, gradeCodes) : undefined, topic, 5);
+  }, [ex?.gradeLevels, ex?.topic, ex?.chapter, gradeCodes]);
+
+  // A named class (e.g. វិញ្ញាសាពេទ្យ) needs its own grade number; the server hands one out once.
+  useEffect(() => {
+    if (!isAdmin) return;
+    ensureGradeCodes(customGrades, gradeCodes).then((codes) => {
+      if (codes) setGradeCodes(codes);
+    });
+  }, [isAdmin, customGrades, gradeCodes]);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -684,80 +698,89 @@ export default function EditExercise() {
           </div>
         </div>
 
-        {/* Target Grades (7-12) */}
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-            <label style={{ margin: 0, fontWeight: 700 }}>
-              កម្រិតថ្នាក់គោលដៅ (Target Grades 7–12)
-            </label>
-            <button
-              type="button"
-              className="btn secondary small"
-              style={{ fontSize: '0.78rem', padding: '3px 8px' }}
-              onClick={() => {
-                const current = ex.gradeLevels || [];
-                const allActive = (customGrades.length > 0 ? customGrades : [7, 8, 9, 10, 11, 12]).map((x) => typeof x === 'number' ? x : (Number(x) || 7));
-                if (current.length === allActive.length) {
-                  set({ gradeLevels: [allActive[0]] });
-                } else {
-                  set({ gradeLevels: [...allActive] });
-                }
-              }}
-            >
-              {(ex.gradeLevels?.length ?? (customGrades.length || 6)) === (customGrades.length || 6) ? 'ជ្រើសរើសថ្នាក់តែមួយ' : 'គ្រប់កម្រិតថ្នាក់'}
-            </button>
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {(customGrades.length > 0 ? customGrades : [7, 8, 9, 10, 11, 12]).map((g) => {
-              const numVal = typeof g === 'number' ? g : (Number(g) || 7);
-              const selected = (ex.gradeLevels && ex.gradeLevels.length > 0)
-                ? (ex.gradeLevels.includes(numVal) || (ex.gradeLevels as any[]).includes(g))
-                : true;
-              const isNum = typeof g === 'number' || (!isNaN(Number(g)) && String(g).trim() !== '');
-              const label = isNum ? `ថ្នាក់ទី ${g} (Grade ${g})` : String(g);
-              return (
-                <label
-                  key={String(g)}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    padding: '6px 12px',
-                    borderRadius: 8,
-                    border: selected ? '1.5px solid var(--brand)' : '1px solid var(--line)',
-                    background: selected ? 'rgba(74, 103, 214, 0.12)' : 'var(--card)',
-                    color: selected ? 'var(--brand)' : 'var(--ink)',
-                    fontWeight: selected ? 700 : 500,
-                    cursor: 'pointer',
-                    fontSize: '0.88rem',
-                    userSelect: 'none',
+        {/* Target Grades / Classes */}
+        {(() => {
+          const gradeItems = (customGrades.length > 0 ? customGrades : [7, 8, 9, 10, 11, 12]).map((g) => ({
+            g,
+            code: gradeCode(g, gradeCodes),
+          }));
+          const allCodes = gradeItems.map((x) => x.code).filter((c): c is number => c !== null);
+          const chosen = ex.gradeLevels && ex.gradeLevels.length > 0 ? ex.gradeLevels : allCodes;
+          const allSelected = allCodes.length > 0 && allCodes.every((c) => chosen.includes(c));
+          return (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <label style={{ margin: 0, fontWeight: 700 }}>
+                  កម្រិតថ្នាក់គោលដៅ (Target Grades / Classes)
+                </label>
+                <button
+                  type="button"
+                  className="btn secondary small"
+                  style={{ fontSize: '0.78rem', padding: '3px 8px' }}
+                  onClick={() => {
+                    if (allCodes.length === 0) return;
+                    if (allSelected) {
+                      set({ gradeLevels: [allCodes[0]] });
+                    } else {
+                      set({ gradeLevels: [...allCodes].sort((a, b) => a - b) });
+                    }
                   }}
                 >
-                  <input
-                    type="checkbox"
-                    checked={selected}
-                    onChange={(e) => {
-                      const fallback = (customGrades.length > 0 ? customGrades : [7, 8, 9, 10, 11, 12]).map((x) => typeof x === 'number' ? x : (Number(x) || 7));
-                      const current = ex.gradeLevels && ex.gradeLevels.length > 0 ? [...ex.gradeLevels] : [...fallback];
-                      if (e.target.checked) {
-                        if (!current.includes(numVal)) current.push(numVal);
-                      } else {
-                        const idx = current.indexOf(numVal);
-                        if (idx >= 0 && current.length > 1) current.splice(idx, 1);
-                      }
-                      set({ gradeLevels: current.sort((a, b) => a - b) });
-                    }}
-                    style={{ accentColor: 'var(--brand)' }}
-                  />
-                  <span>{label}</span>
-                </label>
-              );
-            })}
-          </div>
-          <span style={{ fontSize: '0.78rem', color: 'var(--muted)', marginTop: 4, display: 'block' }}>
-            មានតែសិស្សក្នុងកម្រិតថ្នាក់ដែលបានជ្រើសរើសប៉ុណ្ណោះ ទើបអាចមើលឃើញ និងធ្វើលំហាត់នេះក្នុង Student Portal
-          </span>
-        </div>
+                  {allSelected ? 'ជ្រើសរើសថ្នាក់តែមួយ' : 'គ្រប់កម្រិតថ្នាក់'}
+                </button>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {gradeItems.map(({ g, code }) => {
+                  const ready = code !== null;
+                  const selected = ready && chosen.includes(code as number);
+                  const label = isNumericGrade(g) ? gradeLabelBoth(Number(g)) : String(g);
+                  return (
+                    <label
+                      key={String(g)}
+                      title={ready ? undefined : 'កំពុងរៀបចំលេខកូដសម្រាប់ថ្នាក់នេះ... (Preparing this class, please wait)'}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '6px 12px',
+                        borderRadius: 8,
+                        border: selected ? '1.5px solid var(--brand)' : '1px solid var(--line)',
+                        background: selected ? 'rgba(74, 103, 214, 0.12)' : 'var(--card)',
+                        color: selected ? 'var(--brand)' : 'var(--ink)',
+                        fontWeight: selected ? 700 : 500,
+                        cursor: ready ? 'pointer' : 'not-allowed',
+                        opacity: ready ? 1 : 0.5,
+                        fontSize: '0.88rem',
+                        userSelect: 'none',
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        disabled={!ready}
+                        onChange={(e) => {
+                          const current = [...chosen];
+                          if (e.target.checked) {
+                            if (!current.includes(code as number)) current.push(code as number);
+                          } else {
+                            const idx = current.indexOf(code as number);
+                            if (idx >= 0 && current.length > 1) current.splice(idx, 1);
+                          }
+                          set({ gradeLevels: current.sort((a, b) => a - b) });
+                        }}
+                        style={{ accentColor: 'var(--brand)' }}
+                      />
+                      <span>{label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+              <span style={{ fontSize: '0.78rem', color: 'var(--muted)', marginTop: 4, display: 'block' }}>
+                មានតែសិស្សក្នុងកម្រិតថ្នាក់ដែលបានជ្រើសរើសប៉ុណ្ណោះ ទើបអាចមើលឃើញ និងធ្វើលំហាត់នេះក្នុង Student Portal
+              </span>
+            </div>
+          );
+        })()}
 
         {/* Publication Mode & Auto-scheduling in Asia/Phnom_Penh */}
         <div style={{ borderTop: '1px solid var(--line)', paddingTop: 14 }}>

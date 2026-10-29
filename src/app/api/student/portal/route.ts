@@ -8,6 +8,7 @@ import {
   ACCESS_ERRORS,
 } from '@/lib/studentAccess';
 import type { Exercise, Submission } from '@/lib/types';
+import { gradeLabelKh, gradeListLabel, gradeNameForCode, type GradeCodes } from '@/lib/gradeLabels';
 
 export const dynamic = 'force-dynamic';
 
@@ -112,10 +113,18 @@ export async function POST(req: Request) {
       const requestedGradeNum = typeof rawRequestedGrade === 'number' ? rawRequestedGrade : parseInt(String(rawRequestedGrade), 10);
       if (!isNaN(requestedGradeNum)) {
         if (!enrolledGrades.includes(requestedGradeNum)) {
-          const gradesLabel = enrolledGrades.map((g) => `ថ្នាក់ទី ${g}`).join(' និង ');
+          let codes: GradeCodes = {};
+          try {
+            const settingsSnap = await adminDb().collection('settings').doc('app').get();
+            codes = (settingsSnap.exists ? settingsSnap.data()?.gradeCodes : null) || {};
+          } catch {}
+          const gradesLabel = enrolledGrades.map((g) => gradeLabelKh(g, codes)).join(' និង ');
+          const enrolledEn = [...enrolledGrades, requestedGradeNum].some((g) => gradeNameForCode(g, codes))
+            ? gradeListLabel(enrolledGrades, codes, 'EN')
+            : `Grade ${enrolledGrades.join(', ')}`;
           return NextResponse.json(
             {
-              error: `ឈ្មោះរបស់អ្នកស្ថិតក្នុង ${gradesLabel}។ អ្នកមិនអាចចូលមើលលំហាត់ថ្នាក់ទី ${requestedGradeNum} បានទេ។ (Access restricted to your enrolled Grade ${enrolledGrades.join(', ')}).`,
+              error: `ឈ្មោះរបស់អ្នកស្ថិតក្នុង ${gradesLabel}។ អ្នកមិនអាចចូលមើលលំហាត់${gradeLabelKh(requestedGradeNum, codes)} បានទេ។ (Access restricted to your enrolled ${enrolledEn}).`,
               code: 'GRADE_MISMATCH',
               actualGrade: defaultGrade,
               enrolledGrades,

@@ -10,7 +10,8 @@
     "test:choices": "node scripts/test-choices.mjs",
     "test:tracking": "node scripts/test-parent-tracking.mjs",
     "test:access": "node scripts/test-student-access.mjs",
-    "test": "node scripts/test-grade.mjs && node scripts/test-choices.mjs && node scripts/test-parent-tracking.mjs && node scripts/test-student-access.mjs"
+    "test:gradelabels": "node scripts/test-grade-labels.mjs",
+    "test": "node scripts/test-grade.mjs && node scripts/test-choices.mjs && node scripts/test-parent-tracking.mjs && node scripts/test-student-access.mjs && node scripts/test-grade-labels.mjs"
   },
   "dependencies": {
     "firebase": "^10.14.1",
