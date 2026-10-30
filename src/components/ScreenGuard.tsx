@@ -13,8 +13,18 @@ export function withGuardPaused<T>(fn: () => T): T {
   }
 }
 
+/** Same, for async work such as the native share sheet (which takes focus away from the page). */
+export async function withGuardPausedAsync<T>(fn: () => Promise<T>): Promise<T> {
+  paused = true;
+  try {
+    return await fn();
+  } finally {
+    setTimeout(() => (paused = false), 600);
+  }
+}
+
 /**
- * Deters screenshots / copying while a student is taking an exercise.
+ * Deters screenshots / copying while a student is taking an exercise or reviewing the answers.
  *
  * NOTE: A web page cannot truly block OS-level screenshots (or a phone camera).
  * This guard makes it much harder by:
@@ -28,6 +38,14 @@ export function withGuardPaused<T>(fn: () => T): T {
 export default function ScreenGuard({ studentName }: { studentName: string }) {
   const [hidden, setHidden] = useState(false);
   const [warnings, setWarnings] = useState(0);
+  // Name + date + time on every screenshot or photo, so a leaked picture can be traced back.
+  // (Set after mount so the server and the browser never disagree about the time.)
+  const [mark, setMark] = useState(studentName);
+  useEffect(() => {
+    const d = new Date();
+    const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    setMark(`${studentName} · ${d.toLocaleDateString()} ${time}`);
+  }, [studentName]);
 
   useEffect(() => {
     document.body.classList.add('screen-guard');
@@ -122,13 +140,11 @@ export default function ScreenGuard({ studentName }: { studentName: string }) {
     };
   }, []);
 
-  const mark = `${studentName} · ${new Date().toLocaleDateString()}`;
-
   return (
     <>
       {/* Repeating watermark with the student's name */}
       <div className="sg-watermark" aria-hidden="true">
-        {Array.from({ length: 40 }).map((_, i) => (
+        {Array.from({ length: 260 }).map((_, i) => (
           <span key={i}>{mark}</span>
         ))}
       </div>
