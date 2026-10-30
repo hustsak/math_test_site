@@ -513,6 +513,11 @@ body.screen-guard textarea {
   from { opacity: 0; }
   to { opacity: 1; }
 }
+/* While the shield is up, the page underneath is not drawn at all (nothing to see through it) */
+body.screen-guard.sg-hidden .wrap,
+body.screen-guard.sg-hidden main {
+  visibility: hidden !important;
+}
 @media print {
   body.screen-guard * { display: none !important; }
   body.screen-guard::after {
