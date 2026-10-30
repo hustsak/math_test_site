@@ -7,7 +7,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Sun, Moon } from 'lucide-react';
 import MathText from '@/components/MathText';
 import ChoiceText from '@/components/ChoiceText';
-import ScreenGuard, { withGuardPaused } from '@/components/ScreenGuard';
+import ScreenGuard, { withGuardPaused, withGuardPausedAsync } from '@/components/ScreenGuard';
 import type { PublicExercise, PublicQuestion, QuestionResult } from '@/lib/types';
 
 type Phase = 'loading' | 'error' | 'closed' | 'name' | 'taking' | 'done';
@@ -383,11 +383,14 @@ export default function StudentPage() {
 
     if (typeof navigator !== 'undefined' && navigator.share) {
       try {
-        await navigator.share({
-          title: 'លទ្ធផលលំហាត់គណិតវិទ្យា',
-          text: shareText,
-          url: result.parentLink,
-        });
+        // The share sheet takes focus from the page; do not treat that as a screenshot attempt
+        await withGuardPausedAsync(() =>
+          navigator.share({
+            title: 'លទ្ធផលលំហាត់គណិតវិទ្យា',
+            text: shareText,
+            url: result.parentLink,
+          })
+        );
         return;
       } catch (err: any) {
         if (err.name !== 'AbortError') {
@@ -772,6 +775,9 @@ export default function StudentPage() {
       });
 
     return (
+      <>
+      {/* The review shows every question with the correct answers, so it is guarded like the exercise itself */}
+      <ScreenGuard studentName={attempt?.name || result.studentName || name || 'Student'} />
       <div className="wrap stack" style={{ maxWidth: 600, padding: '16px 12px 60px' }}>
         {/* Score summary card */}
         <div
@@ -1213,6 +1219,7 @@ export default function StudentPage() {
           )}
         </div>
       </div>
+      </>
     );
   }
 
