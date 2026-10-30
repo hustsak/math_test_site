@@ -52,6 +52,8 @@ export default function ScreenGuard({ studentName }: { studentName: string }) {
 
     const hide = () => {
       if (paused) return;
+      // Hide the page itself right now, in the same frame, so nothing is left under the shield
+      document.body.classList.add('sg-hidden');
       setHidden((was) => {
         if (!was) setWarnings((w) => w + 1);
         return true;
@@ -114,6 +116,27 @@ export default function ScreenGuard({ studentName }: { studentName: string }) {
 
     const onBeforePrint = () => hide();
 
+    // Backup for browsers that do not fire "blur" reliably (snipping tools, overlays):
+    // notice focus being LOST. Only a change from focused to not-focused counts, so
+    // in-app browsers that always report "no focus" never get stuck behind the shield.
+    let hadFocus = document.hasFocus();
+    const focusTimer = window.setInterval(() => {
+      const nowFocused = document.hasFocus();
+      if (hadFocus && !nowFocused) hide();
+      hadFocus = nowFocused;
+    }, 250);
+
+    // Phone gestures that take a screenshot: 3-finger swipe/tap and the Samsung palm swipe
+    // (a very large touch). A heuristic: the shield simply asks to tap to continue.
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length >= 3) return hide();
+      for (let i = 0; i < e.touches.length; i++) {
+        const t = e.touches[i];
+        if ((t.radiusX || 0) > 40 || (t.radiusY || 0) > 40) return hide();
+      }
+    };
+    window.addEventListener('touchstart', onTouchStart, { capture: true, passive: true });
+
     window.addEventListener('keydown', onKeyDown, true);
     window.addEventListener('keyup', onKeyUp, true);
     window.addEventListener('blur', onBlur);
@@ -126,7 +149,10 @@ export default function ScreenGuard({ studentName }: { studentName: string }) {
     document.addEventListener('dragstart', blockAlways);
 
     return () => {
+      window.clearInterval(focusTimer);
+      window.removeEventListener('touchstart', onTouchStart, true);
       document.body.classList.remove('screen-guard');
+      document.body.classList.remove('sg-hidden');
       window.removeEventListener('keydown', onKeyDown, true);
       window.removeEventListener('keyup', onKeyUp, true);
       window.removeEventListener('blur', onBlur);
@@ -154,7 +180,10 @@ export default function ScreenGuard({ studentName }: { studentName: string }) {
           className="sg-shield"
           role="alertdialog"
           aria-modal="true"
-          onClick={() => setHidden(false)}
+          onClick={() => {
+            document.body.classList.remove('sg-hidden');
+            setHidden(false);
+          }}
         >
           <div className="sg-shield-box">
             <div style={{ fontSize: '2.4rem' }}>🔒</div>
