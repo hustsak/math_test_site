@@ -5,7 +5,7 @@ import { normalizeStudentName } from '@/lib/studentAccess';
 import { studentLinkAllowed } from '@/lib/studentLinkAccess';
 import type { Exercise, Submission, Profile, AppSettings, ParentViewData } from '@/lib/types';
 
-// In-memory cache for published exercises and app settings (TTL 5 seconds for fast real-time updates)
+// In-memory cache for published exercises and app settings (TTL 30 seconds for lightning-fast link loads)
 let cachedExercises: { data: Array<{ id: string; data: Exercise }>; expiresAt: number } | null = null;
 let cachedSettings: { data: AppSettings; expiresAt: number } | null = null;
 
@@ -25,7 +25,7 @@ export async function getCachedPublishedExercises() {
     id: doc.id,
     data: doc.data() as Exercise,
   }));
-  cachedExercises = { data, expiresAt: now + 5000 };
+  cachedExercises = { data, expiresAt: now + 30000 };
   return data;
 }
 

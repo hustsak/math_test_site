@@ -6,47 +6,81 @@ import type { Exercise, PublicExercise, Submission } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
+interface CachedExercise {
+  pub: PublicExercise;
+  published: boolean;
+  publicationMode?: string;
+  scheduledPublishAt?: any;
+  deadline?: string | null;
+  expiresAt: number;
+}
+
+const publicExerciseCache = new Map<string, CachedExercise>();
+
+function invalidateExerciseCache(id?: string) {
+  if (id) publicExerciseCache.delete(id);
+  else publicExerciseCache.clear();
+}
+
 // Public: returns the exercise WITHOUT answers or explanations.
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   try {
-    const snap = await adminDb().collection('exercises').doc(params.id).get();
-    if (!snap.exists) return NextResponse.json({ error: 'Exercise not found' }, { status: 404 });
-    const ex = snap.data() as Exercise;
-    if (!ex.published || ex.publicationMode === 'draft') {
-      return NextResponse.json({ error: 'Exercise not found' }, { status: 404 });
+    const now = Date.now();
+    let cached = publicExerciseCache.get(params.id);
+
+    if (!cached || cached.expiresAt <= now) {
+      const snap = await adminDb().collection('exercises').doc(params.id).get();
+      if (!snap.exists) return NextResponse.json({ error: 'Exercise not found' }, { status: 404 });
+      const ex = snap.data() as Exercise;
+      if (!ex.published || ex.publicationMode === 'draft') {
+        return NextResponse.json({ error: 'Exercise not found' }, { status: 404 });
+      }
+
+      const pub: PublicExercise = {
+        id: snap.id,
+        title: ex.title,
+        description: ex.description,
+        chapter: ex.chapter,
+        topic: ex.topic,
+        timeLimitMinutes: ex.timeLimitMinutes || 0,
+        deadline: ex.deadline,
+        shuffleQuestions: !!ex.shuffleQuestions,
+        gradeLevels: ex.gradeLevels,
+        scheduledPublishAt: ex.scheduledPublishAt,
+        isSample: !!ex.isSample,
+        questions: ex.questions.map((q) => ({
+          id: q.id,
+          prompt: toText(q.prompt),
+          kind: q.kind,
+          // Choices are sent as plain text (a stored { id, text } object becomes its text).
+          ...(q.kind === 'choice' ? { choices: (q.choices ?? []).map((c) => toText(c)) } : {}),
+          points: q.points,
+        })),
+      };
+
+      cached = {
+        pub,
+        published: !!ex.published,
+        publicationMode: ex.publicationMode,
+        scheduledPublishAt: ex.scheduledPublishAt,
+        deadline: ex.deadline,
+        expiresAt: now + 30000, // 30s in-memory cache
+      };
+      publicExerciseCache.set(params.id, cached);
     }
 
-    const now = Date.now();
-    if (ex.publicationMode === 'scheduled' && ex.scheduledPublishAt) {
-      const pubMs = typeof ex.scheduledPublishAt === 'number' ? ex.scheduledPublishAt : new Date(ex.scheduledPublishAt).getTime();
+    if (cached.publicationMode === 'scheduled' && cached.scheduledPublishAt) {
+      const pubMs = typeof cached.scheduledPublishAt === 'number' ? cached.scheduledPublishAt : new Date(cached.scheduledPublishAt).getTime();
       if (now < pubMs) {
         return NextResponse.json({ error: 'Exercise is scheduled for a future release.' }, { status: 403 });
       }
     }
 
-    const closed = !!ex.deadline && now > new Date(ex.deadline).getTime();
-    const pub: PublicExercise = {
-      id: snap.id,
-      title: ex.title,
-      description: ex.description,
-      chapter: ex.chapter,
-      topic: ex.topic,
-      timeLimitMinutes: ex.timeLimitMinutes || 0,
-      deadline: ex.deadline,
-      shuffleQuestions: !!ex.shuffleQuestions,
-      gradeLevels: ex.gradeLevels,
-      scheduledPublishAt: ex.scheduledPublishAt,
-      isSample: !!ex.isSample,
-      questions: ex.questions.map((q) => ({
-        id: q.id,
-        prompt: toText(q.prompt),
-        kind: q.kind,
-        // Choices are sent as plain text (a stored { id, text } object becomes its text).
-        ...(q.kind === 'choice' ? { choices: (q.choices ?? []).map((c) => toText(c)) } : {}),
-        points: q.points,
-      })),
-    };
+    const closed = !!cached.deadline && now > new Date(cached.deadline).getTime();
+    const pub = cached.pub;
+
     let submissionResult = null;
+    let matchedStudentInfo: { name: string; className: string } | null = null;
     const urlObj = new URL(_req.url);
     const tokenQuery = (urlObj.searchParams.get('token') || '').trim();
     const studentNameQuery = (urlObj.searchParams.get('studentName') || '').trim();
@@ -54,7 +88,6 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     if (tokenQuery || studentNameQuery) {
       let matchedStudentId: string | null = null;
       let matchedNameKey = '';
-      let matchedStudentName = '';
 
       if (tokenQuery) {
         const studentSnap = await adminDb()
@@ -74,7 +107,10 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
           if (tokenOk) {
             matchedStudentId = studentSnap.docs[0].id;
             matchedNameKey = sData.nameKey || '';
-            matchedStudentName = sData.name || '';
+            matchedStudentInfo = {
+              name: sData.name || '',
+              className: sData.className || '',
+            };
           }
         }
       }
@@ -126,9 +162,16 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       exercise: pub,
       closed,
       serverNow: now,
+      ...(matchedStudentInfo ? { student: matchedStudentInfo } : {}),
       ...(submissionResult ? { submission: submissionResult } : {}),
     });
-    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+
+    if (!tokenQuery && !studentNameQuery) {
+      // Allow CDN / edge caching for public links (fastest mobile loading)
+      response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=120');
+    } else {
+      response.headers.set('Cache-Control', 'private, no-cache');
+    }
     return response;
   } catch (e) {
     console.error(e);

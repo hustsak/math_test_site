@@ -46,7 +46,9 @@ export default function StudentPortalView({
       }
     }
 
-    load();
+    if (!initialData) {
+      load();
+    }
 
     const onFocus = () => load();
     window.addEventListener('focus', onFocus);

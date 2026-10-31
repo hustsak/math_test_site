@@ -10,11 +10,19 @@ interface Props {
   };
 }
 
+let cachedCodes: { codes: GradeCodes; expiresAt: number } | null = null;
+
 async function loadGradeCodes(): Promise<GradeCodes> {
+  const now = Date.now();
+  if (cachedCodes && cachedCodes.expiresAt > now) {
+    return cachedCodes.codes;
+  }
   try {
     const snap = await adminDb().collection('settings').doc('app').get();
     const codes = snap.exists ? snap.data()?.gradeCodes : null;
-    return codes && typeof codes === 'object' ? (codes as GradeCodes) : {};
+    const res = codes && typeof codes === 'object' ? (codes as GradeCodes) : {};
+    cachedCodes = { codes: res, expiresAt: now + 60000 };
+    return res;
   } catch {
     return {};
   }

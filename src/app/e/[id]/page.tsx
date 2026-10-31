@@ -177,6 +177,16 @@ export default function StudentPage() {
         }
         setEx(data.exercise);
 
+        if (data.student?.name) {
+          setName(data.student.name);
+          if (data.student.className) setClassName(data.student.className);
+          setStudentLocked(true);
+          try {
+            localStorage.setItem('math_last_student_name', data.student.name);
+            if (data.student.className) localStorage.setItem('math_last_student_class', data.student.className);
+          } catch {}
+        }
+
         // If student has already completed this exercise, show result view directly!
         if (data.submission) {
           setResult({
