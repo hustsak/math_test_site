@@ -42,6 +42,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       return NextResponse.json({ error: 'Please enter your name.' }, { status: 400 });
     }
 
+    const now = Date.now();
     const db = adminDb();
 
     // 2. Validate exercise existence, published status, and deadline
@@ -50,8 +51,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       return NextResponse.json({ error: 'Exercise not found' }, { status: 404 });
     }
     const ex = exSnap.data() as Exercise;
+    const isExerciseSample = !!ex.isSample;
 
-    if (ex.deadline && Date.now() > new Date(ex.deadline).getTime()) {
+    if (ex.deadline && now > new Date(ex.deadline).getTime()) {
       return NextResponse.json({ error: 'This exercise is closed.' }, { status: 403 });
     }
 
@@ -101,17 +103,17 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         .get();
 
       if (studentsSnap.empty) {
-        // Name not on approved list
-        return NextResponse.json(
-          {
-            error: ACCESS_ERRORS.NOT_APPROVED.message,
-            code: ACCESS_ERRORS.NOT_APPROVED.code,
-          },
-          { status: 403 }
-        );
-      }
-
-      if (studentsSnap.docs.length === 1) {
+        // Name not on approved list: only block if this is NOT a free sample exercise!
+        if (!isExerciseSample) {
+          return NextResponse.json(
+            {
+              error: ACCESS_ERRORS.NOT_APPROVED.message,
+              code: ACCESS_ERRORS.NOT_APPROVED.code,
+            },
+            { status: 403 }
+          );
+        }
+      } else if (studentsSnap.docs.length === 1) {
         targetDoc = studentsSnap.docs[0];
       } else {
         // Multiple records exist for this nameKey across different classes
@@ -119,68 +121,75 @@ export async function POST(req: Request, { params }: { params: { id: string } })
           targetDoc = studentsSnap.docs.find((d) => d.data().classKey === classKey) || null;
         }
         if (!targetDoc) {
-          return NextResponse.json(
-            {
-              error: ACCESS_ERRORS.AMBIGUOUS_NAME.message,
-              code: ACCESS_ERRORS.AMBIGUOUS_NAME.code,
-            },
-            { status: 403 }
-          );
+          if (!isExerciseSample) {
+            return NextResponse.json(
+              {
+                error: ACCESS_ERRORS.AMBIGUOUS_NAME.message,
+                code: ACCESS_ERRORS.AMBIGUOUS_NAME.code,
+              },
+              { status: 403 }
+            );
+          } else {
+            // For a sample exercise, proceed with the first match
+            targetDoc = studentsSnap.docs[0];
+          }
         }
       }
     }
 
-    const studentData = targetDoc.data();
-    studentId = targetDoc.id;
-    approvedStudentName = studentData.name || studentName;
+    const studentData = targetDoc ? targetDoc.data() : { name: studentName, className: className || null };
+    if (targetDoc) {
+      studentId = targetDoc.id;
+      approvedStudentName = studentData.name || studentName;
+    }
 
     // 5. Verify accessEnabled (or legacy active)
-    const accessEnabled = studentData.accessEnabled !== undefined
-      ? !!studentData.accessEnabled
-      : studentData.active !== false;
+    if (!isExerciseSample) {
+      const accessEnabled = studentData.accessEnabled !== undefined
+        ? !!studentData.accessEnabled
+        : studentData.active !== false;
 
-    if (!accessEnabled) {
-      return NextResponse.json(
-        {
-          error: ACCESS_ERRORS.ACCESS_BLOCKED.message,
-          code: ACCESS_ERRORS.ACCESS_BLOCKED.code,
-        },
-        { status: 403 }
-      );
-    }
+      if (!accessEnabled) {
+        return NextResponse.json(
+          {
+            error: ACCESS_ERRORS.ACCESS_BLOCKED.message,
+            code: ACCESS_ERRORS.ACCESS_BLOCKED.code,
+          },
+          { status: 403 }
+        );
+      }
 
-    // 5.1 Verify Payment Approval: if payment is pending, only sample exercises are allowed
-    const paymentStatus = studentData.paymentStatus || 'approved';
-    const isExerciseSample = !!ex.isSample;
-    if (paymentStatus === 'pending' && !isExerciseSample) {
-      return NextResponse.json(
-        {
-          error: ACCESS_ERRORS.PAYMENT_REQUIRED.message,
-          code: ACCESS_ERRORS.PAYMENT_REQUIRED.code,
-        },
-        { status: 403 }
-      );
-    }
+      // 5.1 Verify Payment Approval: if payment is pending, only sample exercises are allowed
+      const paymentStatus = studentData.paymentStatus || 'approved';
+      if (paymentStatus === 'pending') {
+        return NextResponse.json(
+          {
+            error: ACCESS_ERRORS.PAYMENT_REQUIRED.message,
+            code: ACCESS_ERRORS.PAYMENT_REQUIRED.code,
+          },
+          { status: 403 }
+        );
+      }
 
-    // 6. Verify expiration boundary in Cambodia time
-    const now = Date.now();
-    let expiresAtMs = now + 30 * 24 * 60 * 60 * 1000;
-    if (studentData.expiresAt?.toMillis) {
-      expiresAtMs = studentData.expiresAt.toMillis();
-    } else if (typeof studentData.expiresAt === 'number') {
-      expiresAtMs = studentData.expiresAt;
-    } else if (studentData.expiresAt?._seconds) {
-      expiresAtMs = studentData.expiresAt._seconds * 1000;
-    }
+      // 6. Verify expiration boundary in Cambodia time
+      let expiresAtMs = now + 30 * 24 * 60 * 60 * 1000;
+      if (studentData.expiresAt?.toMillis) {
+        expiresAtMs = studentData.expiresAt.toMillis();
+      } else if (typeof studentData.expiresAt === 'number') {
+        expiresAtMs = studentData.expiresAt;
+      } else if (studentData.expiresAt?._seconds) {
+        expiresAtMs = studentData.expiresAt._seconds * 1000;
+      }
 
-    if (now >= expiresAtMs) {
-      return NextResponse.json(
-        {
-          error: ACCESS_ERRORS.ACCESS_EXPIRED.message,
-          code: ACCESS_ERRORS.ACCESS_EXPIRED.code,
-        },
-        { status: 403 }
-      );
+      if (now >= expiresAtMs) {
+        return NextResponse.json(
+          {
+            error: ACCESS_ERRORS.ACCESS_EXPIRED.message,
+            code: ACCESS_ERRORS.ACCESS_EXPIRED.code,
+          },
+          { status: 403 }
+        );
+      }
     }
 
     const rawGrades = Array.isArray(studentData.grades) && studentData.grades.length > 0
@@ -193,26 +202,34 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     let studentGrade = defaultGrade;
     if (Array.isArray(ex.gradeLevels) && ex.gradeLevels.length > 0) {
       const matched = enrolledGrades.find((g) => ex.gradeLevels!.includes(g));
-      if (matched) studentGrade = matched;
+      if (matched) {
+        studentGrade = matched;
+      } else if (isExerciseSample) {
+        studentGrade = ex.gradeLevels[0];
+      }
     }
 
     // Verify exercise availability: scheduling (Asia/Phnom_Penh), publication, drip, and grade level match
-    const studentCreatedAt = studentData.createdAt || null;
-    const availability = evaluateExerciseAvailability(ex, studentGrade, now, studentCreatedAt);
-    if (!availability.available) {
-      return NextResponse.json(
-        {
-          error: availability.reason || 'This exercise is currently unavailable.',
-          code: 'EXERCISE_UNAVAILABLE',
-        },
-        { status: 403 }
-      );
+    if (!isExerciseSample) {
+      const studentCreatedAt = studentData.createdAt || null;
+      const availability = evaluateExerciseAvailability(ex, studentGrade, now, studentCreatedAt);
+      if (!availability.available) {
+        return NextResponse.json(
+          {
+            error: availability.reason || 'This exercise is currently unavailable.',
+            code: 'EXERCISE_UNAVAILABLE',
+          },
+          { status: 403 }
+        );
+      }
     }
 
     // Update student's lastActivityAt timestamp upon authorized entry
-    await targetDoc.ref
-      .update({ lastActivityAt: admin.firestore.FieldValue.serverTimestamp() })
-      .catch(() => {});
+    if (targetDoc) {
+      await targetDoc.ref
+        .update({ lastActivityAt: admin.firestore.FieldValue.serverTimestamp() })
+        .catch(() => {});
+    }
 
     // 7. Resolve or create Automatic Student Profile for Parent Tracking
     const profileKey = getProfileKey(approvedStudentName, studentData.className || className);

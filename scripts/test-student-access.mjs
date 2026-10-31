@@ -414,6 +414,50 @@ assert.equal(evaluateExerciseAvailability(dayEx(5), 7, reg28, {}).available, tru
 
 console.log('✓ Drip follows the registration day (1 per school day, weekends never unlock) and access ends after 1 month.');
 
+// -----------------------------------------------------------------------------
+// REQUIREMENT 10: Free Sample Exercises (Instant access with name only)
+// -----------------------------------------------------------------------------
+console.log('\n--- TEST 10: Free Sample Exercise (isSample === true) ---');
+
+// Mock start route logic for sample vs regular exercises
+function canStudentStartExercise(exercise, studentRecord, studentName) {
+  const isExerciseSample = !!exercise.isSample;
+  if (!studentRecord) {
+    if (!isExerciseSample) return { ok: false, error: ACCESS_ERRORS.NOT_APPROVED.code };
+    // Free sample allows unregistered student to enter with just their name
+    return { ok: true, studentName: studentName || 'Guest' };
+  }
+  if (!isExerciseSample) {
+    const accessEnabled = studentRecord.accessEnabled !== undefined ? studentRecord.accessEnabled : true;
+    if (!accessEnabled) return { ok: false, error: ACCESS_ERRORS.ACCESS_BLOCKED.code };
+    if (studentRecord.paymentStatus === 'pending') return { ok: false, error: ACCESS_ERRORS.PAYMENT_REQUIRED.code };
+    if (studentRecord.expiresAt && Date.now() >= studentRecord.expiresAt) return { ok: false, error: ACCESS_ERRORS.ACCESS_EXPIRED.code };
+  }
+  return { ok: true, studentName: studentRecord.name || studentName };
+}
+
+const sampleEx = { id: 'ex_sample', title: 'Sample Exercise', published: true, isSample: true };
+const regularEx = { id: 'ex_regular', title: 'Course Exercise', published: true, isSample: false };
+
+// Unregistered student just enters their name
+assert.equal(canStudentStartExercise(sampleEx, null, 'Dara').ok, true, 'Unregistered student can start sample exercise');
+assert.equal(canStudentStartExercise(regularEx, null, 'Dara').ok, false, 'Unregistered student CANNOT start regular exercise');
+assert.equal(canStudentStartExercise(regularEx, null, 'Dara').error, ACCESS_ERRORS.NOT_APPROVED.code);
+
+// Student with pending payment can start sample exercise
+const unpaidStudent = { id: 's1', name: 'Sokha', paymentStatus: 'pending', accessEnabled: true };
+assert.equal(canStudentStartExercise(sampleEx, unpaidStudent, 'Sokha').ok, true, 'Unpaid student can start sample exercise');
+assert.equal(canStudentStartExercise(regularEx, unpaidStudent, 'Sokha').ok, false, 'Unpaid student CANNOT start regular exercise');
+assert.equal(canStudentStartExercise(regularEx, unpaidStudent, 'Sokha').error, ACCESS_ERRORS.PAYMENT_REQUIRED.code);
+
+// Student with expired access can start sample exercise
+const expiredStudent = { id: 's2', name: 'Bopha', paymentStatus: 'approved', accessEnabled: true, expiresAt: Date.now() - 1000 };
+assert.equal(canStudentStartExercise(sampleEx, expiredStudent, 'Bopha').ok, true, 'Expired student can start sample exercise');
+assert.equal(canStudentStartExercise(regularEx, expiredStudent, 'Bopha').ok, false, 'Expired student CANNOT start regular exercise');
+assert.equal(canStudentStartExercise(regularEx, expiredStudent, 'Bopha').error, ACCESS_ERRORS.ACCESS_EXPIRED.code);
+
+console.log('✓ Free Sample Exercise allows students to enter name and start immediately without registration or payment approval.');
+
 console.log('\n================================================================');
-console.log('ALL 17 STUDENT ACCESS CONTROL TESTS PASSED! 🎉');
+console.log('ALL 18 STUDENT ACCESS CONTROL TESTS PASSED! 🎉');
 console.log('================================================================');

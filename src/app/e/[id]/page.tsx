@@ -563,7 +563,7 @@ export default function StudentPage() {
               value={name}
               onChange={(e) => !studentLocked && setName(e.target.value)}
               maxLength={80}
-              placeholder="បញ្ចូលឈ្មោះរបស់អ្នក..."
+              placeholder={ex.isSample ? 'បញ្ចូលឈ្មោះរបស់អ្នកដើម្បីចាប់ផ្ដើមភ្លាមៗ...' : 'បញ្ចូលឈ្មោះរបស់អ្នក...'}
               autoFocus={!studentLocked && !name}
               readOnly={studentLocked}
               style={{
@@ -578,6 +578,19 @@ export default function StudentPage() {
               }}
               required
             />
+            {ex.isSample && !studentLocked && !name && (
+              <span
+                style={{
+                  fontSize: '0.82rem',
+                  marginTop: 6,
+                  display: 'block',
+                  color: '#059669',
+                  fontWeight: 600,
+                }}
+              >
+                💡 លំហាត់សាកល្បងឥតគិតថ្លៃ៖ គ្រាន់តែបញ្ចូលឈ្មោះរបស់អ្នក រួចចុចចាប់ផ្ដើមដើម្បីសាកល្បងភ្លាមៗ!
+              </span>
+            )}
             {!studentLocked && name && (
               <div style={{ marginTop: 4, display: 'flex', justifyContent: 'flex-end' }}>
                 <button
@@ -673,15 +686,15 @@ export default function StudentPage() {
               fontSize: '1rem',
               fontWeight: 800,
               borderRadius: 12,
-              backgroundColor: 'var(--theme-primary)',
-              borderColor: 'var(--theme-primary)',
+              backgroundColor: ex.isSample ? '#10b981' : 'var(--theme-primary)',
+              borderColor: ex.isSample ? '#10b981' : 'var(--theme-primary)',
               color: '#ffffff',
-              boxShadow: '0 4px 14px rgba(37,99,235,0.25)',
+              boxShadow: ex.isSample ? '0 4px 14px rgba(16,185,129,0.3)' : '0 4px 14px rgba(37,99,235,0.25)',
               marginTop: 6,
               cursor: busy || !name.trim() ? 'not-allowed' : 'pointer',
             }}
           >
-            {busy ? 'កំពុងចាប់ផ្ដើម…' : 'ចាប់ផ្ដើមធ្វើលំហាត់'}
+            {busy ? 'កំពុងចាប់ផ្ដើម…' : (ex.isSample ? '🌟 ចាប់ផ្ដើមធ្វើលំហាត់សាកល្បង' : 'ចាប់ផ្ដើមធ្វើលំហាត់')}
           </button>
 
           <div style={{ textAlign: 'center', marginTop: 14 }}>
@@ -697,7 +710,7 @@ export default function StudentPage() {
                 gap: 6,
               }}
             >
-              <span>✨ សិស្សថ្មីមិនទាន់បានចុះឈ្មោះ? ចុះឈ្មោះឈ្មោះ និងថ្នាក់ទីនេះ</span>
+              <span>{ex.isSample ? '✨ ចង់ចុះឈ្មោះចូលរៀនវគ្គពេញលេញ? ចុះឈ្មោះនៅទីនេះ' : '✨ សិស្សថ្មីមិនទាន់បានចុះឈ្មោះ? ចុះឈ្មោះឈ្មោះ និងថ្នាក់ទីនេះ'}</span>
             </Link>
           </div>
         </form>

@@ -44,7 +44,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
     // Policy check: If the teacher explicitly blocked the student during the test, halt submission.
     // However, if the student's expiration date passed during the attempt, they are allowed to finish.
-    if (sub.studentId) {
+    // Free sample exercises are never blocked.
+    if (sub.studentId && !ex.isSample) {
       const studentDoc = await db.collection('students').doc(sub.studentId).get();
       if (studentDoc.exists) {
         const studentData = studentDoc.data();
