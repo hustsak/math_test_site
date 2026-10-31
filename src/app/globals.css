@@ -80,9 +80,19 @@
 
 * { box-sizing: border-box; }
 
+/* The Khmer OS Siemreap font (SIL Open Font License, see /fonts/OFL.txt), served from this site */
+@font-face {
+  font-family: 'Siemreap';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/siemreap-400.woff2') format('woff2');
+  unicode-range: U+1780-17FF, U+19E0-19FF, U+200C-200D, U+25CC, U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 /*
- * One font everywhere: Khmer OS Siemreap when it is installed on the device, otherwise its
- * web twin "Siemreap" (Google Fonts). Regular weight only: nothing is bold.
+ * One font everywhere: Khmer OS Siemreap when it is installed on the device, otherwise the
+ * same font served from /fonts. Regular weight only: nothing is bold.
  * Math (KaTeX) is left alone so formulas keep their own fonts and symbols.
  */
 /*
@@ -268,7 +278,7 @@ th { background: #fafbfc; font-size: 0.8rem; text-transform: uppercase; letter-s
   cursor: pointer;
   background: transparent;
   color: var(--theme-navy, var(--ink));
-  font-size: 1.15rem;
+  font-size: 1rem;
   line-height: 1.5;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
@@ -493,21 +503,13 @@ body.screen-guard textarea {
   user-select: text;
 }
 .sg-watermark {
+  /* One element with a repeating tile (see src/lib/watermark.ts), set inline per student */
   position: fixed;
-  inset: -50%;
+  inset: 0;
   z-index: 40;
   pointer-events: none;
-  display: flex;
-  flex-wrap: wrap;
-  align-content: flex-start;
-  gap: 70px 90px;
-  padding: 40px;
-  transform: rotate(-24deg);
-  opacity: 0.16;
-  font-weight: 700;
-  font-size: 0.95rem;
-  color: #6b7280; /* mid-grey: visible on both the light and the dark theme */
-  white-space: nowrap;
+  opacity: 0.2;
+  background-repeat: repeat;
 }
 .sg-shield {
   position: fixed;
@@ -830,3 +832,12 @@ body.screen-guard.sg-hidden main {
 }
 
 
+
+/* Exercise page on a phone: everything a little smaller and tighter so more fits on screen */
+.quiz-taking.stack > * + * { margin-top: 9px; }
+@media (max-width: 640px) {
+  .choice-item { gap: 8px; padding: 6px 8px; border-radius: 12px; }
+  .choice-circle-wrap { width: 28px; height: 28px; margin: -4px; }
+  .choice-circle { width: 17px; height: 17px; }
+  .choice-dot { width: 8px; height: 8px; }
+}

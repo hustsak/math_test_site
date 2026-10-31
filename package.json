@@ -12,7 +12,8 @@
     "test:access": "node scripts/test-student-access.mjs",
     "test:gradelabels": "node scripts/test-grade-labels.mjs",
     "test:fonts": "node scripts/test-fonts.mjs",
-    "test": "node scripts/test-grade.mjs && node scripts/test-choices.mjs && node scripts/test-parent-tracking.mjs && node scripts/test-student-access.mjs && node scripts/test-grade-labels.mjs && node scripts/test-fonts.mjs"
+    "test:watermark": "node scripts/test-watermark.mjs",
+    "test": "node scripts/test-grade.mjs && node scripts/test-choices.mjs && node scripts/test-parent-tracking.mjs && node scripts/test-student-access.mjs && node scripts/test-grade-labels.mjs && node scripts/test-fonts.mjs && node scripts/test-watermark.mjs"
   },
   "dependencies": {
     "firebase": "^10.14.1",

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { watermarkBackground } from '@/lib/watermark';
 
 let paused = false;
 /** Run a native dialog (confirm/alert) without it triggering the guard. */
@@ -169,11 +170,7 @@ export default function ScreenGuard({ studentName }: { studentName: string }) {
   return (
     <>
       {/* Repeating watermark with the student's name */}
-      <div className="sg-watermark" aria-hidden="true">
-        {Array.from({ length: 260 }).map((_, i) => (
-          <span key={i}>{mark}</span>
-        ))}
-      </div>
+      <div className="sg-watermark" aria-hidden="true" style={{ backgroundImage: watermarkBackground(mark) }} />
 
       {hidden && (
         <div

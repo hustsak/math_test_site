@@ -473,7 +473,7 @@ export default function StudentPage() {
 
   if (phase === 'name')
     return (
-      <div className="wrap" style={{ maxWidth: 520, padding: '24px 16px 80px' }}>
+      <div className="wrap" style={{ maxWidth: 520, padding: '14px 12px 60px' }}>
         <form
           className="card stack"
           onSubmit={start}
@@ -481,7 +481,7 @@ export default function StudentPage() {
             backgroundColor: 'var(--theme-card-bg)',
             borderColor: 'var(--theme-border)',
             boxShadow: 'var(--theme-shadow)',
-            padding: '26px 22px',
+            padding: '16px 14px',
             borderRadius: 20,
           }}
         >
@@ -501,7 +501,7 @@ export default function StudentPage() {
           </div>
 
           <div style={{ textAlign: 'center' }}>
-            <h1 style={{ margin: '6px 0', fontSize: '1.45rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
+            <h1 style={{ margin: '4px 0', fontSize: '1.2rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
               {ex.title}
             </h1>
             {ex.isSample && (
@@ -525,7 +525,7 @@ export default function StudentPage() {
           </div>
 
           {ex.description && (
-            <div style={{ textAlign: 'center', color: 'var(--theme-muted)', fontSize: '1rem', lineHeight: 1.5 }}>
+            <div style={{ textAlign: 'center', color: 'var(--theme-muted)', fontSize: '0.92rem', lineHeight: 1.5 }}>
               <MathText text={ex.description} />
             </div>
           )}
@@ -557,9 +557,9 @@ export default function StudentPage() {
               autoFocus={!studentLocked && !name}
               readOnly={studentLocked}
               style={{
-                fontSize: '1.05rem',
+                fontSize: '1rem',
                 fontWeight: 600,
-                padding: '11px 14px',
+                padding: '9px 12px',
                 borderRadius: 12,
                 backgroundColor: studentLocked ? 'var(--theme-page-bg)' : 'var(--theme-card-bg)',
                 color: 'var(--theme-navy)',
@@ -659,8 +659,8 @@ export default function StudentPage() {
             type="submit"
             disabled={busy || !name.trim()}
             style={{
-              padding: '13px 20px',
-              fontSize: '1.05rem',
+              padding: '10px 16px',
+              fontSize: '1rem',
               fontWeight: 800,
               borderRadius: 12,
               backgroundColor: 'var(--theme-primary)',
@@ -1227,33 +1227,42 @@ export default function StudentPage() {
   return (
     <>
       <ScreenGuard studentName={attempt?.name || name || 'Student'} />
-      <div className="wrap stack" style={{ maxWidth: 680, padding: '14px 14px 80px' }}>
+      <div className="wrap stack quiz-taking" style={{ maxWidth: 680, padding: '10px 10px 70px' }}>
         {/* Sticky Header with Timer, Theme Toggle & Submit button */}
         <div
           style={{
             position: 'sticky',
-            top: 8,
+            top: 6,
             zIndex: 40,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            padding: '12px 18px',
-            borderRadius: 16,
+            padding: '8px 12px',
+            borderRadius: 12,
             backgroundColor: 'var(--theme-card-bg)',
             border: '1px solid var(--theme-border)',
             boxShadow: 'var(--theme-shadow)',
             backdropFilter: 'blur(8px)',
-            gap: 12,
+            gap: 8,
           }}
         >
-          <div>
-            <div style={{ fontSize: '0.84rem', color: 'var(--theme-muted)', fontWeight: 600 }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div
+              style={{
+                fontSize: '0.78rem',
+                color: 'var(--theme-muted)',
+                fontWeight: 600,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
               សិស្ស៖ <strong style={{ color: 'var(--theme-navy)' }}>{attempt?.name}</strong> {attempt?.className ? `(${attempt.className})` : ''}
             </div>
             {remaining !== null && (
               <div
                 style={{
-                  fontSize: '1.25rem',
+                  fontSize: '1.05rem',
                   fontWeight: 800,
                   fontVariantNumeric: 'tabular-nums',
                   color: remaining < 60_000 ? '#ef4444' : 'var(--theme-navy)',
@@ -1264,7 +1273,7 @@ export default function StudentPage() {
             )}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
             {ThemeToggle}
             <button
               type="button"
@@ -1272,10 +1281,10 @@ export default function StudentPage() {
               disabled={busy}
               onClick={() => attempt && submit(attempt)}
               style={{
-                padding: '9px 18px',
+                padding: '7px 12px',
                 borderRadius: 10,
                 fontWeight: 800,
-                fontSize: '0.95rem',
+                fontSize: '0.85rem',
                 backgroundColor: 'var(--theme-primary)',
                 borderColor: 'var(--theme-primary)',
                 color: '#ffffff',
@@ -1287,11 +1296,11 @@ export default function StudentPage() {
           </div>
         </div>
 
-        <h1 style={{ margin: '14px 0 4px', fontSize: '1.5rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
+        <h1 style={{ margin: '8px 0 2px', fontSize: '1.15rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
           {ex.title}
         </h1>
         {ex.description && (
-          <div style={{ color: 'var(--theme-muted)', fontSize: '1.02rem', lineHeight: 1.5 }}>
+          <div style={{ color: 'var(--theme-muted)', fontSize: '0.9rem', lineHeight: 1.5 }}>
             <MathText text={ex.description} />
           </div>
         )}
@@ -1307,8 +1316,8 @@ export default function StudentPage() {
               key={q.id}
               className="card stack"
               style={{
-                padding: '22px 20px',
-                borderRadius: 16,
+                padding: '12px 12px',
+                borderRadius: 12,
                 backgroundColor: 'var(--theme-card-bg)',
                 border: '1px solid var(--theme-border)',
                 boxShadow: 'var(--theme-shadow)',
@@ -1317,9 +1326,9 @@ export default function StudentPage() {
               <div className="row spread" style={{ alignItems: 'baseline' }}>
                 <span
                   style={{
-                    fontSize: '0.85rem',
+                    fontSize: '0.75rem',
                     fontWeight: 700,
-                    padding: '3px 12px',
+                    padding: '2px 9px',
                     borderRadius: 999,
                     backgroundColor: 'var(--theme-page-bg)',
                     border: '1px solid var(--theme-border)',
@@ -1328,18 +1337,18 @@ export default function StudentPage() {
                 >
                   សំណួរទី {idx + 1}
                 </span>
-                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--theme-muted)' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--theme-muted)' }}>
                   {q.points} ពិន្ទុ
                 </span>
               </div>
 
               <div
                 style={{
-                  fontSize: '1.25rem',
+                  fontSize: '1.05rem',
                   fontWeight: 600,
-                  lineHeight: 1.65,
+                  lineHeight: 1.55,
                   color: 'var(--theme-navy)',
-                  marginTop: 8,
+                  marginTop: 4,
                   wordBreak: 'break-word',
                   overflowWrap: 'break-word',
                 }}
@@ -1348,7 +1357,7 @@ export default function StudentPage() {
               </div>
 
               {q.kind === 'choice' && q.choices ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 10 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 6 }}>
                   {q.choices.map((c, cIdx) => {
                     const checked = val === String(cIdx);
                     return (
@@ -1374,7 +1383,8 @@ export default function StudentPage() {
                         <div
                           style={{
                             flex: 1,
-                            fontSize: '1.2rem',
+                            minWidth: 0,
+                            fontSize: '1rem',
                             fontWeight: checked ? 700 : 500,
                             color: checked ? 'var(--theme-primary)' : 'var(--theme-navy)',
                             transition: 'color 0.12s ease',
@@ -1396,12 +1406,12 @@ export default function StudentPage() {
                         type="button"
                         onClick={() => insertSymbol(q.id, sym)}
                         style={{
-                          padding: '6px 12px',
+                          padding: '4px 9px',
                           borderRadius: 8,
                           border: '1px solid var(--theme-border)',
                           backgroundColor: 'var(--theme-page-bg)',
                           color: 'var(--theme-navy)',
-                          fontSize: '1.1rem',
+                          fontSize: '0.95rem',
                           fontWeight: 700,
                           cursor: 'pointer',
                           transition: 'all 0.15s ease',
@@ -1420,10 +1430,10 @@ export default function StudentPage() {
                     onChange={(e) => setAnswer(q.id, e.target.value)}
                     placeholder="បញ្ចូលចម្លើយរបស់អ្នក..."
                     style={{
-                      fontSize: '1.18rem',
+                      fontSize: '1rem',
                       fontWeight: 600,
-                      padding: '12px 14px',
-                      borderRadius: 12,
+                      padding: '9px 11px',
+                      borderRadius: 10,
                       backgroundColor: 'var(--theme-card-bg)',
                       color: 'var(--theme-navy)',
                       border: '1.5px solid var(--theme-border)',
@@ -1436,15 +1446,15 @@ export default function StudentPage() {
           );
         })}
 
-        <div style={{ textAlign: 'center', marginTop: 18 }}>
+        <div style={{ textAlign: 'center', marginTop: 12 }}>
           <button
             type="button"
             className="btn"
             disabled={busy}
             onClick={() => attempt && submit(attempt)}
             style={{
-              padding: '14px 38px',
-              fontSize: '1.12rem',
+              padding: '10px 28px',
+              fontSize: '1rem',
               fontWeight: 800,
               backgroundColor: 'var(--theme-primary)',
               borderColor: 'var(--theme-primary)',
