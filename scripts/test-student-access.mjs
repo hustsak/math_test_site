@@ -248,11 +248,12 @@ assert.equal(parentId.length, 64);
 console.log('✓ Requirements 13-15 Passed: Server-side grading, profile generation, and history preserved.');
 
 // -----------------------------------------------------------------------------
-// DRIP: 1 exercise per school day, 5 days per week (Mon-Fri, Cambodia time).
-// Day numbers skip the weekend (6-7, 13-14, 20-21, 27-28) so Day 8 = next week
-// and Day 30 fits a 1-month validity.
+// DRIP: Sequential school days (Mon-Fri, Cambodia time Asia/Phnom_Penh).
+// Day 1 unlocks immediately on registration. Later days unlock sequentially at 00:00
+// on each school day (Monday to Friday). Weekends (Sat/Sun) never unlock any exercises.
+// Day 6 and Day 7 are NOT skipped; they unlock on real school days.
 // -----------------------------------------------------------------------------
-console.log('\n--- TEST 8: 5-day-per-week Drip (Day 8 = next week, weekend numbers skipped) ---');
+console.log('\n--- TEST 8: Sequential School Day Drip (Weekends never unlock, Day 6 & 7 not skipped) ---');
 
 const DAY = 24 * 60 * 60 * 1000;
 const local = (y, m, d, h = 0, mi = 0) => Date.UTC(y, m - 1, d, h, mi) - CAMBODIA_OFFSET_MS;
@@ -265,61 +266,58 @@ assert.equal(getDripUnlockMs(regWed, 2), local(2026, 10, 29), 'Day 2 = Thursday 
 assert.equal(getDripUnlockMs(regWed, 3), local(2026, 10, 30), 'Day 3 = Friday 00:00');
 assert.equal(getDripUnlockMs(regWed, 4), local(2026, 11, 2), 'Day 4 skips the weekend -> Monday');
 assert.equal(getDripUnlockMs(regWed, 5), local(2026, 11, 3), 'Day 5 = Tuesday');
-assert.equal(getDripUnlockMs(regWed, 8), local(2026, 11, 4), 'Day 8 = same weekday next week');
-assert.equal(getDripUnlockMs(regWed, 9), local(2026, 11, 5));
-assert.equal(getDripUnlockMs(regWed, 10), local(2026, 11, 6));
-assert.equal(getDripUnlockMs(regWed, 11), local(2026, 11, 9), 'Day 11 skips the weekend -> Monday');
-assert.equal(getDripUnlockMs(regWed, 15), local(2026, 11, 11), 'Day 15 = two weeks after Day 1');
-assert.equal(getDripUnlockMs(regWed, 30), local(2026, 11, 26), 'Day 30 = Thursday 26/11');
-assert.equal(getDripUnlockMs(regWed, 31), local(2026, 11, 27), 'Day 31 = Friday 27/11');
+assert.equal(getDripUnlockMs(regWed, 6), local(2026, 11, 4), 'Day 6 = Wednesday (not skipped!)');
+assert.equal(getDripUnlockMs(regWed, 7), local(2026, 11, 5), 'Day 7 = Thursday (not skipped!)');
+assert.equal(getDripUnlockMs(regWed, 8), local(2026, 11, 6), 'Day 8 = Friday');
+assert.equal(getDripUnlockMs(regWed, 9), local(2026, 11, 9), 'Day 9 skips the weekend -> Monday');
+assert.equal(getDripUnlockMs(regWed, 10), local(2026, 11, 10), 'Day 10 = Tuesday');
 
-// Weekend numbers (6-7, 13-14, 20-21, 27-28) open together with the next real day
-for (const [w1, w2, next] of [[6, 7, 8], [13, 14, 15], [20, 21, 22], [27, 28, 29]]) {
-  assert.equal(getDripUnlockMs(regWed, w1), getDripUnlockMs(regWed, next));
-  assert.equal(getDripUnlockMs(regWed, w2), getDripUnlockMs(regWed, next));
-}
-
-// Registered Monday: Day 1-5 = Mon-Fri, Day 8 = next Monday
-const regMon = local(2026, 10, 26, 8, 0);
-assert.equal(getDripUnlockMs(regMon, 5), local(2026, 10, 30));
-assert.equal(getDripUnlockMs(regMon, 8), local(2026, 11, 2), 'Day 8 = next Monday');
-assert.equal(getDripUnlockMs(regMon, 12), local(2026, 11, 6));
-assert.equal(getDripUnlockMs(regMon, 15), local(2026, 11, 9));
-
-// Registered Friday late at night: Day 2 is Monday, not Saturday
+// Registered Friday: Friday = Day 1; Sat & Sun = Weekend (no unlocks); Monday = Day 2
 const regFri = local(2026, 10, 30, 23, 50);
-assert.equal(getDripUnlockMs(regFri, 2), local(2026, 11, 2));
-assert.equal(getDripUnlockMs(regFri, 8), local(2026, 11, 6), 'Day 8 = Friday next week');
+assert.equal(getDripUnlockMs(regFri, 1), regFri, 'Day 1 unlocks immediately on Friday');
+assert.equal(getDripUnlockMs(regFri, 2), local(2026, 11, 2), 'Day 2 = Monday 00:00 (Saturday & Sunday skipped)');
+assert.equal(getDripUnlockMs(regFri, 3), local(2026, 11, 3), 'Day 3 = Tuesday 00:00');
+assert.equal(getDripUnlockMs(regFri, 4), local(2026, 11, 4), 'Day 4 = Wednesday 00:00');
+assert.equal(getDripUnlockMs(regFri, 5), local(2026, 11, 5), 'Day 5 = Thursday 00:00');
+assert.equal(getDripUnlockMs(regFri, 6), local(2026, 11, 6), 'Day 6 = Friday 00:00 (Day 6 not skipped!)');
+assert.equal(getDripUnlockMs(regFri, 7), local(2026, 11, 9), 'Day 7 = Monday 00:00 (Day 7 not skipped!)');
+assert.equal(getDripUnlockMs(regFri, 8), local(2026, 11, 10), 'Day 8 = Tuesday 00:00');
+
+// Registered Monday: Day 1-5 = Mon-Fri, Day 6 = next Monday
+const regMon = local(2026, 10, 26, 8, 0);
+assert.equal(getDripUnlockMs(regMon, 1), regMon);
+assert.equal(getDripUnlockMs(regMon, 5), local(2026, 10, 30), 'Day 5 = Friday');
+assert.equal(getDripUnlockMs(regMon, 6), local(2026, 11, 2), 'Day 6 = next Monday (not skipped!)');
+assert.equal(getDripUnlockMs(regMon, 7), local(2026, 11, 3), 'Day 7 = next Tuesday (not skipped!)');
+assert.equal(getDripUnlockMs(regMon, 8), local(2026, 11, 4), 'Day 8 = next Wednesday');
 
 // Registered on a weekend: Day 1 right away, Day 2 on Monday
 const regSat = local(2026, 10, 31, 10, 0);
 assert.equal(getDripUnlockMs(regSat, 1), regSat);
-assert.equal(getDripUnlockMs(regSat, 2), local(2026, 11, 2));
-assert.equal(getDripUnlockMs(regSat, 5), local(2026, 11, 5));
-assert.equal(getDripUnlockMs(regSat, 8), local(2026, 11, 6));
+assert.equal(getDripUnlockMs(regSat, 2), local(2026, 11, 2), 'Day 2 = Monday 00:00');
+assert.equal(getDripUnlockMs(regSat, 3), local(2026, 11, 3), 'Day 3 = Tuesday 00:00');
+assert.equal(getDripUnlockMs(regSat, 6), local(2026, 11, 6), 'Day 6 = Friday 00:00');
+assert.equal(getDripUnlockMs(regSat, 7), local(2026, 11, 9), 'Day 7 = next Monday 00:00');
 assert.equal(getDripUnlockMs(local(2026, 11, 1, 23, 59), 2), local(2026, 11, 2), 'Sunday night -> Monday');
 
 // The Cambodia date is used, not UTC (00:30 Monday in Cambodia is still Sunday in UTC)
 assert.equal(getDripUnlockMs(local(2026, 11, 2, 0, 30), 2), local(2026, 11, 3));
 
-// For every start day: Day 2..40 land on Mon-Fri at 00:00, never go backwards, and Day N+7
-// is exactly one week after Day N. The 22 real days of Day 1-30 are one school day apart.
+// For every start day: Day 2..40 land strictly on Mon-Fri at 00:00, strictly increasing,
+// and Day N+5 is exactly 1 week (7 calendar days) after Day N for N >= 2.
 for (const reg of [regWed, regSat, regMon, regFri, local(2026, 11, 1, 12, 0)]) {
   let previous = 0;
   for (let n = 2; n <= 40; n++) {
     const t = getDripUnlockMs(reg, n);
     assert.ok([1, 2, 3, 4, 5].includes(localWeekday(t)), `Day ${n} must not unlock on a weekend`);
     assert.equal((t + CAMBODIA_OFFSET_MS) % DAY, 0, `Day ${n} unlocks at 00:00 Cambodia time`);
-    assert.ok(t >= previous, 'unlock order never goes backwards');
-    assert.equal(getDripUnlockMs(reg, n + 7), t + 7 * DAY, 'Day N+7 is one week after Day N');
+    assert.ok(t > previous, 'unlock order is strictly increasing for every consecutive school day');
+    assert.equal(getDripUnlockMs(reg, n + 5), t + 7 * DAY, 'Day N+5 is exactly one week (5 school days) after Day N');
+    if (previous > 0) {
+      const gap = t - previous;
+      assert.ok(gap === 1 * DAY || gap === 3 * DAY, 'gap between consecutive school days is 1 day or 3 days over weekend');
+    }
     previous = t;
-  }
-  const realDays = [];
-  for (let n = 1; n <= 30; n++) if ((n - 1) % 7 <= 4) realDays.push(n);
-  assert.equal(realDays.length, 22, 'Day 1-30 hold 22 real exercise days (8 weekend numbers skipped)');
-  for (let i = 1; i < realDays.length; i++) {
-    const gap = getDripUnlockMs(reg, realDays[i]) - getDripUnlockMs(reg, realDays[i - 1]);
-    assert.ok(gap > 0 && gap <= 3 * DAY, 'consecutive real days are one school day apart');
   }
 }
 
@@ -340,7 +338,7 @@ assert.equal(lockedRes.dripUnlockMs, monStart);
 assert.equal(evaluateExerciseAvailability(dripEx, 7, monStart - 1, regWed).available, false);
 assert.equal(evaluateExerciseAvailability(dripEx, 7, monStart, regWed).available, true);
 
-console.log('✓ 5-day drip passed: 1 exercise per school day, Day 8 = next week, weekend numbers skipped.');
+console.log('✓ Sequential school day drip passed: weekends never unlock, Day 6 & 7 not skipped.');
 
 // -----------------------------------------------------------------------------
 // Full lifecycle: unlock follows the registration day, access ends after 1 month
@@ -355,45 +353,44 @@ const dayEx = (n) => ({ published: true, publicationMode: 'drip', dripDay: n, gr
 const openAt = (n, t) => evaluateExerciseAvailability(dayEx(n), 7, t, reg28).available;
 const canEnter = (t) => isStudentAuthorized(true, validUntil, t, 'approved').authorized;
 
-// 28/10: only exercise 1 is open
+// 28/10 (Wed): only exercise 1 is open
 assert.equal(openAt(1, local(2026, 10, 28, 9, 1)), true);
 assert.equal(openAt(2, local(2026, 10, 28, 23, 59)), false);
-// 29/10: exercise 2 opens automatically at midnight, exercise 3 is still closed
+// 29/10 (Thu): exercise 2 opens automatically at midnight, exercise 3 is still closed
 assert.equal(openAt(2, local(2026, 10, 29, 0, 0)), true);
 assert.equal(openAt(3, local(2026, 10, 29, 23, 59)), false);
 // 30/10 (Fri): exercise 3; exercise 4 waits over the weekend
 assert.equal(openAt(3, local(2026, 10, 30, 0, 0)), true);
 assert.equal(openAt(4, local(2026, 10, 30, 23, 59)), false);
-assert.equal(openAt(4, local(2026, 10, 31, 12, 0)), false);
-assert.equal(openAt(4, local(2026, 11, 1, 23, 59)), false);
-// Monday 2/11: exercise 4. Tuesday 3/11: exercise 5. Wednesday 4/11: Day 8 (next week)
+assert.equal(openAt(4, local(2026, 10, 31, 12, 0)), false, 'Saturday: exercise 4 still locked');
+assert.equal(openAt(4, local(2026, 11, 1, 23, 59)), false, 'Sunday: exercise 4 still locked');
+// Monday 2/11: exercise 4. Tuesday 3/11: exercise 5. Wednesday 4/11: exercise 6. Thursday 5/11: exercise 7.
 assert.equal(openAt(4, local(2026, 11, 2, 0, 0)), true);
 assert.equal(openAt(5, local(2026, 11, 2, 23, 59)), false);
 assert.equal(openAt(5, local(2026, 11, 3, 0, 0)), true);
-assert.equal(openAt(8, local(2026, 11, 3, 23, 59)), false);
-assert.equal(openAt(8, local(2026, 11, 4, 0, 0)), true);
+assert.equal(openAt(6, local(2026, 11, 3, 23, 59)), false);
+assert.equal(openAt(6, local(2026, 11, 4, 0, 0)), true, 'Day 6 unlocks on Wednesday');
+assert.equal(openAt(7, local(2026, 11, 4, 23, 59)), false);
+assert.equal(openAt(7, local(2026, 11, 5, 0, 0)), true, 'Day 7 unlocks on Thursday');
 // Earlier exercises stay open once unlocked
-assert.equal(openAt(1, local(2026, 11, 4, 12, 0)), true);
+assert.equal(openAt(1, local(2026, 11, 5, 12, 0)), true);
 
-// Day 30 (Thu 26/11) and Day 31 (Fri 27/11, the last valid day) fit inside the month
-assert.equal(openAt(30, local(2026, 11, 25, 23, 59)), false);
-assert.equal(openAt(30, local(2026, 11, 26, 0, 0)), true);
+// In a 30-day month from 28/10 to 27/11, there are 23 school days (Days 1 to 23)
+assert.equal(openAt(23, local(2026, 11, 26, 23, 59)), false);
+assert.equal(openAt(23, local(2026, 11, 27, 0, 0)), true, 'Day 23 is open on the last school day 27/11');
 assert.equal(canEnter(local(2026, 11, 27, 23, 59)), true);
-assert.equal(openAt(31, local(2026, 11, 27, 0, 0)), true);
 // Access ends: expired from 28/11 00:00
 assert.equal(canEnter(local(2026, 11, 28, 0, 0)), false, 'expired from 28/11 00:00');
 assert.equal(isStudentAuthorized(true, validUntil, local(2026, 11, 28, 0, 0), 'approved').reason, 'expired');
-assert.ok(getDripUnlockMs(reg28, 32) >= validUntil, 'Day 32 would only open after the month has ended');
+assert.ok(getDripUnlockMs(reg28, 24) >= validUntil, 'Day 24 would only open on Monday 30/11 after month has ended');
 
-// One month = 23 school days = Day 1-31 numbers (23 real exercises + the weekend numbers)
-const monthTimes = new Set();
+// Exactly 23 distinct school days in this 1-month window
 let unlockedInMonth = 0;
 for (let n = 1; n <= 60; n++) {
   const t = getDripUnlockMs(reg28, n);
-  if (t < validUntil) { unlockedInMonth++; monthTimes.add(t); }
+  if (t < validUntil) unlockedInMonth++;
 }
-assert.equal(unlockedInMonth, 31);
-assert.equal(monthTimes.size, 23, '23 distinct school days in the month');
+assert.equal(unlockedInMonth, 23, '23 school days fit inside the 1-month validity');
 
 // Students are stored with a Firestore Timestamp, not a number. Every shape must give the same schedule.
 const tsMethod = { toMillis: () => reg28 };                                   // Firestore Timestamp
@@ -415,7 +412,7 @@ assert.equal(timestampToMs('not a date'), null);
 assert.equal(evaluateExerciseAvailability(dayEx(5), 7, reg28, null).available, true);
 assert.equal(evaluateExerciseAvailability(dayEx(5), 7, reg28, {}).available, true);
 
-console.log('✓ Drip follows the registration day (1/school day, weekend numbers skipped) and access ends after 1 month.');
+console.log('✓ Drip follows the registration day (1 per school day, weekends never unlock) and access ends after 1 month.');
 
 console.log('\n================================================================');
 console.log('ALL 17 STUDENT ACCESS CONTROL TESTS PASSED! 🎉');

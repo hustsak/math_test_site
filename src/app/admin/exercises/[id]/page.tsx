@@ -928,8 +928,7 @@ export default function EditExercise() {
                 </div>
                 <span style={{ fontSize: '0.84rem', color: 'var(--muted)' }}>
                   • ថ្ងៃទី ១ = ដោះសោភ្លាមៗពេលសិស្សចុះឈ្មោះ
-                  • ថ្ងៃទី ២, ៣, ... = ដោះសោម្តងមួយថ្ងៃ ចាប់ពីម៉ោង ០០:០០ ថ្ងៃច័ន្ទ–សុក្រ (មិនបើកថ្ងៃសៅរ៍ និងអាទិត្យ)
-                  • ១ សប្តាហ៍ប្រើ ៥ ថ្ងៃ ៖ ១–៥, ៨–១២, ១៥–១៩, ២២–២៦, ២៩–៣០ · រំលង ៦-៧, ១៣-១៤, ២០-២១, ២៧-២៨ (ថ្ងៃទី ៨ = សប្តាហ៍ក្រោយ)
+                  • ថ្ងៃទី ២, ៣, ... = ដោះសោម្តងមួយថ្ងៃ ចាប់ពីម៉ោង ០០:០០ ថ្ងៃច័ន្ទ–សុក្រ តាមលំដាប់ (ថ្ងៃសៅរ៍ និងអាទិត្យ មិនបើកលំហាត់ថ្មីទេ)
                 </span>
               </div>
               <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
@@ -938,10 +937,8 @@ export default function EditExercise() {
                   <button
                     key={d}
                     type="button"
-                    title={(d - 1) % 7 >= 5 ? 'Weekend number (skip)' : undefined}
                     onClick={() => set({ dripDay: d })}
                     style={{
-                      opacity: (d - 1) % 7 >= 5 ? 0.4 : 1,
                       fontSize: '0.75rem',
                       padding: '2px 8px',
                       borderRadius: 6,

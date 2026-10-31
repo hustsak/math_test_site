@@ -41,35 +41,33 @@ export function timestampToMs(value: unknown): number | null {
 export const DRIP_SCHOOL_WEEKDAYS = [1, 2, 3, 4, 5];
 
 /**
- * Which school day (1 = the registration day, 2 = the next Monday-Friday, ...) a drip Day
- * number belongs to. Day numbers are written in 7-day weeks so that Day 8 is "next week"
- * and Day 30 is the end of a month, but only Mon-Fri carry exercises:
- *
- *   Day 1-5  -> school day 1-5      Day 6-7  -> weekend numbers, skipped
- *   Day 8-12 -> school day 6-10     Day 13-14 -> weekend numbers, skipped
- *   Day 15-19 -> school day 11-15   Day 20-21, 27-28 -> weekend numbers, skipped ...
- *
- * A weekend number (6, 7, 13, 14, 20, 21, 27, 28 ...) is not meant to hold an exercise;
- * if one does, it opens together with the next real day (Day 8, 15, 22 ...).
+ * Normalizes a drip day number. Exercises are 1-based sequential school days:
+ * Day 1, Day 2, Day 3, Day 4, Day 5, Day 6, Day 7...
+ * No day numbers are skipped.
  */
 export function dripSchoolDayIndex(dripDay: number): number {
-  const day = Math.min(Math.max(Math.floor(Number(dripDay)) || 1, 1), 1000);
-  const week = Math.floor((day - 1) / 7);
-  const pos = (day - 1) % 7; // 0-4 = Mon-Fri slot, 5-6 = weekend slot
-  return pos <= 4 ? week * 5 + pos + 1 : (week + 1) * 5 + 1;
+  return Math.min(Math.max(Math.floor(Number(dripDay)) || 1, 1), 1000);
 }
 
 /**
  * When drip Day N unlocks for a student who registered at `registeredAtMs` (UTC ms).
  *
- * - Day 1 unlocks immediately, at the moment of registration.
- * - Every later school day (Monday to Friday) unlocks the next exercise at 00:00 Cambodia
- *   time (Asia/Phnom_Penh): 1 exercise per day, 5 days per week, never on Saturday/Sunday.
- * - Day numbers skip the weekend (see dripSchoolDayIndex), so Day 8 is the same weekday
- *   one week after Day 1 and Day 30 fits inside a 1-month (30-day) validity.
+ * - Day 1 unlocks immediately upon registration.
+ * - Every subsequent exercise (Day 2, Day 3, Day 4...) unlocks sequentially on the
+ *   student's next school days (Monday to Friday, Cambodia time Asia/Phnom_Penh at 00:00).
+ * - Weekends (Saturday and Sunday in Cambodia time) NEVER unlock any new exercises.
+ * - No day numbers are skipped: Day 6 and Day 7 unlock on school days, exactly in order.
  *
- * Example (registered Wednesday 28/10): Day 1 Wed, Day 2 Thu, Day 3 Fri, Day 4 Mon,
- * Day 5 Tue, Day 8 Wed 4/11, Day 30 Thu 26/11, Day 31 Fri 27/11.
+ * Example (registered Friday):
+ *   Day 1: Friday (unlocks immediately)
+ *   Saturday & Sunday: Weekend (no new exercises unlock)
+ *   Day 2: Monday 00:00
+ *   Day 3: Tuesday 00:00
+ *   Day 4: Wednesday 00:00
+ *   Day 5: Thursday 00:00
+ *   Day 6: Friday 00:00 (Day 6 unlocks here, not skipped)
+ *   Saturday & Sunday: Weekend (no new exercises unlock)
+ *   Day 7: Monday 00:00 (Day 7 unlocks here, not skipped)
  */
 export function getDripUnlockMs(registeredAtMs: number, dripDay: number): number {
   const DAY_MS = 24 * 60 * 60 * 1000;
