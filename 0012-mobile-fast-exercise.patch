@@ -1,0 +1,1370 @@
+From 6f2be84a1bbd745ef833a589d41e4ff569f3b618 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 31 Oct 2026 04:55:03 +0000
+Subject: [PATCH] Faster, smaller exercise page for phones
+
+Exercise page (the student taking an exercise):
+- smaller text and tighter spacing: question 1.25rem -> 1.05rem, choices
+  and answer box 1.2rem -> 1rem, cards 22px -> 12px padding, smaller
+  header/timer/buttons, slimmer choice buttons on phones, name no longer
+  overflows the sticky header; start screen made compact too
+
+Loading speed:
+- serve Khmer OS Siemreap (31 KB woff2, SIL OFL, license included) from
+  /fonts with immutable caching and a preload; remove every request to
+  Google Fonts (preconnects, blocking stylesheet, and the @import in the
+  student portal)
+- useGradeCodes: fetch /api/public/grade-codes (tiny, CDN-cached) instead
+  of loading the Firestore client; /student 214 kB -> 106 kB and
+  /s/[token] 210 kB -> 102 kB of JavaScript
+- screenshot watermark: one repeating SVG tile instead of 260 rotated
+  elements (smoother scrolling on cheap phones); name is XML-escaped
+
+Tests: test-fonts updated for self-hosted fonts, new test-watermark.
+---
+ package.json                            |   3 +-
+ public/fonts/OFL.txt                    |  93 ++++++++++++++++++++++++
+ public/fonts/siemreap-400.woff2         | Bin 0 -> 31128 bytes
+ scripts/test-fonts.mjs                  |  17 ++++-
+ scripts/test-watermark.mjs              |  42 +++++++++++
+ src/app/api/public/grade-codes/route.ts |  25 +++++++
+ src/app/e/[id]/page.tsx                 |  88 ++++++++++++----------
+ src/app/globals.css                     |  41 +++++++----
+ src/app/layout.tsx                      |  12 +--
+ src/components/ScreenGuard.tsx          |   7 +-
+ src/components/StudentPortalView.tsx    |   1 -
+ src/lib/useGradeCodes.ts                |  42 +++++++----
+ src/lib/watermark.ts                    |  34 +++++++++
+ 13 files changed, 323 insertions(+), 82 deletions(-)
+ create mode 100644 public/fonts/OFL.txt
+ create mode 100644 public/fonts/siemreap-400.woff2
+ create mode 100644 scripts/test-watermark.mjs
+ create mode 100644 src/app/api/public/grade-codes/route.ts
+ create mode 100644 src/lib/watermark.ts
+
+diff --git a/package.json b/package.json
+index 021d73d..ddb5fcd 100644
+--- a/package.json
++++ b/package.json
+@@ -12,7 +12,8 @@
+     "test:access": "node scripts/test-student-access.mjs",
+     "test:gradelabels": "node scripts/test-grade-labels.mjs",
+     "test:fonts": "node scripts/test-fonts.mjs",
+-    "test": "node scripts/test-grade.mjs && node scripts/test-choices.mjs && node scripts/test-parent-tracking.mjs && node scripts/test-student-access.mjs && node scripts/test-grade-labels.mjs && node scripts/test-fonts.mjs"
++    "test:watermark": "node scripts/test-watermark.mjs",
++    "test": "node scripts/test-grade.mjs && node scripts/test-choices.mjs && node scripts/test-parent-tracking.mjs && node scripts/test-student-access.mjs && node scripts/test-grade-labels.mjs && node scripts/test-fonts.mjs && node scripts/test-watermark.mjs"
+   },
+   "dependencies": {
+     "firebase": "^10.14.1",
+diff --git a/public/fonts/OFL.txt b/public/fonts/OFL.txt
+new file mode 100644
+index 0000000..58aaa0c
+--- /dev/null
++++ b/public/fonts/OFL.txt
+@@ -0,0 +1,93 @@
++Copyright (c) 2010, Danh Hong (khmertype.blogspot.com danhhong@gmail.com), with Reserved Font Name Khmer OS Siemreap. This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at: http://scripts.sil.org/OFL
++
++This Font Software is licensed under the SIL Open Font License, Version 1.1.
++This license is copied below, and is also available with a FAQ at:
++http://scripts.sil.org/OFL
++
++
++-----------------------------------------------------------
++SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
++-----------------------------------------------------------
++
++PREAMBLE
++The goals of the Open Font License (OFL) are to stimulate worldwide
++development of collaborative font projects, to support the font creation
++efforts of academic and linguistic communities, and to provide a free and
++open framework in which fonts may be shared and improved in partnership
++with others.
++
++The OFL allows the licensed fonts to be used, studied, modified and
++redistributed freely as long as they are not sold by themselves. The
++fonts, including any derivative works, can be bundled, embedded,
++redistributed and/or sold with any software provided that any reserved
++names are not used by derivative works. The fonts and derivatives,
++however, cannot be released under any other type of license. The
++requirement for fonts to remain under this license does not apply
++to any document created using the fonts or their derivatives.
++
++DEFINITIONS
++"Font Software" refers to the set of files released by the Copyright
++Holder(s) under this license and clearly marked as such. This may
++include source files, build scripts and documentation.
++
++"Reserved Font Name" refers to any names specified as such after the
++copyright statement(s).
++
++"Original Version" refers to the collection of Font Software components as
++distributed by the Copyright Holder(s).
++
++"Modified Version" refers to any derivative made by adding to, deleting,
++or substituting -- in part or in whole -- any of the components of the
++Original Version, by changing formats or by porting the Font Software to a
++new environment.
++
++"Author" refers to any designer, engineer, programmer, technical
++writer or other person who contributed to the Font Software.
++
++PERMISSION & CONDITIONS
++Permission is hereby granted, free of charge, to any person obtaining
++a copy of the Font Software, to use, study, copy, merge, embed, modify,
++redistribute, and sell modified and unmodified copies of the Font
++Software, subject to the following conditions:
++
++1) Neither the Font Software nor any of its individual components,
++in Original or Modified Versions, may be sold by itself.
++
++2) Original or Modified Versions of the Font Software may be bundled,
++redistributed and/or sold with any software, provided that each copy
++contains the above copyright notice and this license. These can be
++included either as stand-alone text files, human-readable headers or
++in the appropriate machine-readable metadata fields within text or
++binary files as long as those fields can be easily viewed by the user.
++
++3) No Modified Version of the Font Software may use the Reserved Font
++Name(s) unless explicit written permission is granted by the corresponding
++Copyright Holder. This restriction only applies to the primary font name as
++presented to the users.
++
++4) The name(s) of the Copyright Holder(s) or the Author(s) of the Font
++Software shall not be used to promote, endorse or advertise any
++Modified Version, except to acknowledge the contribution(s) of the
++Copyright Holder(s) and the Author(s) or with their explicit written
++permission.
++
++5) The Font Software, modified or unmodified, in part or in whole,
++must be distributed entirely under this license, and must not be
++distributed under any other license. The requirement for fonts to
++remain under this license does not apply to any document created
++using the Font Software.
++
++TERMINATION
++This license becomes null and void if any of the above conditions are
++not met.
++
++DISCLAIMER
++THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
++EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF
++MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT
++OF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE
++COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
++DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
++FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
++OTHER DEALINGS IN THE FONT SOFTWARE.
+diff --git a/public/fonts/siemreap-400.woff2 b/public/fonts/siemreap-400.woff2
+new file mode 100644
+index 0000000000000000000000000000000000000000..8b55e3aa022b1243c55f1fa94abeb2ea8b9b9701
+GIT binary patch
+literal 31128
+zcmV)1K+V5*Pew8T0RR910C|`I4gdfE0?1?l0C_(E0RR9100000000000000000000
+z0000Q78?v4%|HfV0BjKu3W>{Dh?N`*m0$n?HUcCAm0ScM1%)^V!EjqwVR8rE_T2(a
+ztkhkV>l-<{v*Zz`n=Tsfq~~TK+0{p$1I$g0KGvabRz&-qX3RbL|Ns9_P4*naKPUHq
+zEUDJE{^v47l#{YCp%`k5YqnOLj+D}CLyW~#HLUJy%oxMwNKr>SQ<B_EG)H3+6~xS7
+zK7xE2;>OP4V$SF<XTIsY7SQ4cCYiRQyXKSmSbi%FhWXwO?4w^Vqms9%<iAn%y>092
+z)bMWpDO_JFg;IG5|9y65?(GWEH!T+V54W6(J^h%HNtpO8aXOdR_(~qPh+%!48EHh~
+zX{qWp(ETi&KdPsF3Z8+A!i3Be;Me0n*yBU<6Ua*dcUTSX7NP0}0m|(2TeWV8|3A;`
+z=AV1-OY$;|A;u6!F~$%>3=tz@gh<0mqs6gUjt?P*u~G=Ld_Lt<Kcy5=5pmJzt{*q9
+zMR9B#i!R(qsl`PhEEsd(kjl=3=W|ToPa#PuTtYtrC+C2)1rnyh?CPe`xDL;|Ewo{l
+zV_u+$fXH_6MI0c4BI_ffA|SZ`S8?o8%aLmpG<=O^V_s=vU3#6_kj8b@Ww)w3Th}eG
+zuC7aNnYJ{awXs%n%|T%-gf*VdTN^FB1vHHXk_Y5@2=3jx`(w5SNWxi^Co(2+f<aXa
+z*FAfCzY(bv;7}Nxrw}p*jPMVSFu6U*DBzR=&M3$3)A=?d*(qk_{{w=L1hcz_&tY0i
+zRgt2}9amWAt_HRb>GeQ^^GYs*FAzaDOe!|c^9rpIilK9X;lLhm)&0@)KbQXNIH?>u
+zQh*Lvq6@sK0_zdw-rSL5&H=Xv1RsW~a>8v;&-358uW~94g*@o(xphA8xx!d9tW-@$
+z0;{K~2oAI(;7$ZSC{QLpQXd^+S%#wNJd|5i1ri`3CKb_&Di&zyrbTyVckf=$d%yHi
+zo4<9S&Dktam&N)>XYbFF7PMkA$|&;zIm|`Zez?3Y;r0gSrSW2^eRR@<o%!-hrrZ*v
+zA!9v8+vMlY*cuPG!7x_e0FT^ye}+9yW**V5)S?kX62GWadB8RdL}wu;Un+0K1^LqD
+zH%&xm3xjYd$Il2?(W@gtFkE}UfX!{s$iT$BDpmVpL6HU(;Y?kMl3#cE>lmMxUiZ4^
+z-3!~(vxA-41(yp_CKpr!96-ncA{D6MI_wglmQaY!3Jx)lgaZYM3XrmG>QW4(F2wxz
+zJ$|lxUES{&!~ZRFcIW15`cGf_CbTNt4s?mT$jAtp+2IX)pUu+R(c2PA-=p2oy9}sA
+zo}*XUig4&iBt}M_kn{r!Brsh5`Tj;)bATRabXBt^_^LtU3%a_ld*6QltEfaGseZi=
+zZM5*^e&&l=LmTz(?9A+yz5C4&vqVXRMl0f_Qqp_qJ0v2ZM(p{k>CAMKg*ooN?fCPy
+zn^rJ9DWx>f0JDG+fanqKDZ$E8hEu=G%RswbLCv=<ReIv|8LFV~S>fN>`wF;WC@B?%
+zvCM1=MQwG`f3Yp4X;T^@^sdo{DeO7$|IdAUeb|c9tgIKkLP)r50IKB^P6Nnp0(}9t
+z0t|4VX`smx%Phcqn7@6ZY%<%lj28U5O8v!<%35)K1t^CR0;!QW1JA#I1L>Z%)-DFb
+zUwYKS%p<U!j;7u{bwf>yEP)z4wpaCINFGZis*e!DSFh{ddV7W~*(>iFQR*VE>$+Zq
+z5Y3{9X4B*R4naHn=ahv>Sa_&2M(PTw`MwSN?WH+USN%#KAk_nm%fCB6_S3SBq;dUs
+zBVb=4hUAT%YscE6%X}vSdT3*;6X2o_`~FPt+Rb%*^()I537c(<EM*8gfmbM}B75S?
+zu-Y$+EQJ!V^;t^6u*ouuk-wG+h`%}*3=jZ32{?X;;a5;baGrEX*G?Z*;G5r!Y;eCO
+z*fW6-1$_O`7E~zzOX(N}Ojytt&pa!VKhyJ_B%Ck@(G$~Cl8{S^B!B~i;Tszs0J>+6
+z{lQuQ=$SDTTmUqpA!_**8#Y{cjDU{|p;1Ie6LTfu#+?UGpYbw=)L1g($azyxnn2B$
+z#zcN5(V7gvU!$C}EWD8jl+^Kh@;+30f(L>lTO%SK5##BQ7i{gJqq%b-s4yUqt^Z#D
+zFbw!4!1E?hgcP5kpM&lOoe1KQC8Q6eyZHC`2l!Bbir+&&Chl8YIgaRi*k{zo;GN@j
+z+bh<+(%s-raqH$!xGi*j<$Bw7gR9h);L_@{&85*r?m}5Mb7`Y9MH<qn<H6c}$e7Re
+z@g2FbjG^xCXMMjf_3_@*c}-+s%CUkeKT1Y%$c<{OsKVg?+)Yc4W_N0{A_YOCi#)Md
+zj)kbzX3NafsLF68gCXdKyILRs5HzS}^%KM<{~KJp2F(d4opRb4XPt9_9zPgBJ8stl
+zR|Xw&nE1&-DGz(F;_Bzkeux$TizALY7VRnD*+HZYECwQXpZ3Iu(9%X4QMh^Pnde@3
+z>6O<y@*r<?`cs#`y!E$kcn9y{1AK%}&;$QKuX0?Yfc`c+zmIzy^_a&!;Ym+<+B2T@
+zoaen@vp?J7MK5{TD_-@Q*S+CQZ+Y8N^95izViVfh3Ml%(3H>mjec?6Jkj`E5VPqH6
+z8r+P6$k#U8Lb|b~MN&}YoKv@Wm1=?<6Q;q9onFTK3p*Jtu(}?KrYD(M<g~z$^-E`0
+zJgY?>5lWRQSD{i^mC342QDdrUrmHnWoq7#sYSd(w+2)vQp7|Dth+1gTLW?DVbhhvX
+zkWeI+NM&+`Ql-{tb$Wx*WM}W-=wx<w@!;wP0z;s8|JWBO(2Nr#PSNNLN?V9{H(6{B
+zm&X?fMPi{uDw8XeDz!$d(+iwFfGRab1@@;yDjq0%F|HXQq@rrNVOq9BAd<)wDh;GF
+zm@GDj%i{|mp-3!|%H#^A3bA%nqUC2LH)4rYCRZp`YK>N>HyBN3i`8a#I9+a!*XPG@
+zf~07M<#@q+Hz7{f>lsbvri;~9WcD12K|_Xt2&7PHB%Q%zu{m5GUl1i((bdy8Ff=kY
+zF*WP?-x*06<&{jXP^#1#txj(+n#>lfO~q>>X_pP~84^EM0qSgn72+qM!|yvE-@em%
+zCPm9W1W%Q~<a;&hY_`=-%+(+uBq&^F0mLf?`kpC&`FF<Pv3N${RHTaMB^YV(91(^h
+z@n3?9uZ|YI67Z;gtZ7hCIXgCXXN6amz-&<y=4byI%U~ngnSeG8_LI}q(q!qQxvWuZ
+zt##_{8n&<c2N0Az%_uw_CqUKr<J(}8E{;h6IUx)Wru2i=;rIepO(=Dm)wIt%f%ckJ
+z^dGYi?V(BzD=-?Iy6Hm;h(fx=lCpJ4v0}x84KQdro*VawNJEoYR?(FskW)++IAJz;
+z&}36gr4vZ6MHTl(h#@raV8A1I@h*ly@@syayq+>Qi^WonZGN)H{}aO#X<7~NRBtOD
+z#=tI~o|2$>`LQSwCm$nXIUYP5G&aL#NjJ|v1goPgE=0OL3#-B+;_r*0sZa@^%1VS)
+z)?%^FCOjH!A++5NV!P}nDFNNh{~WHUkr;ZR&1qXzu~|sR6M^&}HtP{XB3JUpLLhY@
+zUvjcp%+mDx;)Z7YsC3cFlCowv+e*JPtXw*rjWqo|fzh7}+WlOTRw@t;VQZ=%0FpvS
+zv=T12T1k3l;l8AwT&vgc2C5<Z0YYxi$(l;4vUz>d`?aqDe_Ykdd2k7@h-iBRAtq0!
+zNdWTGXVrB+`)n{MmELQNaDF_w4BT&+Lpw1Bhx3glX0_h%<T#iTJ!m;qOsbBuFJPlU
+z)D1;KZ3M2%g0`QjD*pzrt~D$Yh4sQJ2`V`V^HJq&mN4-r9D||qfudos%FlGbk2aCf
+zPVaWwJs~qj<M7a0*xAr*d)YwPXSaqGmMSrrg@<GHe59Vb(9sFk1BGvVHmevoj|oE*
+zVJvt_x3qM&8v>0w<dKn_-(7->WbFuB08qj3&D-tf=>!YaA@f2AET!%hP4_Ab7aS4q
+zl_p&#8w|EfAX$NGgi*Pd6g>pf9RXM3q8FD-;QWT7T-KJf%4FhH8yS8d1;S1v#l`ng
+zR^)E6PMaquTCw|;=*X4>psJ<6I!@Hm<vDXRWOi*3{Yy_{9pGGF+Jh)U^Ady@ijpF6
+za@w4lP01xFH*%{K%UogD{(ZD0l)K?jv-706M8R!yW_2&rC@L{hHcv8$eyFxwAW~1A
+zh}>d)V+@k59v%q`(~WHAvCHUD)>KyGmJ{pq7?Gfs0gbFmWU;(bO0<Y-6(HSFbwkpt
+zG?#MDmzl<G;1ozYLrO<ZS075A)Uwb_vNOq~Opp>tMRkd=qtz9fp=B?McUuo(-#VC@
+zyld2Zqbv1lgNr7j1*|{9BUdCl+VHRhQ>fcty<(FMR%$m-r931>9C#0HS~RLtBH4U;
+z1QK7xt%?swZ9e=WW3<L9C1#Dr$(YA}V)ombN&`Z^Fdp4j#huYhdJ#?N42yfd722Z~
+zogP)Xx*Uz}X#1#gzgI^%6e)JPaux;&U8y2$unX0lLWa%dzSXPMe;aWw>BuEqVD(E;
+zIP{z>X0qYu5{fYFY;cE8R%b9>B=C`u>#-YtXZStEU;SINdsLhgFPUwoyukG!1`FE?
+z7&4jDx_?UnyBpd}C{wEk4v4~~);53?S92D25m<9sgl2k+4KEvu!r_3vA68gBYnGBP
+z9LDCGxy^Zji43ZX!BH=0?Ly)14S@VyAl_3D4@Gy5G1GD&V9x|g$gBY3952<(g_Z<>
+zLjeRr)D6`1JWybVQSrBpIHKjIqV8-*SNXUVjEK73QD^t#b}hgc4EWZuB}Dxzzt>W0
+zx*`;A6wnB2c{a^82h=IBOgI(s9t3%m&ZSBx!o6;a5QPs}GHA%sc&0uoZeujlOa7jP
+zF*q9!CA2o=s$mb;v;$GfSB-js;9UKYRZ~}@Gz;H_O{_SJEfFtSnk>gnTpS#(BhYLl
+zVK0`b@SRFkeo$?tRR^)B*IRFcjW%iUBZn>X2@gUzmtlLFTaK$&-s%hei3<+hprQQe
+zVL@*DnzE13Q8BOv8;f&mfaAE3#TJ(>NIevhZeF&Mw5@mY)UM22#e8B>4CCDqbc#w#
+zZ*?Jyh-M=glck)QVIrO{527ACSFvI$vMR0QB_#etMWjSbcqCmg?nTW?J_Xn`A_flP
+zqTn&`P;af6MYPdCG~`D+ZTF!!Z1%YO-0lWzTw$@bn$1zGQjt8QMlvKpd_;j0y5W^y
+z-F3xTP4;l8gP>F%ST!Yb+2zRg6`L%XGNenBDn+s+R?Ar=GE0CdPp%x<vX~fUGSJh>
+zpq0L~PD`bcLM@pJOi4jbrYyJ1I!62FuRnf#`|=4&3eG6OsE-(N>q!$%_uH`|q+_ui
+zw)!1G55c9HgQlY>F9vT2J;ymFMI;?LK5^_Q#Js&}cb#4a9|oU!Y{xz7C$uyu$|c}6
+zp!xeVh@{&EkR|J*5K}fsQLy&;>eCL7aaUF1q^fiiBEII5#1D@TDv@d-0~HZt`(+Sm
+zxk=gXixZsDOm!L&9Yb=<TEKdU`606x5ZyT%x*cq~d$jv=tx^3W*ihDJuw%_?Z5?&z
+zY!XvDRaRm|%~Zs^yLvhVIj>qlKsvRKd*)SoXG_{-pI6-Jg=>y-sFK%26F3gLWJ!q<
+z+FX4NGE?>DIdF*JQjYl5J+SvoJ^M0CfYe`1DRqJ1TE$aJY0vd8uvv&N*pItwZ{Hn6
+zY0W5~uznYV*tchDY6q3<$5LKf50;D2#Gk$L#80Hbo<z^_1~;26kQ_Vl$aJ`_Ixp9Q
+z@IhjbTFcS0VY&2BSZ|^NJenu0`+>dO-O4Sp2i<u3{6vg8yIj7@3Rr$K2ovt`ad#6P
+zwe#J22NwL;wxj+@wE<OGzEYQF@hDFUla9JoO|_v)%UY^}hy)MiMXu#Q>QbD7$P<c1
+z$Z5NmY;?5+<|vVg1keM&YPMT7yEp_9KC}#gu|^Y<2eL0HD+t|qzAMLdVcE_M(}|`#
+zQd9?$Y)=sFaJ(&swefgbyWOo&w57|{!s%@8a5O`ZrZC(Df*ONhBLL|3{tcs_uJ_fn
+zKC0SVQF_U8Pf6+_irodF8_##;xGpT)nPEE7bSXuZkYq7I6ybOwh5_fND@IOwWgBP0
+zI5i_zH{Ldn!qypY=O`V1=kuvM)Am*07+;6aO3$5~l+f=Bxrqb1Jh@wl%+?)<PjV@s
+zhpgi}+u)^xE{BzvI5Q7qvk+pKH5J}ljU@o$ZAzb<j6s?lOd1_9l0ya}m%XF)!2pOA
+zMGbg)IPN_A0Dby~SAon-hC@>Wor>96;>Sm2GL>Z|#BrymmvJ!d(@nNg*Xrm^KZ>p<
+zgwlMnlUP^B!+4gA0c=c;For}NtAinwLE4Z84-s&vmY<B~o}?q*;pFZ$1!3%^I1ZCV
+zO^c-zih*o9MDWfyO%#p2(kalVf6W8vPj2maYLn<p7iNgwUGApES$)?-8tvq;L9J>P
+z$`s3EtN62*i7{U!BZENxDjIEn=fGPfC{%&c58$I3R93<StH9S9(5Qup)`FjPpj8i(
+ztp|S_V2X_pU=vK$0Mq;kfgBKI3+Qc!&+Pz%T@Y@!I8~Z!hx|;Yn$-sDQ$EipW|uWE
+zplcg?G5{LI8<9_}>Gj!F;<2g}5ONWpVLD5tU?4r*uq`Jrg59zXd;kg|aOX%jr(mO~
+z4Lk;l7!=N3-0rg+_U;b%e(AlLbG>hD|7UZ&YiaLjuYKO|^DScA??s2R!}?78^%Q(>
+zuqA;8BY?gVh9}~W<vEOdfcXZTzW|b2SN}Jnpm(rG{4|rmFq#_DaZGT6FeH*PxFk{#
+zDuUmuSk^%lmjV~l!<0{6EU99oU?0jzVi;ePsIu%gkR&xnK_&VW_g)_f(kP4l$=>J`
+z`%Ubt0LA;jI5ND1Fjp0~xdduaFe-vC-IGah2#ecX3dW)mR0Ns&nS^loFQgRmBnps0
+zf>?Y{LRtnH{60y+j6;-ItK-osytY{olN;;?Hdt}EFa{O8<Faj)>9gWU0g@F`wEpmh
+z6r}hxsFsyZ00bq)v_H%Aq$ac2E-sY7#b@LQrcgMN$D=5Urg^TP5w0uk!lG#b?Ltu$
+zk3~^^>zIpoGLKah`PuHGhj|vJ_ya{ZZ4Wphj5Q2jP^{Z7KnKJ{Yc2#gu^AwnbwR^$
+z6>5}=zV2iHjzd51VuuL%&Xz~*qW`|?M`dG5GjXO3Bb%B@iHXWlbMo68i-jphleDE;
+zy{k<oa$;p(znhAHC$=>y8zsN-zeZ(a_Qo=aEgo;p((F&9O8ry18M!C#-_dq8D;!+R
+zT&P*0`Y)AX+=+8*gYvPg?p0xAMbunPCZ!IX6^r8f>GN+hH%a!R?o6>Y>nijl+Rfb@
+zbpz^F)kkBh@$mV3rWkjnS;2;p{7k!K^n`iFFeUy3M!G3m9*7eWGS-0LS<v<|w(J<7
+z6TrA&Yv40UFdN2(10mdST@YL#V+Co$(lLF`gIy+kOy|T&CU8=ck~nda37j~o56u{K
+zF}o8dPGV^D3U<@cc*s@=$4Z)Gz<NTdP%2eQrAnz#D3vOuQmIg=luD&Sp;RapN(~u2
+zWF62GD^l!one`H;0u*;~kXXYi$h5T53E<pVjX-20UtwokG~Z1olgU&l2_{paLMBro
+zQz28_NQ#aMeT<a}GJ%seb(tU&I60;cNtm>TO^oX#6G){}sZ>hssZ>g(N~KgOHMCXT
+ziCq#l&Fcg(kHWs?C%b;V3R$XL_-K#f1%6oK6+v!!cZV%9sbQ>(mDGbc7^gs4T$ud^
+zw3kK#F4wDqu8!Z#F2r-tOyHj{`$`>|Kij*{@N<axN3e^Jk2qnCK@MldzRpiB!`LER
+zWHb4E0QXG}8FDOWJ@|1TJ!e@exTcVgv`31kz-L$zFGdjEl6Sl#wnRqpInUa^qBI&P
+zjxbKMA1R&-|06dKAnqxKg#5q@uest^7viiGk0;N*U3R0-K0ixQ_HY(t)HsBAY#y*C
+z2HA5~v1h5~iH=|z+mN4lk!dFU%)@m7Rhzy%d-ns6ENBe^`7AN)(LJJ<uoRFu>rTXx
+z;V~|Qh}--q7oPnCFLEuykC$YQQi7v|OA?m2>j_pA4|44seSBfCKjH#kt{GR#%*OUM
+z_IVs4a}DOPgpZSCueT761fN88+CWIeO!_fCIf6EFY*(f@8pB$=Y4*#?efT&3^S6x_
+zb@}DscG~G@0JIEcaqw}J-Ohl%5AEuMoW$FMUArmD_}7Ski6lU;atm7Wx^)C(e;s51
+ze55c+DLvDz@sK>!D~#3o_ToX)vL1Nx;IK<j)F_h6$5&dA6lQUnNEu%-1LaUST}RdR
+zB043cBXC!MamUN}1;3=YUF)M7E93V7b@FDo+AzX|6W$o`z@SY=R*saGgxopOGC>Jx
+zI{pL4Yu?{UGo+NEnEE!2vC5FU)PETpR%v4i{Y?r%O2UW^lPHYBIE<4xi7ZqenFS0C
+zdkI4#9C~etv<MX*1Rx)cpC!cD1*eWbD*+#PJ~!i*&}lkjXpo;F?$j1liN-3AnATb@
+zjylitwn1@fxD+oKS>@)pxeVF^izl?lf(efq;E`E^wtMR|-Q`xM>{4j95288z*|b|{
+z74eIOjYZ<r=SEm%^u8~7nZ)y=0LmzoD+&wu&|4U1^g>LcU(UsNsEl1GsHse-&OrJl
+zD#7TdI~7{p)!5GQ1Q&6%3Y=X#Qg~r=w1lF|S~p6xR6Tu{lp(-OwR@tmfrf=G*rf+m
+zm$AF0blD@3#`uJ)nQ5(3M<kqPbD}=MX{%vIYI2?oF%+dN&XJ;jOD<REAyy(sVOymu
+z$wrG2Zv91+tSbvQejiDd@UdcIZCV-m>b3&;gSGGA|MFiNd+Gz90iV4~`u;nJCKAhX
+z3nMEj6U1`&<UkTqW&pc3B2{;RV%38izJxD|XgeIyC@iVpULeJE5P(@a+;&#mR!D*C
+z{giYfHzIr@k3vFJ_GH7zCdLzOvZo$_(UC*sYvY;W(b2=SgK(x%3`h+<OuiJ_6$8q2
+zgea_+Np(RUET=|hYXuWLQGHK15XWZ@r@jdmxuQoKIuN!U6h}m3ZRaV=6fS66;wa?a
+zBsK$Ii^Sw%n#mN<HLb#ZFB~xh!))E9W*oRiGXyS!k1Y3HZ*8T6NV5ZBHqg*Z>N&N-
+zs&rz^b|jH#qDykcLOBuQJj(*jWd#wID$m_&lw1tVBw;e@PE^~zW0>}kS<TH?fnYIl
+zD>-DKmTH^9+wCCndUSL^9uYs~S-GbpmeoNpLpoAQOWLyFlke7)X37KZ@E`+w3hlvU
+z4*)%onOC^D!910xY>{VpD}yOMp;AaVhLJh5@R~iJ61Znd@}oNcw`)rG2>~J(bOpBh
+z8nIIYk5{~sG)DlRA=7+%c;HdwY(Q69!JWS7p`@?5z?&+JNbZo)%<T8rbRam_7%>~8
+zZl=YueKOMGnaH#OewsUiO)?STtb%BCI3Q|fka5R!J)C-X`6aY;Bj6Z(nMeq8EBt#g
+zKsgmn<!SLQ5UvR&R+eC?Osur*hMQU4;yXk2$=c+t2L-PGL;GX8u{=ejXMmJ&MbuNv
+zCL1R>L7sIMvzO$Zv#3nw^M^}DhMhSA3$Zw}@yun7t^Hg2zcka4rl*vo%7J|9*^(C2
+zK1&`ol8Gq-GX$yOkb$|FgBrlWeHUv>X6DgR9+7#yiFx$7=G?Ezd`xbUs$-ra-de#T
+zW^5MaS$dHCy;r6$%jTscmIbMxW-$WSeAVnnqOoz7LhCXhpOGf8_M4dw#+0y3Cz)nF
+zQJvx*jufPaCZ)}CF6W%*L`XliBB)(Ky)x~nAg|#ilGZ-tXb{{x(wc2#EIA|M2H+OF
+zpeAm(fBDoWB&pPAUeqvAJ%Z_FhCVc%xV&6QbchRTH^J6#5m8!svIv`SL?ms>0EO+F
+zC}DZiunTf`yb8TML?s|OQyM}{S3PM((QL&&Lk~WL!V0Z}c`gYjS!gsbf<A=d{4Gi;
+z!?Q<fyaUTd#~Ym&JdJRH4#U@;rmKd;iNfV&M;3u&>gf$GOE~&q7z0kL{S-86jyR?&
+zl7>|BMPZn^V>Zqo34eY?r-lyZq7{w1AS%8Lk1LimsT4P@jwN4+^V(v|7)mGU*dd#6
+zccJ7h%IYZDJlqkfY3<8vqcs@jvpHZouM6P&n1BHyHDYjcYjSehvd}5!s<TFN*uqao
+zlH!AT(HzK$)*woYErtEZ=!~5i#_l{X$o4dvvRjNe@2tojaB#k>v87IUdd!7lsfQ-`
+zD)LyDwEQGWR^_)j4Bw8uGTz7d5%b?kTZ|~10VU30{IT(NJXk9k1`fGNJFwa%t;>W$
+zv7v}Rcqrp5!RfE9u|B0j!>wqPQ`Gap!$LxE-4I5eHVi&n6iZSJkIUXeuu2Tm)EbPj
+zI~TI_L$ls$jS_+e4-o+Iwwf2iS>Z<WC?mOP&O;fQH;`~vj1@vW=JGf}1al%4YJ|8E
+z)&}%bXB6|vQ`B_J%YX*0=5WaCm4iIB)4&JvA1;s_Hjl$_zEWJV0r)BXnT(k^rs7=l
+zewD&@rAeZZ$SN6zs@R3X>+y?bPeSpt$qr;&6X5n#SBLM+{+EuDO8!HAF;38?21<?h
+zx6>1l8cS#Xd5n@fYxiF$+3!pD4)NIhV3{hb<Z!tGI5vn;zqM1#PK~v(MJy?-!L_Ex
+zQZ(dKV%xL9*4hsD`xe|n-EkVRa)@m?bab|~Q<{MML+v0Q6T@J4)vVD9hFdfhq*?`l
+ztVMR-Jc;0Bls&a*cO09lZdb?WyJR<^tSFnLrFy@I91I$oDo$6Y%VnF93S;Ty*x!_a
+zTbc5=1=<4<4Jh)`DXVklxVcz(J?32~cxvrn1#%<j8OIJbzddSmq#Ge68iZj6iCPx&
+zuRw)SG;6bvQX_@9R$kfAk}@WB2OxPkYbBLvpivd7L8WsL4cUy*Y%Ev}ypZx6F5P}4
+zdmn`$hu_by#q3;1%PnZ}nFxCHR~Z7tfD%+15&IeL?`RL9#kG|S;p7JHKoT8zeF(!)
+zQ=J#uh=?2a7YowQPR+gej2}x{BP56?aa5LIE|Efcr4W+ACkIoFjF7{=%G<CGLU7Yn
+zcQ`RavuDfV`&O!kEuI8rdz2QWJtjFM6w(vN5{(2=cdfv2%XJG66rgTWrt5a>_SlM2
+znq18bekU`#zTe%YJyj{2g@|R!DW~dAB))%$7=U%I36QP!0FQrd$dl_rUB%*IZCNd9
+zQsrhAKsMVNgQ5x+))Z^;&ox*YiKMS7L9fW<K*F?sg)t?BXX}|K(lz;W@knh7bY|9<
+z;d{_Ldb21j2vMOdk=lbr__e^}Jn!pYZGsj(`6AgI_wu%5ozomPA2eWlM@5v!819U+
+z6eewA0)HMg1{3T8EDu>yKXpB1vX$P>gL{*u4t7Nbm1SmYF*W)YEFHk?h1F7$)V&bs
+zp8TL>?z_+$$>5Aw995E$^7M+7^!ZCb&7E0((%OgxK7@g|Cdu20>FNavT~`BNW!oGA
+zr4aC{*rd8IRd#Ab3uEyz`xQOmc-E}uA|4saVT70yYOOsCS~U6TK=`qUj?@VI2Au@2
+zmKf!t&Nb%PBuWWWt5gzYY{1Juq(qYkEF*tIY>{YvkbOf9;WUxkNQvP0N@W~VC4#7z
+zgd4+nJzTsyuUSl)+Fpglr(;=!?raAar$Oj+BX3++`)Tp4rW-&>A2MDPg$dB7<R*C!
+z@XI{>hLlPs!7d7(3{rs$<AWAU8TyRZi55xz2=btA1!G0EiR&mzU`z78@o*j&ZdFKq
+z?^_KVTq|UrdK)9eVHIak_i<5!59aO8dxUG;tGtj|>X>qMk^mWMsDKurZnTaFwkJYY
+z?SdY~`uPHr(QZfLlxTYNquOV$=Sb|YP)6D6+p5=+nf8G<dtNATM5-IJhG!J4*9z7o
+zn|}hziFRgcIHx;LZ%QewkPS`_z6&!Riw1sp1pNbqrlzHsqjEUwL^=mN>IE<m1(-t_
+z-S9tT9>?J)El2%P8&aMU$JH;MUzh`wM#Bwuv!*uLd5I1hnkh=%6#~~#>an=tR7B9o
+zcSH4orq-%16r0ufb&$O15L2Bgt;q!$$C4Zx0-jt!uEkzKAkDu#dF(;o;ilW2F=Xqk
+zbBt-44PPr}>WZJhN*dfIIMTDmTUj<BKP^sM=L~uAH7~LarD}cEBGQK3)$PSR)4yyA
+z>y6)bnETo%=`jQXL0mRpOE~!>@FG#gvYfazIaZ^02%Q&KO7bA(Iwi~CQR!~vTX=C|
+zQ7M}{p~+21f--uFO+Y+7$|t^*>OmaS3vXgxoRcI6CHQ?J??ilrQDxBNz9h=G^y0)U
+zL0VFtBP_%iGw{@GFgbCFGfQ)#4DC06Ex|vTG-5AbOFeU~&|xtRm1X`Gf{41x?!1{{
+zNpx33U{aAa1`M@YL)bvYHLUZFzH4Y}QTa86d`}ZLeeLUpT5Rf8*O3kD*i)DdO)YBA
+zrnd{KwAe`3tA!zEO13G=b&cE9<g)s$I^A_~3EiGz?(c4yTGi4GL1C5MwEn2S16@B*
+z<_&+XYxagUIyGM~|92~QYrWgU{1>hk%A+=L_;jio4Bp?=6DFE;NNE`0Hw|LI3)G2X
+z<s<sT_n$4h9n7-%1-t*;V|VZ#WY%;h#+y7#AeVgx@Byd2Um1FuMXPYSi^T)a<=w>1
+z((4P<c*E&oz6AB-v?ujRK$Rka(6(4OC}b`aY%c^*>s0gR*TX<L6qokLyU+T&yRXn&
+zXjg)ws+x0In;_I((_0xaQ^(Tm6xOTR1g3g3@hLlJd2E62LFXKwWn%9D_jh%8L;sra
+zO8%!0q-zW&6l3%f0{}%Hr_ZA4Q5TV!JSay8MQFMT(~ryK6rQewAT@v}0RRALny%vX
+z3xnb_MgRbD0MZ;#9{^(&CN_e`TTHmYgr28Q1L>M`n28Mcw`+8_wSxab`mZ6W*r~TG
+zvoQBySxe`l50;K=pF%pjE0s=*rcye(4gHnv_~i$pblqNlOWWIU%eYm#ps{r7z0|dE
+zov0<VjY=dVhqlnt;7+7`;aFWHP=BmlQGZ!Irhj9vM5oX4(hp?S_JMcR$GT7OybNRO
+zN__n1o=3smz%jM|J{xU6#xo3zJrJS6Z?M+wHpHX4UrKN4{3VD0uxKg5f8iQ<gT>K`
+z-iTr4=-XC(XK~HM@Vsg}i>gHg`nx5%SUjB=*^Aso(<dc;mF<$RJhka-bhBVa2$J7n
+zn}x7Lv%JbPi(rYY^%ax99s`o3eEr>dO;BO7x1_LZLJHBm{+ne{AfDhYD9D;nAhk;(
+zi~i~FplSkYC3OA$S4}WFmD}0X)CA;{xP6sN6DvsHHfL}-Qj1OKmdf0`&Az2bgvPO*
+zb?+Rx-^p?bo|{JVdo*Vk&R2gasoAx0=hol1JHMEI|N9NYn^1Ox07s8Wqpx<=YXPxT
+zT5me)yVnDtikAwo;1%vN|1p&{$;N80`@3Rq<S!cw8!`o7a=>5qZV}gbr828Wl};#+
+ziyc+;Ff-SK*cffv9PhC{Y+W1t8|%6X%pRImAIX-oxbojs>y=F57P7KBKfr*OvoAt1
+znib})HA>FGuwwc=--az~+M|4zNR7AVwm6_veyC={C(BLNV?pK4FUg`S=BEQY_^!$$
+zq4@kgf|vY(l`5g)WG{iu`mjCQDHkoX*8W1^j3lS<F`*K&0g!>COV&Sdvy&#<H)LNb
+zBNCzi4V?X}c6Xp3rnf*rPjV>yVNX7zM*v@v4G?}dYHwGG#VHnGg!Tb@<b$W43p_6`
+z_$Fr&Y3V6GPYK&{N&B>?62fIC4Q9@Qx5Q4XV89hVIT)rIh#|^shfEC8O6os-bcXwq
+zE+WH4PsO+KL9&Zb6GIC%tTft13C4*Fn9)_-Vg}wQJc4Z4I|;1@`$(N6S_citE|~WW
+zE+6r4;jCf9T7T)2eH|?h6hYvcIIK#oNA%Pt)j-VV1Q84&cAiLd_JG>iB_M>eebj(1
+z9_4cVqv(Z>vSNK)dhlGG465k4w6f{w@{Gm#3x}Fk+g{q_*eBd=d6Z%DO{>@>!%0EO
+zVH7<FH&^E(sEz`hsb_7GWSv~Kbj(=cm^;Me;QqklWR8_$-Ob~uP%dABZo*f3BV#QO
+zP3PmQVt10zO6y!ncqQl(lc1#GU^X)pT-CUX5kVHz_+M-8{|`wCT9Q{XRtGchA<Jt)
+zLGn`WDmK>Bq<fITaCO$ecw`_?VwB}q-pAOwMb~AZZ=jeg>SDHjrYqr`He4)%doG68
+zB0Lko48srbK$rjCB(vSLi%J5mHUYx1{*cLmG2AV@dl{eQ&^{J|T1h~L!gUwrVyKKe
+zt%?7|rz)%B%f3!FG*haBGH3il@e!Z#tG#h(#iHh2;ls1=9!NRmdA8xp;jv-^Y!0nN
+zkmvZ2xdTJBGj>zG90E{>rU0}$b;cRcHQ0X*j{TSE^Iyw#1R&gL?-t<hw3HV19d~U2
+z2%{0`(mO#Ad01uuFEdx{r)geWzk4fxT=fq>U4gL=T+an6&+g{Qp!iT3fy+a|J3#tW
+z%{s(BRhjo5tOL^oLkzG7HF@JK;I;isbMqnie`so(7?>)&wAvW{auqWk76;JeqE_I{
+zrD%je$L|`OZkhyYT?!U>HqdC0?x6T_7<ecVcsSqOHvpFbL_HNOu=e)Sq43=Zz~{Sq
+zgxt5U5YsO&4cgy70UjU}3mAg*{m(1816NwlDr|P{FbUOne_Fb;aIOFx#i&5SUUc<)
+zyvDRB!+7+`{L41r!68c$O%(nFs`t!F)CM@0p!OUab7a2~JN9WFqCX{U=z~<WNBdO;
+z&=a@-k1vYBBkKAIqQuI@RVZ#Hd<2zXxYBxaG*qCu)ZQPrVh>4ky9t$+0@rZF^6dyV
+zm$dE8e!cvZiT>t!KJTrACeZzx>NAVshdITLjQVytSLu5vTijc8Kgr?ZLn%v-Rm?Bp
+zzMouAV(OQDU*T(sBEW>HtLQfo&p#*FZ#=50D_fFJcNWpu@s{kb*H=I*8Z|vvzj&(6
+z>-KaRD2HUzfM&>l=}(V2szHXQ`}QQC;He#8-jg$cf_YGFdum4+2Fy=1YUvtaOmZ(f
+zRKsIC%X6QukpKPt$npS0yg!wy`HjG@SuVY4ldwl;)o-6f$|V5B$q=8-u5NdOPUCUv
+zvavT&kRE)F7()E=CQi<G(U+PubB1P<(rjmzF2a1)IODr`$FWP#cwQQwm+Wc#Z<4Rj
+zcca33Y495%`qkj;l+o>~(SK7$cO;K~G5AwF`grhz+`2<y#mH*%{r?lA7!Vy}Rh5Hh
+z?j@>fL7vYZhn*`VJx-V1{<|T3dc5G9nSti?F(h`Y%a^OZjP=pa`KRQ2Ic#;^JQ*1!
+z%eQ)kd>WG&ZY{pT3dqR)vE|n*e&lUgqzi=${F~i=%}8x($rbFE;8r#rGxsQhl)Alb
+z=G>H~gC%Xr1x*LrN^+A|ud9s9X&oU}n1pHZRRR-PxFSE!&2MC~7aD%hD>yYiTHGVc
+zZra;coU3j+Sh^-Tzv*D7Iak%V?uvhis&nIr!pgWTGJj=(;Q3G7c&}soC+pA6bH8uh
+zjTEe}RcxQDIh2SD9xN$WC^qXYr#<sy@w>WmvlE*x<n(;a<am0otw#1&#(5+QtD2A8
+zIZ#Z1pD;>Ip=ekWz34NB1d^3c%eG9erWbzTbXO)zA>F`0*Z=aB_p!^*qP)_0Uas=)
+znd*PGVjuW19?zfp_CxiLp~^nLf%d9TE90B7(8-#Aw_?BaV?3EZ{nLk<m!WVUZm_-b
+z(+XiTmeoDe?)>~~6}91UoaL-p(R!)vQlVn#?4vkp!`CWI`1~O2;X{@~htFsCVas9S
+z$p>Hk>H3vgzaZtIhSG$Uv~K)yqifHDnVA{afQ*?MLdL%}o{PSH^!x8~b9x8d4nt<9
+z;g7nn-@8qp=ROE{RfAy|KL_F9b9~fB_&$TrXMoS{-TN%MW#6T=JK6;<U@s_wIxeLW
+zf`YOG{(Kh@@D2=|KHc}IH}61^!`QuhCxJho@9)P~Z=kdGfAMJg@eG)m1d}zOW&<FL
+z-n@Hv_84afaNd6un3LmsGh@yAg~-yoKtZvVLc2bu{vlu<T*6OE;yVfIi1+5^7VORg
+zH=X6g7u6Zp?|t_jS(G6qWk~ms3Z;%<uOI2GG{9~TV1wcN`QG0AR?I0~`A@8;Pg|cH
+z?-zTE{yB2*-jRRE+`8SU#aSs;q-PaI`ucZq;6xadCC!Z{n1<I1*B{;s<tw3l%^tiY
+z?Mut|mbf>0*6*#pl0Sk*`1e3H|M1pm_TmNYTP{==M=RN~#P32uk3)~OS@4`jJ1nRt
+zCv}c~ZK}_zKktJw9KSl^N>CUq=ElnFZS~SioS>NtGvo{($35o-SXp4y#i-?-WgE@b
+zQ}3^zy*UxMY)r_HcO^+TUj~sLUVC&~wfB`crtd|@Pc_TFoxeq8=Y$ESoTF1@!bdhP
+z1iPrT_B+2#QoN0<4`X+?pPjwtzoTcvj>EY_Noe=?dp_QI<a38($tM?u_7+;R+V&6R
+zNgQJuGP@G<1CI@Px-C!V;+f7<FrA2)pTG|YSl?con3Fg=O9<GoS1TQimE`f=AIJh$
+z=HFlcc2lE~mST+Qs}Y{L0VeEhwtWIjSf{3}lzC?Tc>Tqrb~c7`Hr@D!A_@wMe_Nt&
+z<AcPn^%h@!O5YfN)mAoOo1t`~tKt4-O75!Wj+T~6R4NN^<}{<kwFy?fqY8E3_78-P
+zh-@hO%I@uL7nM$XZ@v|Ixl|?%;}ec`-+%5Er4Hj&cgOaLro^pB-WT`SYuNiERw$;M
+zE`X#0^7y5c73J3RQELr-r_v+_WnTs|DnJ2>+H7Lvf|Oq&HJYna1gbNa&YVe3lq!wQ
+z3Fo^2i^8G+13EMU(DR2gRw`@rbc~o2^++o(jR;URw;~7SCp?rc?3e@e$B#ql5EPlF
+z#+)}YZ8zd?J5!=ARhMM}Fwj+_FkC9ZN3)Im3(uHsc-{k4Bzu0Mr>ieV!>dRpA&OxN
+z5)mC4EMkh8m3ks}HQcV?zrMJQTsg#Evi1e=<C-Gko{z&~Ei6XeePokW)+0x(6ZSg;
+zQ)MzGZnZwkZ?oVt&nNWil9FrmTQO*F>^!|cp0K`iJ?TbODv{#y!%t5VaKEyCKZbdq
+z@I(Wdsz9B~!Iw|`hR-RP(nzr|CR+H_!NFS1NKHF-CjU<MhI9Q)1~=lBWy^T-MDou9
+z>9VAu#*X$zgW8!dJG}Yznfw5>YZb2tn!dX`LUdmi&$eh`=iSn2@6KDK%dN8MWh9NU
+z03F1{m8GTa?KpBt#(EmeO`wpgEgJ)qhsvE99-rk@VSDzDthvnztniRA&x`F1Hnamd
+z*nXhB7ePT!9;AU`jqQUUyD~9j^47%e&#YT+i8Crak68aZW{!_voMMUw2EbL1WgMwg
+z7`B-yDwd#7^*O{DY-vFsnqyk!rmkM&<zoCl2bKz`<`0~35)Wsn$S-F3=W7!7B%o7S
+zxCjK?u&xtsJ1=vI0XAAFzu+*0i`(*j6SwL<J0-<x8)J=ZFWKJS?4w{|dGwYR@RIuC
+z#Ry8Q3&gWr<Zu8=rOpncktm7s+_$S(EEmtS9u(0VV>;z5hHbyN`e5xofA;^KPv$q+
+zfdQ<!=H^pNz$b*(JGVnEF1^43v}p$x$YKW3<v7>j%i1?U*HW!~@{I+YoxkP@Q|5p(
+zlr7hHb@7TDKJ70mhfwH|gIt&ix@^|U|9svt+!+xaMhuUTo&Di_<ZgbM_!WxUL?b9v
+zeqAkOJ<9epzJ{M^_;gxjwI<3_bIFB|l1}I@@wB4Uj3ruj(y504fNYD}fbE9brk;?!
+z&y2`@-(6R{fMYgb`+HjAZvem;I+s8`3j#ZuW#MJFxSdEgJos6%o;2$A!Rc?dB;|yq
+zFjU=XUMJo3Yenf<4fo#TkC@5vbO@;i)cQoMV~1BHy_obVX3-DVCSexGf%$jV2;`tG
+zExmPvVWH!Ls?*N}%M*5TcaUPbUcgI+UG{d**%6EI17&p^1{CC9{r0RJdp$Q$a@Bgg
+z_S$@6u(2RnAkA}+Op#ihbi81kP$T68($m^dtUbq$ZA{PkM#4}BI0~?CHCDF{Gzaa#
+zIJMpX`D^=UA+#Q;v>8Q5k7m$nAqM(&o0)#l3{?2tS!BJcjnm1VtCoHDnLM8I|NdH%
+ztkVFB7x`qBy_jJ#4Vw2G<{MgY?T(WD)@!x%l}dLOZ|rRFznk62#{YamV=uoWID)Hh
+zfA{60Ga!0QXGOT|rASwc4$evD`x;Up`vL0zLj0mHYGoLCk^CoN;7|+m&c`wRjyaI?
+zkmon!Q^>v*JQRk}_K+@17njuUODK8qO={{|(BMv7Mm#wTLnX2cLS@msE0}ehv=A_h
+z^aO02S4FqhC!{99<~km_f4jSjqp^9z+CxwRR*c<OV1_vDz6orO=Yv<yqo%CC{-y5Y
+z_x;_rgm$bZlp8VTFZ1$!k74O&dh)d!(+-9xl7(XdNp}rNdc(EC%(8NPq)`!t;RRgZ
+z@iogOV~aujFtBI-uTN#(i<#<3Z1}I&4lKybS!G=o&tlQhOOt)o)Z4fDnDu9TKyxNG
+z;OAo-hZ=br@1RKfpRt0MSgxRwpBc|DMB$>rjlDfX8;YYI1;HBaySQI-<BpuGu>&+Z
+z9Fo0^V{f(u2J4^v+Ag&;(|>$j6x(kRfJ~^txm%wE{PX|6`t`^YF~!gZ+EPZBAH+(X
+z?%GAR(P3LED7POO*7Vf3-vAn4Uh%GjQBcaT-8ShGZeH{NRKK%@&OG&h{MaA=_;Y{!
+z?Z<fk$B#B$&?JF!h!3SCk6uL{*Bi!<8VpDOSHMle@?8xulQHr5$oPVjDf0+A1#&bf
+z+US0{znd+-!3*5TY&_LLQw!HePAZ@;ktHY;)Ar*U50|9x?e`nS^!4@TwI{b*<i6xD
+z(X!%1iLgXc7wE!H10NGUPGCi_JP;bKpunS$@^@c4S)6ULX2*`lIZ0eZaUA2+nq#%*
+z*nsWRz#=!qz%b`$M#qr*9s`&^s6Rto_nqd1e?kna7R$6#%7UL5Uqk3nW&4Yxc#j{K
+zMB#85iD{xJc;*3QgkfW~LZ*;!FOj9n)3#Sj2oi$9aA`Cu>hJ}J#8Rx^DTceb;^Ckm
+z2$e#f5Cl*SilS<P0D=apDmof#Y6fgWn#GAKWK-c;%~ITVFtRoGXq9z;zQn9n2s-om
+z&2Fgr&M&;-r(iNUm`e5vrh1a8!DJFExTc|@<}>DtTX=Pv>c!_y@@f{y>naU2q}C6|
+z&&|c(dVYT|5pcMGwXN$G)t$L;OMcLjdbZ}vXBzg@>z`*|wXUZV6>}1xfPfu?wb41z
+zzx+xF*m+FLALK|heE0h@+{(E7MQ_a`#sBz(`q8jAb2LhCrMD)>HOeVyib{;R>_xL@
+z3)Y&VyP~=oxv(-96EVFsuB^=beM~S_=P5|$;DXa(AL{okX`*vMpzzinEd9_F{^V2;
+z<h9Hw4dj3NY5tn=@%*xeHRu{Uj1{r$4A~y<-~u<dPwt$YR8nHeilq3Ek0*#>y*t4w
+zFx)r{R)|1wUX8#o5)_KODY_4&bb3XvB|!uN9YRym(8ySB62dDg;}aX!EI-1enYVP5
+z<ig_h2xxi!Ai5FZKoA5s@2=cgm0X=X#<l~z`>rME9P0Y^0sv@ttAv<`4<We$h7EG)
+z`>j|w=<L0gmV2}4P2s+>7uDqevuNbXzkkV%I(#7_UPnp1K7RB;Ee!cVjz<IEl8px*
+z^?biH!Vg}wV7s~@udCl)xyYHUt4{Kpa^%eBfz6?W&WVn)mNJ5D{Q<4q{T}h|nwGI*
+zeX;KD7sae%rXlu-Aa`TPrd3vD%g0W~|2<xcK>yAW1AhGlM|kjp&5o5bMP0y0lYg{}
+zdeefm6<WOXT=v-LZRF%E0q@Q}JjD0GQ))X1898^O05NQ~7>Mp0ZL+Pu`M0^2mM}<j
+z^W1MOE&sq#r@Wlm3mjxliwiM?bsz;=PIa|5EXQv!y9F^sa`R8=IH$?MA9;nQJNu0{
+zt?*tbeCFlWALi_P?{mHr!dzxAS>dsOo~d5G7&%B5J8$t^K(`)$-Tqx|;Kp1SMjCZu
+zVsuA2R`_fnVu|fwSRUl2`9;Bh;pF@Lo95*BipUfHQet**<2skxA`&WSVeDlk;enD2
+zr#Yoe&k_|DF$MQ!Jh78Tx=5&a4n+itv!Jmi^G6A}SyfM#PIX=BKJ-QL#p3aXhWd;3
+z<G;<-7pyF}ek)_OuIU&n$ur_boXcd1*NTAHjM$8|tr}r!{NBBqVa-OGlUh71W!+tS
+z>fSCUe{8U*%#kXbXe~Ekw?eDHV3RyeArc4cQGr!9Te0|&1|G2civOqH7bZgdCAI{o
+zXt_0%N0DWEgnWID^k_uEXO$nY`19|t;yRa}k4$Kxg)%~?l-BZnxCPSy0Q;6Q7x0P=
+z*fyJa^iaEjZE$nRJ+jO4Zs`<zs<Hl6tKK(NeDCCsr(TVN?uCsjJzt;Ly6wintt~yx
+z`7-|`jjO7orKO`^lANS&KZ}&3Wrwb`^|$qX_-oVJjqCVCXkQr|4!K-9>*!tPHdq@w
+zI_kFq^mH7x`?Y<)>O|!U)~}5y+OTOEzjAB&*0^QmQ=(a=Iz<RJ0o1y>+&~$Du=;pS
+z0HLgEttK8tbBG()GK%;Ze%@c$zM8d_U6<6F({L?YXRqTYSLU>WR@>W?wpI|Tn3~v%
+zi!kO(W7?_=<rRL$H_2tvHWZyWdOxEqEa$D{!&LeC)Y2V$?x)yo8<fUysv#yS3F$x!
+zr>_Hptr=-XKqzzJX-}d-tv0Y%uEN-AL52-?*`;Fb%cC8QX>rn*?AdnFv-IyI@6F|x
+zP5dB7Q*0inWYcrhjCC$Sc%@GsJa`f&z%BAUG&=Lo(%5!ez|uemY5m&zb)RfC>N5>{
+z+S^w22XBYbKc0`9ylOdnVrt+0J8y0Jm&td%*gTI$=b%<~E}dz4oS&IY-@AtmIfTM+
+z^wV=4Jhjcv+FpsWxMkQBbGxm824~9ViVW*7ew?7D>1cXbGd%#DSY2nBFrM4iy{0=-
+zSX+HnT>XkCdzzeI7l_-sEy`izS1Z@nuk-l+(EbDVqa8h9MGmSZrtX{n{nVKg$0tNp
+z5lw!%^_%K9<@hyKMu>nW35klK8jRu5wKn$ZHHKD0QtVm_My!+oZ)vM};#r3_tjD5k
+zb5`&Yx+Lje3gKXF&>tbr?;LxSu<q8*4=aniSG+i?s8m*M;^ylPjTh+*@c8-u(Xka1
+zJ!f{=*=UYD)iOP(U#nhGva4j()RDewBV&2MZ?%<|9y^YX?VMV-UB~6;TkXKk-b_&e
+ze@(Ibj`!P;FeD^Pov<X9)$7?75sY6Q)_gEsrUqF_^LjAyyIHK#ade#HAB8f)n(3`A
+z&77!VN+ZHY;;8%rDw2cdaH8osp&xUQN$fu^0)pi-s^O$^_BJNDN?iSxF3m0gN{*6)
+z8gZ<@AqYW0E(ZX}25C^V1K1$j7=&50+7k=lLXMR{8K)GspyE^*>g$6(U)4~s^WwFb
+z&Gd<JUkJKPsiIU1l|rSCq6@}`6VaGxZ!->o6XC={d=NP0R9>PdrAftUu=o!Lsn_2W
+ze>o+)kP_}%Ix_iUVN#lwA!R5~hWrK2&h-_!zWtDim+fviVsie70<rKVzM=d)bRVAa
+zl?^H>fpT2xowdDFkSD>n@7uO*PTRI^+qN-n+qP|c+O}=mzwVxPpZV{-AI>=uH*VaA
+zyB;dCDpr1LWvqJ0T2+~!6*LF^_gvb5O}ih&EiWcGMZr>exua2sqk{W=Gr>~>W5*Jt
+zJKqtFG*dw>JQbr5;YvA5&gdbrf*e|T^-&^<$m9@VB(MW=dkY977RL^9WbIso*oY2I
+z+H0Sp8T8qN{)S(mtDk`QKL=AT8f-Vi_m)#;tii=ccr3FsW)$@{YL&lFO7MYPU-u0u
+zbBYfs13&H^d4L8JoYE#EtULw44I0Qtbz;pM1%sHCHgu8+O!W>YR>aD0n@N&OPLNVc
+zgOE|@hL_YwtJ>K?^t!7CDvf!o3D5*snnY$RuLK>8c_USmwz8v12X~b*NU4zNwa7AW
+z;Y-<UX0)yEPmTACp*Hg~#HGp3x-l+5o`;z}QY@+cOl!18jPZB4&9gD&#<px}F{(t2
+z<fK6a`rIAHhJ$tp9xOl3)IuLuakdwLg?98Dt=EP6Vb2+;=ilD-d7b}6(=GqO(mReu
+zi$26$$;mprek`e{q@Ak4rTt2fI5^`=gMc6#8ED{SR>pNOLt4(W5uP`KbXp+U{E&Cn
+zNJOluc|2UvD<#nPi(OfP|J0NPwMg5FCXteI4Eiv23u?a;Ztp)rood9jX<MT;*j*fq
+zb+vQ@{6&5;uV8Y?{a2d4{7nfY`3FdBNTz&JfM$;X&S`Zk;?)p22<YnR-j&UJ4_~~x
+zDTSOYs0d5^Gk;xl)rsJdzZ~1NuX>aB$I~?v9nE1l=q-Gj6luc2H=-f9RjhvLV(g_}
+zwqE9l1Ucd++Y(K9g!nZ>GET&-m9hwZXtSii1|OctaIC&VaJr5jid#Km0xB_dd`Wmo
+z1osQd7!jeVL>~M5>0Rb4nYB`si6yr4KKYHDMWLYe#Ed<@%=*`>)vhDY!<G_-lGuCD
+zm^pJg>t^e(k*%GvU=dAOz<TtlJ#!CgN30VKm2b5>mr&OV-HSF3K3kEazuu*DFvYzi
+zv)~Z$39?y&dha?FBa_trbp~>`wC4F(*KPPrN2xX-4NoXizF@Q7$NsDkXa$50rd9`&
+zP~dOA;_De80m5NX6>3t%lX8hUcJ(<*CL!Q?t7E2NZHtoil{jV|s1=15>x9?gmi$Wa
+z6-`}0a_Nrk1l3Z^)hpw1>3fJsrVJuQGY<s@`9%E9(uzdD?-CE^G|^yAKtc&(ZsG-W
+z2Evwd5pKu=0SnGszUa&fc2hym0L+S&6_RY}@k7x8KdMM(-Rko!?x%TiC(71Hi`4K~
+zv<qp%^!bFUK(q#qwM<&*FAevyZ1Dmz&SCT`k<Kr`eS<Y;u`+>-{fMhl6_z?l1yB$e
+z@;;YM!cavy1ylVG3uDa`NA61^nl=aM6VLjUdCo>Ee+Q86g$t!jcPF%i78sKXq1Zy#
+zE-|n-W&%7=M9+tDR1%#OIkUUS;0qO$7;(UEww+aGPxxs-j!G`-@n1co8B!2n;o?zl
+zusblwi4UPDZnRZfp97IVz|p83k-iBtd)E;aMVEtK@V&aZ*hjUiid{y0Mv9aRPI7@_
+zj#|#aK?qfkn4jMr$$OSJ;Ii}vUzy>M&qT{fH-}Nd7(sJV9&`(O3sn=DfFP4q+q^71
+z^09~^ms(G`#iH3^TGzd;Gt1ZJlwQ;0D69GJI|a;Dw1>x+K2fcyCu9<I^zV~^v<>e>
+zHc3rQEHDmGKpC}Xt8vWNl{T-4fPeSk^S5`$etcxu##~nQhs9+SaU*Mrm8yiIt8q^=
+zeP>O8)AjXCT=-`XoqrmOhv(!eU3mL3mymwoem|{EMn}pB&D8-9b3N$8gh?7TFclNH
+zzMKmsEgQ|BXx=)ja&|zx6Suya7#Abn;xmZ8W7k0kIQ~eG0x3Qb+0%&G3wzlM4*h1Q
+zLvCE3f&{&3*ZYU)bBPQ>Pr>&_%SC68YsESICSt-nCF&$~o-n^iTLRJS>=iI4sWAxp
+zQqNN8#D_?ICAEyPw5VdTD*gjmso}S`Hu#pTThFKNaG%Zh1e)0qM#_{b>acWCzNf49
+zD=)q%^XcKOD7p}EmNJ!J)?h*Acirjd)O}(1Vb8W$FZ!h`kIl-qHE-@Ol<!SYUh(U#
+z1Q)~<yEr~_#v$(=iSw^CvMIIZoK^v>*Pa^#L)9iCqKRt>LC?wD?BCP+Kt6E>{&Go(
+zL<$<`=pTf@21ec+-fDEARQbE67e)j7@TairEGm%wbV70ZzI}lVGU#oXS?v=0WerE^
+zQzKik&b(pV*Qq{Kb_0TZu2U7o#ZGsJ;#5PXu5+?z&2AedvE8In3WfQDMF_2|`Y%IX
+zn?zA>vAbwh4K_P@7R!XsE2ny;H_~h-DQ2f4fXDoT!3>GV>rW6T88WM(Y46kX+ts;m
+z93@}t0OioD@^km<JOUPixRAC^HlHU9YsuTfb~!}&77amAE*3MWiEgd@_HKVta_&I2
+z8pqx5*R1@01x(f)LTAf4>qt+;FFSgb{ajoo(Y?<8IiELC_B+Tv@@mYfCfcU=xNygy
+zswr5em~J1gVV(6898e-z7V58}INP0kT%=sCL$O=P<!7dmqe+p)cZ9@L{P-CX?1H=Q
+zEt{@Ra?mhwM#+Gf6n3US!(p^qQ{u53xeu)4PCDItfP~YV3_s}7l@PDYXpP+WLXt2}
+z__rP)eG7aWgK6*Qi;GLpwPAXD;_R!zoBMu*&&pEhioI*g!8sr%tOiGVGGw-vuHh%m
+zFBDw{6*@3~1?P&-NL*=A(r;jcY4nVK!znhGB8`I$dU4C*QcLj-Lqh4p4z~1tht{Z5
+zS9Zj~Tr6q~UCIt`@Va1lqnmJ&_5#+40&*kIL%sz-N#Lly|6u^VF$=^{I~vG=kv#A*
+zDm=L4sUM=6y>LL-kWQk{06M~B+7=>MoAJ<8IQ(Eu$e))yOMLf~i01s@`j}y^=t(?B
+z>+tY^?);oQZDUs9DM7!-OONUH9aWxJ9t7lSVWV|!$B4m4nx8;`3nw$DGbQJcj(mw9
+zY<2lIWB4qb+eo}DyxnW}eFufr_U=(@)kD{5!Pk)0^zHJFeWis9el_CL<27yE;pO4q
+z;>CKd=C5zBb|-0C^{*6OHP*%b9CgV2%u86BR}4|fQKG#(w2bf!mS2#UoSRPoJ-L)$
+zUnB2O1y<gdWwHe8Yq9GPZ7Zt);yK|^FE8V8ty-!PODnAa!E`Zq2Pai8&sIXk8?zhV
+z9V#~l{64GEm!34qhxp!mBrU`)D3|45N!tMYURVCt*~;{<;1dl&!5uySDk|xA_WhPo
+zK-MtCZUK&t`}x|I1lT#!Yd_Clk2ou?Q)Fl^BE=-TP>e{><>ScH8nIO%-@h;KPP@iy
+zBqkudK+fEnGYNH`%QtrQT*NLOJbu9@Pg3z)=s^8s0}ZA+Cz(`%u>hA1iA}5WUM7x}
+zi}Ysr1Qh(khZTa3f9uqHkEGBMYx~uuH%CCD7~l)debiX4wvKOZA~(W#2T=0{ePG5(
+zX<1s*$scovDUx_Q`nxerlk*p845TF9Rv^l2zG&{aOG?tl&~@5_Umtsl@^JtzHkfl4
+zEQmt7LdKGJ=*tv|Ei{)QsP!ciR67WKB+<d?q&+?(sHPu|WD~4=Aijq)JjEi5R?~|i
+zc@B{<Z)XBD%-{t4bJW*EYGy>;u)I2r@#^UtnhvCMLDxg6MzXKB5K5WD?LsMp2dR0K
+zhYQsW!~`sKfu_`PAL|m8zdSs)n`FZs!08=oL{g90IQ=xI*MDk8j5U`FT$$pPW18>h
+zxeAR5N-#tk?=pn6NC;<r%A(v&?i&NRf9&WP@!nldc1dMacP(`0K`6{Y=`s)-)8e=N
+z5c0fbD>%*`-lIRR-KU+OL*NTZ2PO_fMjBJ}+u1RI|787pW5{KIs9N{r!g|viL%qP_
+zes{W4WUkFz-dvo9!Y4-~!TSX=B*B7&pEV#vhJxmmXOiOs;Pb_@JOD0;X&cZ^rp68P
+z@)Az#n+9{&=fz)A!2cP>gz1!{DnWxr4UObZii?4!P#6}>6XPVsgB(LYjM!g3eAMLw
+z#vnTzJp9qCCjk7L{!<kvR5;>y0+yMiD&bd^l?qHLv9Y-c6Q{0jUAsMWhSZNx2w_A4
+zEZ!!s;HcT3*ao?<R8-Ilopr8hiF{mHxLW<MpW8n}XRO8@dtkdpixKgTm=1J^Z_nmD
+z!{37=$XIzFQFWYTBHHp^Mj^6!*~)IlZ;w{^bQ0OyIFf>e2}n@C2hya6$)kBN=q4G2
+zje}9jGgKQzN#tXHu7dxZes|JPje6)^Ou~KR+5_*fWZ*l?=RjJcbpBG7l6HWJqkK+K
+z9+z5hlroxjb)&4+vQASD=D6~4LuwJ=o)JK=Z+md%?D@&?rFN!v{x>xjEo2>w-zXz3
+z?_|d%gGw!KP>O^WmPZM@{D=?w5zwmj|3(aB$#KsX#tAAn*?mE!!+>hi95x;8jqMJ2
+zC$X!lzuO=+!Jt;?TkcTpRcvJRQ<{ln;PlOV>KaUvHJyJVhDQyNEaCJ)feh=UEyGw8
+zMp{N_A3{p$%|#`F`K({+qgeq}SMOBotUL_waZlXZ48+W|Etp~UR{BM)ozP&rn6ZBw
+z_%MLq(}DMAp=GDV$8*VAmThfhdl1_sbmw1z7}NP|%#QM}fl}=&;gg<`wc<VoW2auR
+z#+CBuOMS>yimpk>!{v}AYDg3|SjOlK;>lW3L==ORT!4s|7ZF<YNJE_m!;-RpuI~G*
+zp|xWKr)bWotOcv_*Ad@Hgo>WAUQyq<vOT?$Y-|CSAEQC}1vqs!akHmtCDOZ`OV|~Y
+zU2rvxYKB2FDCzjvR{A)f9y$Tu&qxi}%cAyIHYFxQd(PmG--7ny41MF+A{TNoqP{zR
+zlrsYi;R^#I9qdXJCIgHl8my0bkv=#>3S<47Q7gwu^<DyJhNV=R@7<WYKDXpro8?mB
+zx1as70^sn?pWfP$;s)A%u?GuVIFU$bU(dbSOdpWRFk2zvfmL5k0n~0;wci{x0|7#p
+zkAj!Ri7@HUc87^2H3fYl(LJmv?yR1o(RvrOVKqTHCBPzD6)d+*S^i2$X)&OMR+%U%
+zf6Imyr;srV`IXgrKZq2|i(LG@v0Kkd%@X}kNfMO_S{=c*7}G1BKYgy!p|Nrnmm)zu
+zi$NtUjyg9K+~qAS;;O6xL?H6a)u<gseACiCY<dGJj(hFNve`}RG4G_kdYq8&XaXv}
+zZiSdhLi|-G(bx9%K8}WX$aKbW)=nlIkhq5_&C1Rj*Qh$@JtossyF8VFBDef!FYdL{
+zbkW2){{aQyHr(*#-?OUNFY#)d7FR-sFQc1HNk*0^tf?S&9Qmn#L4d9}VO5h0t)t!V
+za8+3~nbBJdwIvchIiFnHz0BLTrSSMxksOUc%RB!hidW+RYImJ{(B>Gx(!P*%D@d(s
+z61YuyLbZaVFufxNixW{|)`Tuc0eP0bd4)i?b=pB^gHvvescTMH*o5BYj8LhIm-)U!
+ztp4rE5?8`JXU++j^Lt{G=J{*EkIb^TCAf8`gL?bhpwhm+lj|O!y=_4j(h2hzlvVab
+zt#>G({DQXxp4np5p9;#q`kXg8J8)JLUsny;FSzX4di;k4C8oPBKca!d!MNFqN`;(G
+zd!f;OoAK?EpUrntBvgh&FAav6RA~O9`#^8@&y#GoC`Mk}fXL*a!%8O+SWzCSajM(p
+zxEtCLnB8EX2fYP|T3iuie{Gsv9;wRM)myfrmxKz(W7FuL`{wXk-j0cHR?blQidiug
+zAZ(^8)OU{sJ%#SR^4|n@JIu#&965itfgM43>k`5&8aN62eztJZn?KcaiHyWV+>7@l
+zaw;9Syj#u46-jvqxY{9;P^9i%=9l291eGs4=28#*g{4RPb=VEUFzJ{+u9K||AR?V*
+z(z!jbp0|f)UK39lNT89E^h~VO(07Hc!nAZq*g&mU-Ab(T`40^GVR`otF9bRKlU!$Q
+z2_jR#Z&LyH6IQM4hOod2D?s&*fDD-)0kxndSrC3iBsB)!jmaSm<tU)cD_+1~o@>H0
+z_yj|~+|Z4O5I+Jms6iRBX#@*#EWhg7Ja7e=nKJPi`B>L%tPRYrs1mQkP_6ELhL4rB
+z@6m|tr2L|<X#Kj-)*Ms}Q{SSm9ib|-=w+y+VU*83qHzA9?3yLiI)$FuPqi922cq_N
+zAw>yqWm20T#yM|aH?gkzyEoFl7J$jqRLs<IG-Jq50tE#ZE+06}{9;sYup6N?<rUkZ
+z?I|Fc<83J?({bq9Y)9mimsO#SMJ*X}SD!D)dh*~#)%t4JVY3|r(F*hUFGf6$k&-0?
+zXM4utD8FYp9o#`jhWobSmKA`uI%A(pDY=GI14X-T7cU(!N#@p$D+}3i%<?T~GD-Q&
+znXjAUM7<>+8%Lw~deGt!P8uJfU~SBmPAS7n@#Jg8j&DWzV&Z}O^05jIENlHxG;|Rb
+zJb0MDk!YBn_Wtc&mzJ&I{e|wl{N`Otb9h)0?*?TXI}NDG@T0tIOD!Ei6Tc|YO(9uo
+zj<aztWKfk<VvIw$i&ImexGtm}fnXhn$h!soXt+-Px!y061j3bVhI5&mUl}tOLvo?a
+zl4y3dfKjv6W`!BCzIp{#pr_V+uqL;v{$#~z!8zWF!G4GW&eh^17MpX^OsB2^i9h+f
+z=JP7ytW|O+946({wk$LSGL15~#5Iq41NWR$K~=TDJ&Wp|@^f?DhncaVjG13<fn?K3
+zZ7nx^^Y#KN+%AG_Nj~W3w-lJWciBiw6Ok5T5<rX^QXfE<?Mq`Ei_$%{2F3HF>@M^^
+zhAF3dqR>2@etgplHnnnZ6o5=xXhKr-gL%9pl~0>A+rRF3jjA~ux55ocwve<r%Wb}3
+z-BtsNeS*zCo$W*;mt<WboHf55GCXC`9l6;eEx3mi!aDT4?hn>_%LKmuqBN+D+fbm*
+zPU7m^kOK%XpJyiOOB%P1lAl&D!8m8GUydn~$&1Sca+Y}-pMp<KbjIJs0Kb%vGsh?w
+z@&qPlgLAHP6@-`aT=~OaoW<9mp<3i`JD=?SB|LPvnIntC5#27~<4O{^C9pYE{VAni
+z%(Uy3LxgTiu^vJZBctEb9uP6kIZ$b_m4_E-?1!UW;ED3bf7kK~5s0CnYGUcYbEfxC
+zP)G_FV71hIS}cgL>XAe#@AiuJq;R=Wm-rE2XSyI|inMi?l9lm=h=OYPi}9B<0WxQU
+zSRiNnU*L4&e)Xqtq80?{_LA<1ly$m~V(iBu2bd(jMPft`eyRhVNGIgr_bv7oz%QL=
+zzszHu@eg1TCESc{J=}P^4=a`g5#%j9oiH&3mBY5vHTk0%x-M+Nx+S`XguKABsn(F3
+zvUUPQ|JbZ)2TBNU3X2a!kBrr}TX!*N*oHikg>~Tm8u0+&d6w2eBp{uALvWLu2P~w;
+z{tq(#+kw@v(3SyY_G&_supoWtgFuY3ti48RoM3~n6%qCTWCbwyb!(q?&;>%D9T#Gf
+zPxbad>OqFS949bTd*d~`gaWjs`a6C$XK>Bp<^wvP{FRtMq0NlA6r(USY<bY>p(-Yh
+zHg&p1!i=Ss+14>2L%Cn*#XUliqES^$sJK&o_Rhk9U#`p|nU0~rBWtBuW{e}i!3;D8
+zFONSy;AS3gtMQ_cNwYigymsAM$G)>22Y120&Q037ctbx05+gT$*E5?|IZbjVAU_4@
+z$4TVj93{6NJZZinomczZpMPLcXe~0`IF5ZMQHmu$UBO2*^XLHTq+F`WyBwUGQVDLQ
+z{b<IwG+J&hy%PK4WA+p$b!8&!xjntD?fe?(a@W15-Ob4QI&(dmGDzf}zU(0T#8!Xf
+z^u_hQ)-TpJq_*Ik$)Fj0Isch$U(&Vll8<Q)8^q7w7CKL<6!q8HPmi-J9OVPnd2dUz
+zhl#62vA##&6lwTXORFRj8MSzwZTuvtvlEmkrgq7|P^?B@Fd!I}2E%sSMEbzN{eofb
+z6q8)pn2H7Ba?t9YJET!;?>hPSgyxa)fU8J_2#t|cs}9EQ7%F}LyG}FOt7#)|u079B
+zS0q-8+LTyefUtY#?OJb(ZVG(cgDX8WRAle>Z=UzRY?OTm{s+HNG8nkO`<OPEe!y4s
+zLbd#-d5zB)FA8A`A{&iyhYba>xQp|rjhH#HAdVP;t-XiBj_df(2|HSUlqLLM^5~9>
+z)o%6~vGCYT_qw#gK2eyA$J0mbeqtegM|X~xiQs~feH%L|<bitv+FyU@@J=8V15Pyv
+z{*K;xvs5HW3uXMYU()Sq#rGS-h`}BIC=C3#_ZV|%bX`)od-FhyPfDc0egwqBOT69}
+zScHYLGj^;0b(Q-Vx!=+)hm>wR0lG)4;X5fO08bQ=Eu#i>vyESniGvsl>e{#~7Sr=x
+z-UR88*)PdmhMJ+x^Fzj?W9@Qc5Q+Bu`pOO^5*+r0EJ=bxYDO0X-~gev$#{cWgJX#>
+z#>m>jOr``Ja7eglNA$}YUa=%(D4~|W#!g(egG+p82TV*ONJ#%gQ!~L;)kc0h5Fj*W
+zm?p!So;yaTOu*Ouf`A#)p@EbQMc!tgfuj(dbPGjC7OwWE9$b!sq9K4tplQ%bX`-&F
+z06TdHg5i=vI(TfBG+9D|i(myGVuT7^Z)3Ke=pNsQ@j{_xdGrV}DQH6%e5dn)xZz=!
+z0};edJhGyt2+jG<xC}8)0TNFkh8yzl;DEjNY^b*;ZFA8JqCJPN5~`^*TEs4kG(na8
+z%(o+=7c`3ioE9NtEHjrlR(y(-5)KON>8BE5F&%9VXY=?Xy0!xRTR53G$@d|6xAE#8
+znLwIzkw`5SW8_s)$H7-Y+q9*1>76#P(4@lHkS~tTG}zw94v#(v0jHz2aOw2Y9Mj?K
+zJ62cdVff_sXr?&1N*y%^YU9H)ElWUjEHlOA<Vna5F!d^u<{x~H$&iIJLB3Y&X8GZ}
+zs-!1)L~t~bYv}46$J}H_z71UX?aP33R&$I4A%^1AK9Elk#W`q)jK3zot%StOLrJZp
+zJZ{ep7B8aT@VBgrgUK~RufbyoVzMM0ArbKDUkHN?*OdrdTlZ7+ndhapv-*OOs@r+2
+z?sk=Y_yp!G?&0|wyL`WL#-2a<Y%Nm*0!f=M5^Q2)8mKioaZSO%NtSJ|)#z1g7a4*k
+zn^kD1oiNoSMH7_(a;#N<fFC#A?#u-EyEW?2+xrRyN%FPc*1paFjZZ)7jPcp0Et$)Z
+zjFpLh&Lj=)7Qr6Z)hL9?1o%!O>}xjbcE^-&^OaG;1VV$ZLXAM{?w@7WK7BcM1j!NH
+zfJtN3Z$%}<!T7|s*Rdd&qRLhH#prcwV70woT&-*d$T_pH+49pg$hh321f!jrV>M&E
+zyiz+dfSgf$WHp0&^zt{{xY><Yv{6b|;E%&4>~Tx2i$*lZqJukHi__XDMB(sIP!-aK
+zNZ3&JR386i(iz_3T3N2)>tDQ(GO;%7p~fnXo)NQMKOx1q`8;-QU-H2t9=Cd|%8j0w
+z9<-;{Qkfr&@+CBt9wDhF?uYE&(6>fa&<DH1qqr~GvXr?O`xeZN6$Hi)bqNU|!tuc1
+zw4>z=PJJ!PaZhH9_Ui}hM%OcPJ$+6aYQo+AdZ+;*VIEdwhqNF+ml|MbS)P9#AqwtP
+zqrwB10yU4!KEA2**4^EEdNIK~&NAK|y}E5gTxwQ{t_wkK{zYwrfxra)m;qb-;iU!z
+zCvp*-=X%$vJP!BgIk&>`@>e1LCn3UB)v>x+L6RIK@1d)bMwjd@(<|DgTxm4&wkl$m
+ze$pxC=b<#jT&^<NYTVySA}!>Ht*x#N?!*ugWF8eUkkSfq%UwO*xc1wZs0ALqmj~+_
+z*v+#*vYttx<qj>eMbMUC8%AB5pGAy4UcHWdt|zwZfccOK<TrUgCuvI+<Hk>;#=7&M
+zjc2zDP41SWtf#;+q}-3P`vR+d)f1rkvXr1+o3y{4`B~hf5N*?K2GJN^-kT;myZ#q~
+z5P^J12l8`CRiJ@zUVaM{g(f`G-7HDuhiP2P9A3|3HV>}c>Kgu{xu;o*n&N_?lpR0Q
+zdDUAZyKf@P9#z%ABV<Gn9cYY}>aVA0yap-aW;cUOFTyj!yg{mtvWX^?yh=bwLFL{^
+zh*_Q?-@ID{?UE>Zi}yEKO=}P!SQGoS7G>0ohx#R=LF5?|;@#d?Bv~IJiU3@~s#QfX
+ziT0T$xGX(rI=f=zfHQ;lEBKGJ*TaW2z3{r-d{fafc)bFL)%?ouBf#E?YZ-N>yqI*#
+zzBxve;7*|(aRvwNgJu-Swb4qlEVFh8dHFChZI3sQ&uyHP4_eOs${s~Up1&^o!4o4s
+z{1&>*mYn@XnDH`xy7deVwlN?2SGl!N2t1!1%4H9te?)OGyc%qe#~;oL`8^cl<^h)8
+zXt|PV0sdo`R{gkC3L1<7tB%MmzY-@fO^{V#Vr-1fD+~R--}R7A8s74Yo4Bu*A7+SZ
+z1voW@M21W;YZksYUeY%{sbYYTdky#^>gHwes7{+H;w?s;hq!Zz9tGX$i;Y)vcAM%Z
+z8Qa-Ef?FU=5LecM_8J_FE2XDs8;YJ(*z#C4k+B719YqoYA(MAplzcr1l@jzdQm%U2
+zDY1Gy=o>tw5I2d@f*9RE?%tuDc5J2@`K^<yL$|XYpX6%a?=}o&T@0$edETGSJ%il$
+zA<NWx^arDZ?JJE9yZz~`BhtT~bsgIldwaco(Qf5rlArfCGD-SWHEws-29Fs(b&^9l
+zX?z?a*CM49Ay`t-M!4RyGqoxCZf*h&F=oZM#w`}f$nRxz@r7Dd{dSrbFO)Dsrf}d?
+z>TFX5om?jy=f(5TqLQ&hCA67pnZ{d&{bL4$8Zh2U=%^>K4Hk#tggj{&QA0d8y3KvX
+zmJ+4Lh)nvy>p7`Fv%a+V+wUH5*d(@f%77oS^2tnDc~mQ5@|_ausROOOqtr|k%AK&J
+ziI}vxkEE5OT_iarlewmFiKeNk#+-#kLi&puJRCDWLTsXj=IbapYZC@)xVO!E)*yC^
+z*cTI4#<s}8JT8(Jt~nWG(BPQylj$$SwN#1e@sl?gyYpIi8%F)Q5@0maS*K?}*9q9|
+z_tMTBbN&@Djhnp|2OoqiHSK{?s1cA9%<&B=jR!`-?c$_73oe)gvLi4t;N7MA?)D6k
+z*4aIdCv~*s7wO7!1{m~jjG*COXQXG6r<K{4U)*C=3uo!HAJt3-Qw$T_e2^xtUnf62
+z^+c=SN5pU(#L>jvD{a>9eKolk?m^^E2gPsC6-x*ZF3U~>cS64f4OfxLm0hvJiK;p*
+z?`^cJ^iZ<V7BOrGx8S0w2kI)tS+%~hB809h-dEYtAo#3QY)(F+_(S9MlZ%-H2ra2S
+zW|{?dA=m{$3ZlDKkj0X<*`_GXWSHt#TbUrxkt~A5>5;c>$_OfGw<6S6FO^LnvP3g5
+zVVOWh#%q3)x}_F&vHmvm>R!tECB{+r{N9L4_6!SGS+p?P*fAy0IqN1>z41qp!u=NW
+zRJeO7Ea2N?rsv|fc!nfMemE3~api$a_fos}d2f3k-+SKK>{#6^4ZFv3Z56@~AKh6t
+z?Kmb4z(Q$V>Q}%;Ap9MwS2xdK{nfl&yUtLJdEY0izc>!*hc~;%M%l;g3Ht}{+JiC%
+zp~cnDtyV(I5l;Nlw(F&#4UIU^{m8fJ8Ow%Pr}~_%?Nk7_gnigwbzI@ptPYIth%lql
+zp{^{<gzI#h{FRy9K8eo|JL1?iHyAxM%YUB;YITa{8^v(IhigUlh)j+_XM8a}ookD(
+zk)l_Ot!)IfFma2@^~O~U>C;X+sQm+(O++vV>vts(xm++lWZPIjhmOZ{p2{%v`iDV0
+z#-@kxf;&urRn`PIjLK?~ov2bS8i>rU1L0}>R<W&J(1URPrd^<K%dvHWR>VX)x*>Ig
+zuPJ~zw+cCFA@Jj_UR{uSNy-<9jtw8ThhVi3WCOWs{mF9M$S-#I8&|scetyJ_zjdA7
+znG?U5VT_w`Ng#$Wm?fpUm<ymRQPya2qRF~n?E<Hj<&`ChKlcuib~XJlbhfqGOGC8r
+zrUo2bZzR^;k8MKxP+F4nm2+@Q+Zc*HPzA?yjsCVG_W@eL=eGPV*1Wp4tzxOpSIy@h
+zbGr4v$(2b}4Jb8|o0{OHz{#VAl72bw0vp1vYM^KSPRD$d`5Y>Wu7c~XuUQbVT0F@P
+zInWRwf)DdMKI!wi>RcPTeb+y&MY@avI8)P1Xw-)AE7zMQ$acT9>sx?!M|gPQ1bX1l
+z#-bs$=84SS5T}nw?Ky(E8n>z6q-+6<t`TuY_aNuHX_oaMV>a5o71MV-j%a6mG$n>p
+z14n#-ru@xL?hl-rvDRUoMW^y|y|F<NDt`D{VZCn1zke|ZmVAuU#(hrnUxW?ZOXG2<
+zsyO7sez)2n#Dicy^~S~bdlF>uN3BT0KE#;<x2M(1rRO-0l3a$ZS7wbcI^!dxNYt3t
+zmC?t5x}X+}mi=~fXCA_mnL0?J6%vFoASZin2??+xHA(alt%@dNyxok@g&E?Uu1Rg^
+z2wKqNaXb9CpT8=Be%}Lt;-tz0;v&*=g28||p`rz?ZnlvMCpe85=oUYzcl;E`^@`k^
+z^Uk>|O{f(sGOWF6c6|}vOZQBhoFHvfZlJ$N(`x7#g9R6+K;@~s#;OBKQqcF*$u#(7
+z0|IunFy2}R7&)(rD=m{Xt2U28=X#y=g0&Ut3it>LYnQI!LCGIxdQ90wmC;<2ZnS8I
+z%bIcsXuRY^lud6l3%iEyHMCo51A2VO!|xDe8QoPEhO?E{+vLF*%-Y^iMTc=MBrAjH
+z3#Uq_w?@S_OOiQ$f~^EqFJVJhBvNd*4D&LB(>~MQn%CJD(jrzeiXWEb$_`_GKeM3(
+zj;Lc+ZI;23T>Z;bgR_R}`Xlr@Y){$~U|N9!y0u_`3m!G`49a@iW+yrHD96G!>!v5(
+zY5{?6_6qU45?av<s4%aa&!`bDeL;jp+85SjP0Pj&6?%u)@X@}`yo~oj1~&!AEsdJ>
+zcWv4~VnOx_d!lw1RXSHi+DEvtY%UgPLZEmXx@FCns;e3-O~2Gca-mLYBab@OAtuq+
+z5Irr<?^XA+rwwCaFXczszM8F%?%k2MqKCot?DT5bbCje%nH=R~*9mtIs9JMD)urDT
+zBI<Y7p|Dx_WLj0#jUOJK`&4z8Q}!P{f{JIBzWRug$?S!4HV*8Ai(Yiu=FyXdN|lJj
+zaH=Qy+9{0{C`hA4!-1OhC}5t@A<sL@-ci^(`9k@tB#prEej<@-1Of977-7DAMt8Fz
+z?!&fP4)0zd$yR!8f8v+w8l#4HIrIdjo0fYscuq-9m=y&#6?#|LkQ#HJb++A;Ml0nM
+z?Ja^)sEiL4o5P+s{cB29MtACZCkpHn6bEMx?IAZB191+VPL~FMyDBuk<+=5e^zXK;
+z<R>(*^rzHAyN@@QhWl_ul$b_CH2_PHc5VZwaNH-%^36;@vLeeH32Z<{-Td2^`s<fM
+z!tHGUR8sXLAcd*}EK}xSlXb(fsWOT+!y6S333@YfleHl@Mr!Wc|3*xbh4)%oQ&a@3
+zvZU6_|6EpC0yr~$Pq}k2?})(WL?Fx_k9=AZJ7*Pki7cH{syd7JWqkgr!j@a<va{)U
+zqzU%oL3!_(CrcXjH4-GX&Mhg`;u4B*O}h<$!LZM1GwLV<hMXPM_uR#`Lbg1KtdlTm
+zJp9RwafoW2Hl(gzwwD<3&o8_xW{(q;JNAL)l4A%grZ*p$JB9toU3gzzQ>J=YTO;2m
+zMLL2*!$<YAoT=?U6N8_uY$;;V^|HoaxYcE-m=zA&Xqv|^9tN?jy5*oyR1(_i>s$Vu
+z?Nd{4hu?5UR5D}j_07B^Z?CI&-gF-@K}j{NA`0pOEKhy}`_A0XG7>7&l?beg;W=Hk
+zgvv5Gaqasd{!0R<Lrd*E;_GR2gE#G2{e1>O2wV3TBi|zPWL{is&#)$$w7$0?ef~GP
+zZ&C7gD#tW6y+2j_@977g-R*VnNH=~CX=FSQoPGn^8)+I1wJqj04(Oc(>tPsGEzVT7
+z=1>q`$kz4^(LF}*4#H<vsVVTC|JH=cis(I)T(bVPULt2j0qU8-zir|{P`?Zfp=iZE
+zngXKfVU6l1wqRwwPKFlel(V`hg*pY308eLWh7En#4ohTc&!j$>%kygS4?is@SJhej
+zIvN-?uZfnCt0NN^$a$R|Z=kAYm#$oWbgE9JZd#FYi88ScD(j7rcNeX!%gZt~uMbB@
+zpx0$Gg;|<$;y-ZiMF?MALIX5qUlF-bemr3D4lbQ6DLE_+*9ZpS{swrgdNuQ-6W?2{
+zEHQSU)=VN~f7faY1<F#0*J^Y^auu146MTJu>Q6B_H4|oc(!8@yitTqmZzpBvYHkdm
+zafz3`+i-5hHh<p=m0oI7O#5ghZ4HJ#+1j9ZK?KXQ^(g8~E_~oVbnkG)_**(V>Uzk(
+zdKw7qrhUABWyG(4m~s^@8D=dXgw@kpOiWl>F`w+Z(ZAys(>{?dgE!Jnh+%go5WFj-
+zy-Ptg4J2tt*DOnd2$-Ob3bI!&W<6U5>N(?-t+j@k#8mZMROx&g!um}s8}Qrfjs#?A
+zkWT5?BAyJ%pmINNWVkgk1N09D&gz=wvoTq92z8pQI{3&y?o`)<eutmIv-EH73Qj9;
+z2@Y`hxK(N27gyy#Q1*QoBgXl<vFExZg^jx;(uS5d#wufj)0b$>#RETK`i&6bZ4&RB
+z2q2a%-DUrRhn*8Eq{XM<k|E^?cp4s~(E*z*l5iu1<>~S$dH$R~m3#3s=hO3QOjgJN
+z=Se|Tg|$C*WmZYSTe}jY3w_Gdgl<k)mU?Z+eI7IM$sBz$Ws|4EsS-uS<fIzrSd#IO
+zI|IG0*_@IaKmvAHyvO4`O`2u<<EBYY<a?bO)l{n_N0v>vtu|tG?n}Xr)+->_N(ePy
+z<c(um-1ox3z1FdMWc1s=qoz3L{n44HZgne)Wx{mmewpp;%U*A*Pj<}W{?YL|)TIG2
+zQTE8Zz=~Rmb%t*`tYdYA4sqM?Pi#kv@EQsaswb}XFPSX2Tp2ihWwKJn8$BkU_`OM~
+zLZQt5{>{A1cslSX8yL2dk!gXG8bc;m&Bwp^!`$lcAjJx}_UPpBcpAgnd4%VgJwr*p
+z0LC9G0jfQ8^d@$gED94X@+HNyeRu|666(%?9rv@=F+HogI`yV#p;dL1fl*keB?mIt
+zBk$W<-ocLa{?!#P1cZVfj|=jK>kxtkcAAVx<Q-)KLifl9!)<P?C7-&waLr`%7rhnh
+zZk4VJu_P-{k>QvmuDKdd9Cj;+@UuboL2Yy_AAY3x^Cs5~q8<IM=Va_YBFv^*Fu$V`
+zhU~w41F*j9@oI@tWz-Msf0;b(FcgU4{tjH0p~*fhof2c)n80eGz=;_>cd?8jAV`cE
+z*x+;+YAlC5k<hdsWsYzyi*J1wG{_!dsy{9He22Zc-si5n3*w`!u6;#EGv2*&>c>3Q
+zFRHJRcVB0+BVyag-xTr=nEr)S4eQ8J_{4GB&COj>|Mz=pD<N?FmAE`R2&?tSD3pJ)
+z!I$q<_K_YPt?i^X0KoC0a~XYAQNA9shWnP!;FEvk$Ro_UlELsp^Y%O!Oe0X_vZqES
+zU2p!r<P+<#bah+$+hGA3GuuE~X~fD=aV-|fygzRF^#r3wdP0ZAm5wh=)7Qoc2fJ`%
+ztm_8WJ9#JRx+!ZD0q(cw;svup8#<jhM`^*V3z@E~1p=Gt%AO)^eKO<&H=`X*DQ3%D
+zHc{ta<#Ri4QjA;Bp~fAOQz(WKipLXDC+7w(+?&ES-)@WD^1Q);is?n_25bj`4IAF^
+zn;l~bJ6YIxi^rFZ5ifRm8$CPpSwBTg|Awgj9(Rb^u-Zv6jkd7a9G>h5h{WB_Xz#8I
+zM(I*H{QcD>%O<qt&=pj$AS3bRl}wzEaW?vwPOlDK+oMWE))7|(1-lG1K`-aY`=}h^
+z90UO7ji=jR;}=hJ4x-^)1-{2@+m@{{YKRDSnY74uw1s1Y*W%5a^sKa*EU)n}6?K$F
+z=*ML^1=Ty|X0$DlsRUiCIZbcI-D)*X?@tK)LGy*V<KgKkv1tR_>4FxX)xWagimw?M
+zGPkBKp!i@oM8q0d^Qf_~<NQbMgom31Jfi|`WEmO-z1_!VUp@weTLvy0cMXW4NliBD
+z$ki*Gn5KQH4M}8a`jwe1&b|XfFa$UHjqZQt<a(hD88}dj0n)mUB1r&K?xkQpJD_zi
+zVICR)K&xKE8x+^O_g4bn@Tod2k##C?yAe{N6_Fv=#}9werSH0T=v`?~Mm5<<^jp}B
+z2tnPLd9&#x7{F6cl5&oJcOGxzD>kElZ1~iDBySlhblu7MH@3qx|G3Ssf832Oby@K^
+z?3z!xCRA*LqA4T*>42mGRJynJdf2eKFmqIZelh6I^k@lLl%(cFyyIdi-9{tY)dRki
+zi$K;5eX(ZHXHZJnVVIXCq|m@0VoJCdX(>>sfF5H9Sz=%x_lX0a1VaDlGpdI_hf4L=
+z7R%w2PSfxHUkM~whs`u=T*A2G;~yybix5jTDb?zc8#<#;IuVSXe>d~L0e>$pj0pDh
+z-Tm{F_kaJqV(;FKl`jE==GaYkbm_n&>VheJ4yn~;m{NrJy_`<_&raf^zu=z~rl_)$
+zNmRszia|37j8!`{D58fD{C$*eI3Gfzez}G8@JWAy|GwL&*6UGW854{yhx|;Qv$*Dp
+z{j>Wdb0Bz|f4Mw(pa1@bx#;Qpw@A2ATb)nv(Row<E`27}06R2O2b-VNjrzCk^e>f3
+zca_war*814F!a3PM&t%}TcgOn7g0mO@+N2?w^z01z=b9l3gQL1bEnYKZ=5h5#r0jV
+zYz)wrgf}srP41CQZTn&7fv)XU%L$;}oKukLa1BC4lRQqw2BvC}NZj;V@6;?SDp^z8
+zVZa-d93GUeSK-kycR@Xfw4NXkV_?BjU0td007aGzC{X{&-6slAK=s(+C*mr!zS^}6
+z(7YiM5R_rPg5bLJ?!lidRM0~w%J231y5TcKyCj+N$B5-7j5(@}^?l-sC~jOahEr!Y
+z`N<sX{G4iJo6-Kl&q%X}NqOAwDQn{>SY8^HaY|fCN>rt|Rz2O(!6N3+;Uq|w{K$rw
+zz;Zvsjd7Iv)|sr}tT9-UD)Cj>?F+~@EZXi_rL~5-_#r8isLhZVUBIh`^Xwz#*i8zI
+zmD6R1`e1)*uftN5>oB#IEU;iaO2iad(p;4$+T^9S241x#lLv(3Nh$dG@7J)B-ht55
+zeihr2$sc9jTyNp49@U@TNYpDlc@l67>i7x*{mbO8<rg9|%-_{0%ZJ*J4Qv%}|2R2z
+zF?R!8(g@3wSQEgk#%zQ+?XUc_v6$1|uijOJ1Q7Fk#|Ua~zp<a1IA7&_6Ij3<-Jh>i
+ztR&8R0drM(KY{#fGCXryWsgl#;VlR?6P6^ARng_CY~|(%?Tdk;R9n`Bww*0=BLK6|
+zWIzgxNE(g^^!@;WbrJpLjFI6`?cV;H7eQVv{!={B35HBmK6S=Z^9QklHpZqzVP!>S
+z{+Ig77H+l1Jj01DDkYo-pOgRnWj4vpiU!XLICQl_k%gI6zLx6~m)k)vOhYB(&?`xM
+zrN9<9Qz<XxB3<fueJt#;_2J<rb%7tD&R{K5PrV2wyjv|Q6JuekRRw5l@`v)|x$sz;
+zyJ_MmI(HRiVGJdE-nwNJ@Vxcj;jD+DL1^e&>65w!M{oZ|QjT)+Sdh2INdyUjv!?Y}
+z<&ieDEzM{YgyFKy>?$s3x{Q^7)Y+V$2>Wbt4A{9=2nKq(U&rmj$2%Q=`On>OZ<;dm
+zWjfa^vrC6u{BzDF9r=t`jsH@=SDY1N?Vg{^@2Q)}-3RkoJf|?jmr3q*E*1Sr5I#Ua
+zG!us$SpT>ryyYZccplOHxybgIY4)t<FmVAjE|9NM9zPnfp+99<{Bt1~dQWx{UrHbW
+zl)1e~5p6o1L=<gi35ezE11Wl)wQ-~=<Hta0i|aDt@*@jXlOT-PWUnE#EeQC^n{xUu
+z4KIfmTYI?-+Hwqn;Bv{NX+QZ=QGPFByDD-aa|O}K65^x^Yi%`C%e4*kCce#8MwxUn
+zDTHj^d3jPNDQusL*Z`4UG<POO3TLoo-g51#K}v=V(q^)dYvm<jQq^WfW;z#-%b;*m
+z^tTZZLMiL6@F;|tl;YCUDEmtKbs+;5krGT7X{$`CU1nubWgd0itm7=xdMP*aN^&86
+zWGcD9C?WPzW)h(t7$%0)D`lb<@pW81mIYDdNIDg}qEpdCQjOxomGMl|BCZ$`BZB<R
+z`+_(^{|4cw+_37`V7(W-$g4h5Coa#f`s~@UyEX08BRn9H0!B`dNMVx(PToLC5|s*8
+z?%)Yymk!=uK}r;v66Q|fN@bfC?w$clW}O=LKSQ2+zP)$`M5(Y05OX)&Kwq4UqhKm)
+z*=K!H#VZ%^;>o!^!NtiN8zaHhxKMC`gZogwU}6Uj@4*88H*Nl2zwiGi{R?OB|8D_Z
+zT%O(@T%6n-U7f`na|$W{zr_Dfznfnm4E2{73+))Je*PZM7zSLcrd`?2fomt9ety2-
+zuS6<U97zkt|0dN53MXokq)wnqr)vNII6&-{Rw@0r`tlJw%#jSm(NNWbSQEW;?{M({
+zLGjLO+tjwM{^yWa21>3f3BGBYHJWkZ+8@G9Ujkx>_s4VWe>~!^9P)rrCp!`@`?E(*
+ze!Ru*`udXBMD>rqI~MZvON+z^!)V?xR;Q_<YO!8$@#7dItY@h7FZ`f`#+9miX)G>^
+z#<0j!ykN@@PVGH&u9hN<G!7b1@^3t(Zsi95b2k|6kcr}#*@+|DLmEh8HAN)y6er@9
+zFd7nB$|K>b0@)14e?HV9&}O=l=&I2FiG;cW`9D5tiWL9tBJ^J)9O!0{PWmOa81x^_
+z(=Ua8Z6Kh2kpJqCVF&epGKl~C4Cep7_!NHQ7txF;aNPY7`=mb<HH}6cJ8Rek#U36$
+zCG#8lf1YNNbvy!kh8;6h&y<y`aHR>5|Hu?@yxO+Bd0hR=^*;<CvMmB)y2dU;i(r|e
+zl`BNDSOXWYuD)mAJP5YqBPbA%ps1*5{cvPP=06kr*B0&myX$@D>!-29U?hx<sSI!V
+zU+J-nVH(9UiTUqL&2pXPxXk_swEUkAqSOB|lK&XL@eSZ=ob)HWzPo6=G<+RR&erK4
+Hhxva26JRqg
+
+literal 0
+HcmV?d00001
+
+diff --git a/scripts/test-fonts.mjs b/scripts/test-fonts.mjs
+index 97f71c6..344aa4f 100644
+--- a/scripts/test-fonts.mjs
++++ b/scripts/test-fonts.mjs
+@@ -6,8 +6,21 @@ import { readFileSync } from 'node:fs';
+ const layout = readFileSync(new URL('../src/app/layout.tsx', import.meta.url), 'utf8');
+ const css = readFileSync(new URL('../src/app/globals.css', import.meta.url), 'utf8');
+ 
+-// The web font that stands in when Khmer OS Siemreap is not installed
+-assert.match(layout, /fonts\.googleapis\.com\/css2\?family=Siemreap&display=swap/, 'layout loads Siemreap');
++// The font is served from this site: no request to Google Fonts anywhere (they slow the first paint)
++import { statSync, readdirSync } from 'node:fs';
++import { join } from 'node:path';
++const srcDir = new URL('../src/', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
++const walk = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
++  e.isDirectory() ? walk(join(dir, e.name)) : [join(dir, e.name)]);
++for (const file of walk(srcDir).filter((f) => /\.(tsx?|css)$/.test(f))) {
++  const text = readFileSync(file, 'utf8');
++  assert.ok(!/fonts\.googleapis\.com|fonts\.gstatic\.com/.test(text), `${file} must not load Google Fonts`);
++}
++const fontFile = new URL('../public/fonts/siemreap-400.woff2', import.meta.url);
++assert.ok(statSync(fontFile).size > 10_000, 'the Siemreap font file is in public/fonts');
++assert.ok(statSync(new URL('../public/fonts/OFL.txt', import.meta.url)).size > 500, 'the font license ships with it');
++assert.match(css, /@font-face\s*\{[^}]*font-family:\s*'Siemreap'[^}]*url\('\/fonts\/siemreap-400\.woff2'\)[^}]*font-display:\s*swap|@font-face\s*\{[^}]*font-display:\s*swap[^}]*url\('\/fonts\/siemreap-400\.woff2'\)/s, '@font-face points at /fonts');
++assert.match(layout, /rel="preload"[\s\S]*?href="\/fonts\/siemreap-400\.woff2"[\s\S]*?as="font"/, 'the font is preloaded');
+ for (const old of ['Inter', 'Kantumruy', 'Noto+Sans+Khmer']) {
+   assert.ok(!layout.includes(old), `layout no longer loads ${old}`);
+ }
+diff --git a/scripts/test-watermark.mjs b/scripts/test-watermark.mjs
+new file mode 100644
+index 0000000..b008098
+--- /dev/null
++++ b/scripts/test-watermark.mjs
+@@ -0,0 +1,42 @@
++// The watermark is one repeating SVG tile with the student's name (npm run test:watermark).
++// Needs Node 22.18+ (imports the TypeScript source directly).
++import assert from 'node:assert/strict';
++import { cpSync, mkdtempSync } from 'node:fs';
++import { tmpdir } from 'node:os';
++import { join } from 'node:path';
++import { pathToFileURL } from 'node:url';
++
++const tmp = mkdtempSync(join(tmpdir(), 'watermark-test-'));
++cpSync(new URL('../src/lib/watermark.ts', import.meta.url), join(tmp, 'watermark.ts'));
++const { watermarkBackground, escapeXml } = await import(pathToFileURL(join(tmp, 'watermark.ts')).href);
++
++const decode = (css) => {
++  const m = css.match(/^url\("data:image\/svg\+xml,(.*)"\)$/);
++  assert.ok(m, 'is a CSS url("data:image/svg+xml,...") value');
++  return decodeURIComponent(m[1]);
++};
++
++// Khmer name + date, as shown on a real screenshot
++const khmer = 'សុខ ដារា · 10/31/2026 09:41';
++const svg = decode(watermarkBackground(khmer));
++assert.ok(svg.startsWith('<svg xmlns="http://www.w3.org/2000/svg"'), 'valid SVG');
++assert.ok(svg.includes(khmer), 'the name and time are in the tile');
++assert.ok(svg.endsWith('</svg>'));
++
++// Tile is sized for the text, never tiny or huge
++const [, w, h] = svg.match(/width="(\d+)" height="(\d+)"/).map(Number);
++assert.ok(w > 150 && w < 700 && h > 100 && h < 500, `tile ${w}x${h} is a sensible size`);
++
++// A name can never break out of the SVG (XML injection)
++assert.equal(escapeXml('<a href="x">&\'</a>'), '&lt;a href=&quot;x&quot;&gt;&amp;&apos;&lt;/a&gt;');
++const evil = decode(watermarkBackground('"><script>alert(1)</script>'));
++assert.ok(!evil.includes('<script>'), 'markup in a name is escaped');
++assert.ok(evil.includes('&lt;script&gt;'));
++// ...and it can never close the CSS url("...") either
++assert.ok(!watermarkBackground('x") ; background: red; ("').slice(0, -2).includes('")'));
++
++// Very long names are cut so the tile stays small
++assert.ok(decode(watermarkBackground('x'.repeat(500))).length < 1500);
++assert.doesNotThrow(() => watermarkBackground(undefined));
++
++console.log('Watermark checks passed: one tile, name and time inside, markup-safe.');
+diff --git a/src/app/api/public/grade-codes/route.ts b/src/app/api/public/grade-codes/route.ts
+new file mode 100644
+index 0000000..0ac7315
+--- /dev/null
++++ b/src/app/api/public/grade-codes/route.ts
+@@ -0,0 +1,25 @@
++import { NextResponse } from 'next/server';
++import { adminDb } from '@/lib/firebaseAdmin';
++
++// Always read fresh from the server (then cached briefly by the CDN, see below)
++export const dynamic = 'force-dynamic';
++
++/**
++ * Public and tiny: the class names and their grade numbers (e.g. { "វិញ្ញាសាពេទ្យ": 30 }), so
++ * the student pages can show a class name without loading the whole Firestore client library.
++ * This is the same information the public registration page already shows.
++ */
++export async function GET() {
++  let gradeCodes: Record<string, number> = {};
++  try {
++    const snap = await adminDb().collection('settings').doc('app').get();
++    const codes = snap.exists ? snap.data()?.gradeCodes : null;
++    if (codes && typeof codes === 'object') gradeCodes = codes as Record<string, number>;
++  } catch {
++    // fall through with no names: the pages then show "ថ្នាក់ទី 7" style labels
++  }
++  return NextResponse.json(
++    { gradeCodes },
++    { headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=86400' } }
++  );
++}
+diff --git a/src/app/e/[id]/page.tsx b/src/app/e/[id]/page.tsx
+index 55534bd..ad86af4 100644
+--- a/src/app/e/[id]/page.tsx
++++ b/src/app/e/[id]/page.tsx
+@@ -473,7 +473,7 @@ export default function StudentPage() {
+ 
+   if (phase === 'name')
+     return (
+-      <div className="wrap" style={{ maxWidth: 520, padding: '24px 16px 80px' }}>
++      <div className="wrap" style={{ maxWidth: 520, padding: '14px 12px 60px' }}>
+         <form
+           className="card stack"
+           onSubmit={start}
+@@ -481,7 +481,7 @@ export default function StudentPage() {
+             backgroundColor: 'var(--theme-card-bg)',
+             borderColor: 'var(--theme-border)',
+             boxShadow: 'var(--theme-shadow)',
+-            padding: '26px 22px',
++            padding: '16px 14px',
+             borderRadius: 20,
+           }}
+         >
+@@ -501,7 +501,7 @@ export default function StudentPage() {
+           </div>
+ 
+           <div style={{ textAlign: 'center' }}>
+-            <h1 style={{ margin: '6px 0', fontSize: '1.45rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
++            <h1 style={{ margin: '4px 0', fontSize: '1.2rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
+               {ex.title}
+             </h1>
+             {ex.isSample && (
+@@ -525,7 +525,7 @@ export default function StudentPage() {
+           </div>
+ 
+           {ex.description && (
+-            <div style={{ textAlign: 'center', color: 'var(--theme-muted)', fontSize: '1rem', lineHeight: 1.5 }}>
++            <div style={{ textAlign: 'center', color: 'var(--theme-muted)', fontSize: '0.92rem', lineHeight: 1.5 }}>
+               <MathText text={ex.description} />
+             </div>
+           )}
+@@ -557,9 +557,9 @@ export default function StudentPage() {
+               autoFocus={!studentLocked && !name}
+               readOnly={studentLocked}
+               style={{
+-                fontSize: '1.05rem',
++                fontSize: '1rem',
+                 fontWeight: 600,
+-                padding: '11px 14px',
++                padding: '9px 12px',
+                 borderRadius: 12,
+                 backgroundColor: studentLocked ? 'var(--theme-page-bg)' : 'var(--theme-card-bg)',
+                 color: 'var(--theme-navy)',
+@@ -659,8 +659,8 @@ export default function StudentPage() {
+             type="submit"
+             disabled={busy || !name.trim()}
+             style={{
+-              padding: '13px 20px',
+-              fontSize: '1.05rem',
++              padding: '10px 16px',
++              fontSize: '1rem',
+               fontWeight: 800,
+               borderRadius: 12,
+               backgroundColor: 'var(--theme-primary)',
+@@ -1227,33 +1227,42 @@ export default function StudentPage() {
+   return (
+     <>
+       <ScreenGuard studentName={attempt?.name || name || 'Student'} />
+-      <div className="wrap stack" style={{ maxWidth: 680, padding: '14px 14px 80px' }}>
++      <div className="wrap stack quiz-taking" style={{ maxWidth: 680, padding: '10px 10px 70px' }}>
+         {/* Sticky Header with Timer, Theme Toggle & Submit button */}
+         <div
+           style={{
+             position: 'sticky',
+-            top: 8,
++            top: 6,
+             zIndex: 40,
+             display: 'flex',
+             alignItems: 'center',
+             justifyContent: 'space-between',
+-            padding: '12px 18px',
+-            borderRadius: 16,
++            padding: '8px 12px',
++            borderRadius: 12,
+             backgroundColor: 'var(--theme-card-bg)',
+             border: '1px solid var(--theme-border)',
+             boxShadow: 'var(--theme-shadow)',
+             backdropFilter: 'blur(8px)',
+-            gap: 12,
++            gap: 8,
+           }}
+         >
+-          <div>
+-            <div style={{ fontSize: '0.84rem', color: 'var(--theme-muted)', fontWeight: 600 }}>
++          <div style={{ minWidth: 0, flex: 1 }}>
++            <div
++              style={{
++                fontSize: '0.78rem',
++                color: 'var(--theme-muted)',
++                fontWeight: 600,
++                overflow: 'hidden',
++                textOverflow: 'ellipsis',
++                whiteSpace: 'nowrap',
++              }}
++            >
+               សិស្ស៖ <strong style={{ color: 'var(--theme-navy)' }}>{attempt?.name}</strong> {attempt?.className ? `(${attempt.className})` : ''}
+             </div>
+             {remaining !== null && (
+               <div
+                 style={{
+-                  fontSize: '1.25rem',
++                  fontSize: '1.05rem',
+                   fontWeight: 800,
+                   fontVariantNumeric: 'tabular-nums',
+                   color: remaining < 60_000 ? '#ef4444' : 'var(--theme-navy)',
+@@ -1264,7 +1273,7 @@ export default function StudentPage() {
+             )}
+           </div>
+ 
+-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
++          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+             {ThemeToggle}
+             <button
+               type="button"
+@@ -1272,10 +1281,10 @@ export default function StudentPage() {
+               disabled={busy}
+               onClick={() => attempt && submit(attempt)}
+               style={{
+-                padding: '9px 18px',
++                padding: '7px 12px',
+                 borderRadius: 10,
+                 fontWeight: 800,
+-                fontSize: '0.95rem',
++                fontSize: '0.85rem',
+                 backgroundColor: 'var(--theme-primary)',
+                 borderColor: 'var(--theme-primary)',
+                 color: '#ffffff',
+@@ -1287,11 +1296,11 @@ export default function StudentPage() {
+           </div>
+         </div>
+ 
+-        <h1 style={{ margin: '14px 0 4px', fontSize: '1.5rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
++        <h1 style={{ margin: '8px 0 2px', fontSize: '1.15rem', fontWeight: 800, color: 'var(--theme-navy)' }}>
+           {ex.title}
+         </h1>
+         {ex.description && (
+-          <div style={{ color: 'var(--theme-muted)', fontSize: '1.02rem', lineHeight: 1.5 }}>
++          <div style={{ color: 'var(--theme-muted)', fontSize: '0.9rem', lineHeight: 1.5 }}>
+             <MathText text={ex.description} />
+           </div>
+         )}
+@@ -1307,8 +1316,8 @@ export default function StudentPage() {
+               key={q.id}
+               className="card stack"
+               style={{
+-                padding: '22px 20px',
+-                borderRadius: 16,
++                padding: '12px 12px',
++                borderRadius: 12,
+                 backgroundColor: 'var(--theme-card-bg)',
+                 border: '1px solid var(--theme-border)',
+                 boxShadow: 'var(--theme-shadow)',
+@@ -1317,9 +1326,9 @@ export default function StudentPage() {
+               <div className="row spread" style={{ alignItems: 'baseline' }}>
+                 <span
+                   style={{
+-                    fontSize: '0.85rem',
++                    fontSize: '0.75rem',
+                     fontWeight: 700,
+-                    padding: '3px 12px',
++                    padding: '2px 9px',
+                     borderRadius: 999,
+                     backgroundColor: 'var(--theme-page-bg)',
+                     border: '1px solid var(--theme-border)',
+@@ -1328,18 +1337,18 @@ export default function StudentPage() {
+                 >
+                   សំណួរទី {idx + 1}
+                 </span>
+-                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--theme-muted)' }}>
++                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--theme-muted)' }}>
+                   {q.points} ពិន្ទុ
+                 </span>
+               </div>
+ 
+               <div
+                 style={{
+-                  fontSize: '1.25rem',
++                  fontSize: '1.05rem',
+                   fontWeight: 600,
+-                  lineHeight: 1.65,
++                  lineHeight: 1.55,
+                   color: 'var(--theme-navy)',
+-                  marginTop: 8,
++                  marginTop: 4,
+                   wordBreak: 'break-word',
+                   overflowWrap: 'break-word',
+                 }}
+@@ -1348,7 +1357,7 @@ export default function StudentPage() {
+               </div>
+ 
+               {q.kind === 'choice' && q.choices ? (
+-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 10 }}>
++                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 6 }}>
+                   {q.choices.map((c, cIdx) => {
+                     const checked = val === String(cIdx);
+                     return (
+@@ -1374,7 +1383,8 @@ export default function StudentPage() {
+                         <div
+                           style={{
+                             flex: 1,
+-                            fontSize: '1.2rem',
++                            minWidth: 0,
++                            fontSize: '1rem',
+                             fontWeight: checked ? 700 : 500,
+                             color: checked ? 'var(--theme-primary)' : 'var(--theme-navy)',
+                             transition: 'color 0.12s ease',
+@@ -1396,12 +1406,12 @@ export default function StudentPage() {
+                         type="button"
+                         onClick={() => insertSymbol(q.id, sym)}
+                         style={{
+-                          padding: '6px 12px',
++                          padding: '4px 9px',
+                           borderRadius: 8,
+                           border: '1px solid var(--theme-border)',
+                           backgroundColor: 'var(--theme-page-bg)',
+                           color: 'var(--theme-navy)',
+-                          fontSize: '1.1rem',
++                          fontSize: '0.95rem',
+                           fontWeight: 700,
+                           cursor: 'pointer',
+                           transition: 'all 0.15s ease',
+@@ -1420,10 +1430,10 @@ export default function StudentPage() {
+                     onChange={(e) => setAnswer(q.id, e.target.value)}
+                     placeholder="បញ្ចូលចម្លើយរបស់អ្នក..."
+                     style={{
+-                      fontSize: '1.18rem',
++                      fontSize: '1rem',
+                       fontWeight: 600,
+-                      padding: '12px 14px',
+-                      borderRadius: 12,
++                      padding: '9px 11px',
++                      borderRadius: 10,
+                       backgroundColor: 'var(--theme-card-bg)',
+                       color: 'var(--theme-navy)',
+                       border: '1.5px solid var(--theme-border)',
+@@ -1436,15 +1446,15 @@ export default function StudentPage() {
+           );
+         })}
+ 
+-        <div style={{ textAlign: 'center', marginTop: 18 }}>
++        <div style={{ textAlign: 'center', marginTop: 12 }}>
+           <button
+             type="button"
+             className="btn"
+             disabled={busy}
+             onClick={() => attempt && submit(attempt)}
+             style={{
+-              padding: '14px 38px',
+-              fontSize: '1.12rem',
++              padding: '10px 28px',
++              fontSize: '1rem',
+               fontWeight: 800,
+               backgroundColor: 'var(--theme-primary)',
+               borderColor: 'var(--theme-primary)',
+diff --git a/src/app/globals.css b/src/app/globals.css
+index 08aa6db..b170df5 100644
+--- a/src/app/globals.css
++++ b/src/app/globals.css
+@@ -80,9 +80,19 @@
+ 
+ * { box-sizing: border-box; }
+ 
++/* The Khmer OS Siemreap font (SIL Open Font License, see /fonts/OFL.txt), served from this site */
++@font-face {
++  font-family: 'Siemreap';
++  font-style: normal;
++  font-weight: 400;
++  font-display: swap;
++  src: url('/fonts/siemreap-400.woff2') format('woff2');
++  unicode-range: U+1780-17FF, U+19E0-19FF, U+200C-200D, U+25CC, U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
++}
++
+ /*
+- * One font everywhere: Khmer OS Siemreap when it is installed on the device, otherwise its
+- * web twin "Siemreap" (Google Fonts). Regular weight only: nothing is bold.
++ * One font everywhere: Khmer OS Siemreap when it is installed on the device, otherwise the
++ * same font served from /fonts. Regular weight only: nothing is bold.
+  * Math (KaTeX) is left alone so formulas keep their own fonts and symbols.
+  */
+ /*
+@@ -268,7 +278,7 @@ th { background: #fafbfc; font-size: 0.8rem; text-transform: uppercase; letter-s
+   cursor: pointer;
+   background: transparent;
+   color: var(--theme-navy, var(--ink));
+-  font-size: 1.15rem;
++  font-size: 1rem;
+   line-height: 1.5;
+   user-select: none;
+   -webkit-tap-highlight-color: transparent;
+@@ -493,21 +503,13 @@ body.screen-guard textarea {
+   user-select: text;
+ }
+ .sg-watermark {
++  /* One element with a repeating tile (see src/lib/watermark.ts), set inline per student */
+   position: fixed;
+-  inset: -50%;
++  inset: 0;
+   z-index: 40;
+   pointer-events: none;
+-  display: flex;
+-  flex-wrap: wrap;
+-  align-content: flex-start;
+-  gap: 70px 90px;
+-  padding: 40px;
+-  transform: rotate(-24deg);
+-  opacity: 0.16;
+-  font-weight: 700;
+-  font-size: 0.95rem;
+-  color: #6b7280; /* mid-grey: visible on both the light and the dark theme */
+-  white-space: nowrap;
++  opacity: 0.2;
++  background-repeat: repeat;
+ }
+ .sg-shield {
+   position: fixed;
+@@ -830,3 +832,12 @@ body.screen-guard.sg-hidden main {
+ }
+ 
+ 
++
++/* Exercise page on a phone: everything a little smaller and tighter so more fits on screen */
++.quiz-taking.stack > * + * { margin-top: 9px; }
++@media (max-width: 640px) {
++  .choice-item { gap: 8px; padding: 6px 8px; border-radius: 12px; }
++  .choice-circle-wrap { width: 28px; height: 28px; margin: -4px; }
++  .choice-circle { width: 17px; height: 17px; }
++  .choice-dot { width: 8px; height: 8px; }
++}
+diff --git a/src/app/layout.tsx b/src/app/layout.tsx
+index 90eb5e9..5b5ae51 100644
+--- a/src/app/layout.tsx
++++ b/src/app/layout.tsx
+@@ -22,13 +22,13 @@ export default function RootLayout({ children }: { children: React.ReactNode })
+   return (
+     <html lang="en">
+       <head>
+-        <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
+-        <link rel="dns-prefetch" href="https://fonts.gstatic.com" />
+-        <link rel="preconnect" href="https://fonts.googleapis.com" />
+-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
++        {/* Khmer OS Siemreap is served from this site (cached for good), no request to Google */}
+         <link
+-          href="https://fonts.googleapis.com/css2?family=Siemreap&display=swap"
+-          rel="stylesheet"
++          rel="preload"
++          href="/fonts/siemreap-400.woff2"
++          as="font"
++          type="font/woff2"
++          crossOrigin="anonymous"
+         />
+         <script
+           dangerouslySetInnerHTML={{
+diff --git a/src/components/ScreenGuard.tsx b/src/components/ScreenGuard.tsx
+index d8daae1..f7b8daf 100644
+--- a/src/components/ScreenGuard.tsx
++++ b/src/components/ScreenGuard.tsx
+@@ -1,6 +1,7 @@
+ 'use client';
+ 
+ import { useEffect, useState } from 'react';
++import { watermarkBackground } from '@/lib/watermark';
+ 
+ let paused = false;
+ /** Run a native dialog (confirm/alert) without it triggering the guard. */
+@@ -169,11 +170,7 @@ export default function ScreenGuard({ studentName }: { studentName: string }) {
+   return (
+     <>
+       {/* Repeating watermark with the student's name */}
+-      <div className="sg-watermark" aria-hidden="true">
+-        {Array.from({ length: 260 }).map((_, i) => (
+-          <span key={i}>{mark}</span>
+-        ))}
+-      </div>
++      <div className="sg-watermark" aria-hidden="true" style={{ backgroundImage: watermarkBackground(mark) }} />
+ 
+       {hidden && (
+         <div
+diff --git a/src/components/StudentPortalView.tsx b/src/components/StudentPortalView.tsx
+index 0f78de9..75a8f44 100644
+--- a/src/components/StudentPortalView.tsx
++++ b/src/components/StudentPortalView.tsx
+@@ -115,7 +115,6 @@ export default function StudentPortalView({
+   return (
+     <div className="wrap sp-root" style={{ maxWidth: 560, padding: '16px 14px 60px' }}>
+       <style>{`
+-        @import url('https://fonts.googleapis.com/css2?family=Siemreap&display=swap');
+         .sp-root, .sp-root * {
+           font-family: 'Khmer OS Siemreap', 'Siemreap', sans-serif !important;
+           font-weight: 400 !important;
+diff --git a/src/lib/useGradeCodes.ts b/src/lib/useGradeCodes.ts
+index a2759d8..214cac6 100644
+--- a/src/lib/useGradeCodes.ts
++++ b/src/lib/useGradeCodes.ts
+@@ -1,26 +1,42 @@
+ 'use client';
+ 
+ import { useEffect, useState } from 'react';
+-import { doc, getDoc } from 'firebase/firestore';
+-import { getDb } from '@/lib/firebaseClient';
+ import type { GradeCodes } from '@/lib/gradeLabels';
+ 
++// One request per page load, shared by every component that asks
++let cache: GradeCodes | null = null;
++let inflight: Promise<GradeCodes> | null = null;
++
++function loadGradeCodes(): Promise<GradeCodes> {
++  if (cache) return Promise.resolve(cache);
++  if (!inflight) {
++    inflight = fetch('/api/public/grade-codes')
++      .then((res) => (res.ok ? res.json() : null))
++      .then((data) => {
++        const codes = data?.gradeCodes;
++        cache = codes && typeof codes === 'object' ? (codes as GradeCodes) : {};
++        return cache;
++      })
++      .catch(() => {
++        inflight = null; // try again next time
++        return {} as GradeCodes;
++      });
++  }
++  return inflight;
++}
++
+ /**
+- * Class names -> grade numbers (e.g. { "វិញ្ញាសាពេទ្យ": 30 }) from settings/app.
+- * That document is publicly readable (the register page reads it too), so this also
+- * works on the student pages before the student has typed their name.
++ * Class names -> grade numbers (e.g. { "វិញ្ញាសាពេទ្យ": 30 }). Works on the student pages before
++ * the student has typed their name. Uses a small API call, not the Firestore client library,
++ * which would add about 100 kB of JavaScript to those pages.
+  */
+ export function useGradeCodes(): GradeCodes {
+-  const [codes, setCodes] = useState<GradeCodes>({});
++  const [codes, setCodes] = useState<GradeCodes>(cache || {});
+   useEffect(() => {
+     let active = true;
+-    getDoc(doc(getDb(), 'settings', 'app'))
+-      .then((snap) => {
+-        if (!active || !snap.exists()) return;
+-        const c = snap.data()?.gradeCodes;
+-        if (c && typeof c === 'object') setCodes(c as GradeCodes);
+-      })
+-      .catch(() => {});
++    loadGradeCodes().then((c) => {
++      if (active) setCodes(c);
++    });
+     return () => {
+       active = false;
+     };
+diff --git a/src/lib/watermark.ts b/src/lib/watermark.ts
+new file mode 100644
+index 0000000..e49812c
+--- /dev/null
++++ b/src/lib/watermark.ts
+@@ -0,0 +1,34 @@
++/**
++ * The anti-screenshot watermark as ONE repeating background image (an SVG tile) instead of
++ * hundreds of rotated text elements, which is much lighter for cheap phones to scroll.
++ * Each tile holds the student's name, date and time so a leaked picture can be traced back.
++ */
++export function escapeXml(s: string): string {
++  return s
++    .replace(/&/g, '&amp;')
++    .replace(/</g, '&lt;')
++    .replace(/>/g, '&gt;')
++    .replace(/"/g, '&quot;')
++    .replace(/'/g, '&apos;');
++}
++
++/** CSS `background-image` value: a tile with the text written at -24 degrees. */
++export function watermarkBackground(text: string): string {
++  const safe = escapeXml(String(text ?? '').trim().slice(0, 48));
++  const fontSize = 14;
++  const angle = 24 * (Math.PI / 180);
++  // Generous width estimate so the rotated text never touches the tile edge and gets clipped
++  const textWidth = Math.max(100, safe.length * 9.5);
++  const boxW = textWidth * Math.cos(angle) + fontSize * Math.sin(angle);
++  const boxH = textWidth * Math.sin(angle) + fontSize * Math.cos(angle);
++  const w = Math.round(boxW + 80);
++  const h = Math.round(boxH + 80);
++  const cx = Math.round(w / 2);
++  const cy = Math.round(h / 2);
++  const svg =
++    `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">` +
++    `<text x="${cx}" y="${cy}" transform="rotate(-24 ${cx} ${cy})" text-anchor="middle" ` +
++    `dominant-baseline="middle" font-family="Khmer OS Siemreap, Khmer UI, Leelawadee UI, Noto Sans Khmer, sans-serif" ` +
++    `font-size="${fontSize}" fill="#6b7280">${safe}</text></svg>`;
++  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
++}
+-- 
+2.43.0
+

@@ -1,0 +1,148 @@
+From d8c0ad6eb3c0fba7c249181be352c5927cd37abb Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 30 Oct 2026 01:08:44 +0000
+Subject: [PATCH] Screen guard: also protect the results/answers view, stronger
+ watermark
+
+The guard only ran while a student was taking the exercise. The review
+screen that follows shows every question with the correct answers, and
+it had no protection at all.
+
+- mount ScreenGuard on the results view
+- watermark: readable on light and dark theme (was 7% near-black), now
+  covers the whole screen (260 repeats instead of 40) and includes the
+  time as well as the name and date
+- withGuardPausedAsync(): opening the native share sheet no longer
+  counts as a screenshot attempt
+---
+ src/app/e/[id]/page.tsx        | 19 +++++++++++++------
+ src/app/globals.css            |  6 +++---
+ src/components/ScreenGuard.tsx | 24 ++++++++++++++++++++----
+ 3 files changed, 36 insertions(+), 13 deletions(-)
+
+diff --git a/src/app/e/[id]/page.tsx b/src/app/e/[id]/page.tsx
+index 9eeb731..55534bd 100644
+--- a/src/app/e/[id]/page.tsx
++++ b/src/app/e/[id]/page.tsx
+@@ -7,7 +7,7 @@ import { QRCodeSVG } from 'qrcode.react';
+ import { Sun, Moon } from 'lucide-react';
+ import MathText from '@/components/MathText';
+ import ChoiceText from '@/components/ChoiceText';
+-import ScreenGuard, { withGuardPaused } from '@/components/ScreenGuard';
++import ScreenGuard, { withGuardPaused, withGuardPausedAsync } from '@/components/ScreenGuard';
+ import type { PublicExercise, PublicQuestion, QuestionResult } from '@/lib/types';
+ 
+ type Phase = 'loading' | 'error' | 'closed' | 'name' | 'taking' | 'done';
+@@ -383,11 +383,14 @@ export default function StudentPage() {
+ 
+     if (typeof navigator !== 'undefined' && navigator.share) {
+       try {
+-        await navigator.share({
+-          title: 'លទ្ធផលលំហាត់គណិតវិទ្យា',
+-          text: shareText,
+-          url: result.parentLink,
+-        });
++        // The share sheet takes focus from the page; do not treat that as a screenshot attempt
++        await withGuardPausedAsync(() =>
++          navigator.share({
++            title: 'លទ្ធផលលំហាត់គណិតវិទ្យា',
++            text: shareText,
++            url: result.parentLink,
++          })
++        );
+         return;
+       } catch (err: any) {
+         if (err.name !== 'AbortError') {
+@@ -772,6 +775,9 @@ export default function StudentPage() {
+       });
+ 
+     return (
++      <>
++      {/* The review shows every question with the correct answers, so it is guarded like the exercise itself */}
++      <ScreenGuard studentName={attempt?.name || result.studentName || name || 'Student'} />
+       <div className="wrap stack" style={{ maxWidth: 600, padding: '16px 12px 60px' }}>
+         {/* Score summary card */}
+         <div
+@@ -1213,6 +1219,7 @@ export default function StudentPage() {
+           )}
+         </div>
+       </div>
++      </>
+     );
+   }
+ 
+diff --git a/src/app/globals.css b/src/app/globals.css
+index 3d318b2..4734b11 100644
+--- a/src/app/globals.css
++++ b/src/app/globals.css
+@@ -480,10 +480,10 @@ body.screen-guard textarea {
+   gap: 70px 90px;
+   padding: 40px;
+   transform: rotate(-24deg);
+-  opacity: 0.07;
++  opacity: 0.16;
+   font-weight: 700;
+-  font-size: 1.05rem;
+-  color: #111827;
++  font-size: 0.95rem;
++  color: #6b7280; /* mid-grey: visible on both the light and the dark theme */
+   white-space: nowrap;
+ }
+ .sg-shield {
+diff --git a/src/components/ScreenGuard.tsx b/src/components/ScreenGuard.tsx
+index b273678..4505b2a 100644
+--- a/src/components/ScreenGuard.tsx
++++ b/src/components/ScreenGuard.tsx
+@@ -13,8 +13,18 @@ export function withGuardPaused<T>(fn: () => T): T {
+   }
+ }
+ 
++/** Same, for async work such as the native share sheet (which takes focus away from the page). */
++export async function withGuardPausedAsync<T>(fn: () => Promise<T>): Promise<T> {
++  paused = true;
++  try {
++    return await fn();
++  } finally {
++    setTimeout(() => (paused = false), 600);
++  }
++}
++
+ /**
+- * Deters screenshots / copying while a student is taking an exercise.
++ * Deters screenshots / copying while a student is taking an exercise or reviewing the answers.
+  *
+  * NOTE: A web page cannot truly block OS-level screenshots (or a phone camera).
+  * This guard makes it much harder by:
+@@ -28,6 +38,14 @@ export function withGuardPaused<T>(fn: () => T): T {
+ export default function ScreenGuard({ studentName }: { studentName: string }) {
+   const [hidden, setHidden] = useState(false);
+   const [warnings, setWarnings] = useState(0);
++  // Name + date + time on every screenshot or photo, so a leaked picture can be traced back.
++  // (Set after mount so the server and the browser never disagree about the time.)
++  const [mark, setMark] = useState(studentName);
++  useEffect(() => {
++    const d = new Date();
++    const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
++    setMark(`${studentName} · ${d.toLocaleDateString()} ${time}`);
++  }, [studentName]);
+ 
+   useEffect(() => {
+     document.body.classList.add('screen-guard');
+@@ -122,13 +140,11 @@ export default function ScreenGuard({ studentName }: { studentName: string }) {
+     };
+   }, []);
+ 
+-  const mark = `${studentName} · ${new Date().toLocaleDateString()}`;
+-
+   return (
+     <>
+       {/* Repeating watermark with the student's name */}
+       <div className="sg-watermark" aria-hidden="true">
+-        {Array.from({ length: 40 }).map((_, i) => (
++        {Array.from({ length: 260 }).map((_, i) => (
+           <span key={i}>{mark}</span>
+         ))}
+       </div>
+-- 
+2.43.0
+

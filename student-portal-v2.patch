@@ -1,0 +1,97 @@
+diff --git a/src/app/student/page.tsx b/src/app/student/page.tsx
+--- a/src/app/student/page.tsx
++++ b/src/app/student/page.tsx
+@@ -778,9 +778,31 @@
+                                           </div>
+                                           <div style={{ fontSize: '0.76rem', color: 'var(--theme-muted)', marginTop: 2 }}>
+                                             {ex.questionCount} សំណួរ{ex.timeLimitMinutes > 0 ? ` • ${ex.timeLimitMinutes} នាទី` : ''}
++                                            {ex.isSample && (
++                                              <div style={{ color: '#059669', fontWeight: 800, marginTop: 2 }}>🌟 លំហាត់សាកល្បងឥតគិតថ្លៃ (Free Trial)</div>
++                                            )}
+                                           </div>
+                                         </div>
+-                                        {ex.isLockedForPayment ? <Lock size={16} color="var(--theme-muted)" /> : <ChevronRight size={18} color="var(--theme-primary)" />}
++                                        {ex.isLockedForPayment ? (
++                                          <Lock size={16} color="var(--theme-muted)" />
++                                        ) : (
++                                          <span
++                                            style={{
++                                              display: 'inline-flex',
++                                              alignItems: 'center',
++                                              gap: 6,
++                                              padding: '7px 14px',
++                                              borderRadius: 10,
++                                              backgroundColor: ex.isSample ? '#10b981' : 'var(--theme-primary)',
++                                              color: '#ffffff',
++                                              fontWeight: 800,
++                                              fontSize: '0.88rem',
++                                              flexShrink: 0,
++                                            }}
++                                          >
++                                            ចូលធ្វើ <ChevronRight size={15} />
++                                          </span>
++                                        )}
+                                       </>
+                                     );
+                                     return ex.isLockedForPayment ? (
+diff --git a/src/components/StudentPortalView.tsx b/src/components/StudentPortalView.tsx
+--- a/src/components/StudentPortalView.tsx
++++ b/src/components/StudentPortalView.tsx
+@@ -125,7 +125,8 @@
+           marginBottom: 14,
+         }}
+       >
+-        <h1 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 800 }}>{student.name}</h1>
++        <div style={{ fontSize: '0.85rem', opacity: 0.9, fontWeight: 600 }}>សួស្តី! Hi 👋</div>
++        <h1 style={{ margin: '2px 0 0', fontSize: '1.3rem', fontWeight: 800 }}>{student.name}</h1>
+         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+           {enrolledGrades.map((g) => {
+             const isSelected = selectedGrade === g || (enrolledGrades.length === 1 && selectedGrade === 'all');
+@@ -149,6 +150,14 @@
+               </button>
+             );
+           })}
++        </div>
++        <div style={{ marginTop: 10, fontSize: '0.84rem', fontWeight: 600, opacity: 0.95, lineHeight: 1.4 }}>
++          {(() => {
++            const done = exercises.filter((e) => e.isDone).length;
++            if (exercises.length > 0 && done === exercises.length) return '🎉 ពូកែណាស់! អ្នកបានធ្វើអស់ហើយ — បន្តរក្សាភាពល្អនេះ!';
++            if (done > 0) return `💪 ពូកែណាស់! បានធ្វើរួច ${done} លំហាត់ហើយ — បន្តទៀត! (Keep going!)`;
++            return '🚀 ចាប់ផ្ដើមថ្ងៃនេះ ហើយអ្នកនឹងរីកចម្រើនរាល់ថ្ងៃ — ជឿជាក់លើខ្លួនឯង! (You can do it!)';
++          })()}
+         </div>
+       </header>
+ 
+@@ -200,6 +209,9 @@
+                   </div>
+                   <div style={{ fontSize: '0.76rem', color: 'var(--muted)', marginTop: 2 }}>
+                     {ex.questionCount} សំណួរ{ex.timeLimitMinutes > 0 ? ` • ${ex.timeLimitMinutes} នាទី` : ''}
++                    {ex.isSample && (
++                      <div style={{ color: '#059669', fontWeight: 800, marginTop: 2 }}>🌟 លំហាត់សាកល្បងឥតគិតថ្លៃ (Free Trial)</div>
++                    )}
+                   </div>
+                 </div>
+                 <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', fontWeight: 800 }}>
+@@ -212,7 +224,21 @@
+                   ) : ex.isClosed ? (
+                     <span style={{ color: 'var(--theme-warning)' }}>ផុតកំណត់</span>
+                   ) : (
+-                    <ArrowRight size={17} color="var(--brand)" />
++                    <span
++                      style={{
++                        display: 'inline-flex',
++                        alignItems: 'center',
++                        gap: 6,
++                        padding: '7px 14px',
++                        borderRadius: 10,
++                        backgroundColor: ex.isSample ? '#10b981' : 'var(--brand)',
++                        color: '#ffffff',
++                        fontWeight: 800,
++                        fontSize: '0.88rem',
++                      }}
++                    >
++                      ចូលធ្វើ <ArrowRight size={15} />
++                    </span>
+                   )}
+                 </div>
+               </>
