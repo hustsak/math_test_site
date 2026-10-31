@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
 import { fetchStudentPortalData } from '@/lib/studentServer';
+import { LINK_LOCKED_MESSAGE, StudentLinkLockedError } from '@/lib/studentLinkAccess';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,7 +29,18 @@ export async function GET(req: Request, { params }: { params: { token: string } 
       );
     }
 
-    const data = await fetchStudentPortalData(token);
+    let data;
+    try {
+      data = await fetchStudentPortalData(token, req.headers.get('cookie'));
+    } catch (e) {
+      if (e instanceof StudentLinkLockedError) {
+        return NextResponse.json(
+          { error: LINK_LOCKED_MESSAGE, code: 'LINK_LOCKED' },
+          { status: 403, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate', 'X-Robots-Tag': 'noindex, nofollow' } }
+        );
+      }
+      throw e;
+    }
     if (!data) {
       return NextResponse.json(
         { error: 'Student link not found or inactive.' },

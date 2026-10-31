@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import ParentTrackingView from '@/components/ParentTrackingView';
+import { headers } from 'next/headers';
 import { fetchParentViewData } from '@/lib/parentTrackingServer';
 
 export const dynamic = 'force-dynamic';
@@ -23,7 +24,7 @@ export default async function ParentTrackingPage({
 }: {
   params: { token: string };
 }) {
-  const initialData = await fetchParentViewData(params.token);
+  const initialData = await fetchParentViewData(params.token, headers().get('cookie'));
 
   return (
     <>

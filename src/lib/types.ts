@@ -142,6 +142,7 @@ export interface StudentAccess {
   studentToken?: string;
   parentToken?: string;
   active?: boolean;
+  linkLocked?: boolean;
 }
 
 export interface Student {
@@ -157,6 +158,8 @@ export interface Student {
   paymentStatus?: 'approved' | 'pending';
   paidAt?: number | null;
   createdAt: number;
+  /** True once the teacher copied a single-use invite link: /s/<token> then needs a device session. */
+  linkLocked?: boolean;
 }
 
 export interface CustomGradeConfig {

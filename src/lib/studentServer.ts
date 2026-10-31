@@ -2,9 +2,15 @@ import { adminDb } from '@/lib/firebaseAdmin';
 import { normalize } from '@/lib/grade';
 import { getCachedPublishedExercises } from '@/lib/parentTrackingServer';
 import { getDripUnlockMs, timestampToMs } from '@/lib/studentAccess';
+import { StudentLinkLockedError, studentLinkAllowed } from '@/lib/studentLinkAccess';
 import type { Student, Submission, StudentViewData, StudentViewExercise } from '@/lib/types';
 
-export async function fetchStudentPortalData(rawToken: string): Promise<StudentViewData | null> {
+/**
+ * Loads a student's portal. `cookieHeader` is the request's Cookie header: a student whose link the
+ * teacher has locked is only served in the browser that opened their invite first, otherwise this
+ * throws StudentLinkLockedError (callers turn that into an error page / 403).
+ */
+export async function fetchStudentPortalData(rawToken: string, cookieHeader?: string | null): Promise<StudentViewData | null> {
   const token = (rawToken || '').trim();
   if (!token) return null;
 
@@ -30,6 +36,10 @@ export async function fetchStudentPortalData(rawToken: string): Promise<StudentV
     const accessEnabled = student.accessEnabled !== undefined ? !!student.accessEnabled : (student as any).active !== false;
     if (!accessEnabled) {
       return null;
+    }
+
+    if (!(await studentLinkAllowed({ student, studentId, studentToken: token, cookieHeader }))) {
+      throw new StudentLinkLockedError();
     }
 
     const rawGrades = Array.isArray(student.grades) && student.grades.length > 0
@@ -138,6 +148,7 @@ export async function fetchStudentPortalData(rawToken: string): Promise<StudentV
       exercises,
     };
   } catch (err) {
+    if (err instanceof StudentLinkLockedError) throw err;
     console.error('fetchStudentPortalData error:', err);
     return null;
   }

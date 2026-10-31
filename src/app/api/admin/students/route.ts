@@ -132,6 +132,7 @@ export async function GET(req: Request) {
         studentToken,
         parentToken,
         active: accessEnabled,
+        linkLocked: data.linkLocked === true,
       };
     });
 

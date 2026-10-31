@@ -2,6 +2,7 @@ import { adminDb } from '@/lib/firebaseAdmin';
 import { buildParentViewData } from '@/lib/parentTracking';
 import { getProfileKey, getProfileId } from '@/lib/profiles';
 import { normalizeStudentName } from '@/lib/studentAccess';
+import { studentLinkAllowed } from '@/lib/studentLinkAccess';
 import type { Exercise, Submission, Profile, AppSettings, ParentViewData } from '@/lib/types';
 
 // In-memory cache for published exercises and app settings (TTL 5 seconds for fast real-time updates)
@@ -40,7 +41,11 @@ async function getCachedAppSettings(): Promise<AppSettings> {
   return data;
 }
 
-export async function fetchParentViewData(rawToken: string): Promise<ParentViewData | null> {
+/**
+ * `cookieHeader` is only used for the "student link pasted as a parent link" fallback below: a student whose
+ * link the teacher locked can't be read through /p/<studentToken> from a device that never opened their invite.
+ */
+export async function fetchParentViewData(rawToken: string, cookieHeader?: string | null): Promise<ParentViewData | null> {
   const token = (rawToken || '').trim();
   if (!token || token.length < 4) return null;
 
@@ -103,7 +108,15 @@ export async function fetchParentViewData(rawToken: string): Promise<ParentViewD
         .limit(1)
         .get();
 
-      if (!studentTokenSnap.empty) {
+      if (
+        !studentTokenSnap.empty &&
+        (await studentLinkAllowed({
+          student: studentTokenSnap.docs[0].data(),
+          studentId: studentTokenSnap.docs[0].id,
+          studentToken: token,
+          cookieHeader,
+        }))
+      ) {
         const sDoc = studentTokenSnap.docs[0];
         const sData = sDoc.data();
         studentId = sDoc.id;

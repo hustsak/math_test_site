@@ -24,7 +24,7 @@ export async function GET(
   }
 
   try {
-    const parentData = await fetchParentViewData(rawToken);
+    const parentData = await fetchParentViewData(rawToken, req.headers.get('cookie'));
     if (!parentData) {
       return NextResponse.json({ error: 'Information not found' }, { status: 404 });
     }

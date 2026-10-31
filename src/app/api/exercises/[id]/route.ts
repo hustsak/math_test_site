@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { toText } from '@/lib/textValue';
+import { studentLinkAllowed } from '@/lib/studentLinkAccess';
 import type { Exercise, PublicExercise, Submission } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -63,9 +64,18 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
           .get();
         if (!studentSnap.empty) {
           const sData = studentSnap.docs[0].data();
-          matchedStudentId = studentSnap.docs[0].id;
-          matchedNameKey = sData.nameKey || '';
-          matchedStudentName = sData.name || '';
+          // A locked student's token only identifies them in the browser that opened their invite.
+          const tokenOk = await studentLinkAllowed({
+            student: sData,
+            studentId: studentSnap.docs[0].id,
+            studentToken: tokenQuery,
+            cookieHeader: _req.headers.get('cookie'),
+          });
+          if (tokenOk) {
+            matchedStudentId = studentSnap.docs[0].id;
+            matchedNameKey = sData.nameKey || '';
+            matchedStudentName = sData.name || '';
+          }
         }
       }
 

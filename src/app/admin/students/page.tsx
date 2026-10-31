@@ -475,6 +475,62 @@ export default function AdminStudentsPage() {
     }
   }
 
+  // Single-use student links: every "Copy Link" makes a NEW one-time invite. The first browser that
+  // opens it is signed in; a forwarded copy (or the address-bar URL) errors on any other device.
+  async function createStudentInviteUrl(s: StudentAccess): Promise<string> {
+    const res = await adminPost<{ path: string }>('/api/admin/students/invite', { studentId: s.id });
+    setStudents((prev: StudentAccess[]) => prev.map((x: StudentAccess) => (x.id === s.id ? { ...x, linkLocked: true } : x)));
+    return `${window.location.origin}${res.path}`;
+  }
+
+  async function handleCopyStudentInvite(s: StudentAccess) {
+    try {
+      const url = await createStudentInviteUrl(s);
+      try {
+        await navigator.clipboard.writeText(url);
+        showToast(
+          lang === 'KH'
+            ? `បានចម្លងតំណប្រើម្តង សម្រាប់ ${s.name}! ផ្ញើវាទៅសិស្សនេះតែម្នាក់។`
+            : `Copied one-time link for ${s.name}! Send it to this student only.`
+        );
+      } catch {
+        // Some browsers refuse clipboard access after a network call: let the teacher copy it by hand.
+        window.prompt(lang === 'KH' ? 'ចម្លងតំណនេះ ៖' : 'Copy this one-time link:', url);
+      }
+    } catch (err: any) {
+      alert(err?.message || 'Could not create the student link.');
+    }
+  }
+
+  async function handleOpenStudentInvite(s: StudentAccess) {
+    // Open the tab first (browsers block pop-ups opened after a network call), then point it at the invite.
+    const tab = window.open('', '_blank');
+    try {
+      const url = await createStudentInviteUrl(s);
+      if (tab) tab.location.href = url;
+      else window.location.href = url;
+    } catch (err: any) {
+      tab?.close();
+      alert(err?.message || 'Could not open the student portal.');
+    }
+  }
+
+  async function handleUnlockStudentLink(s: StudentAccess) {
+    const ok = confirm(
+      lang === 'KH'
+        ? `ដោះសោតំណរបស់ ${s.name}? បន្ទាប់ពីនោះ តំណ /s/… ចាស់អាចបើកបានលើគ្រប់ឧបករណ៍ម្តងទៀត។`
+        : `Unlock ${s.name}'s link? Anyone with the plain /s/… link will be able to open it again.`
+    );
+    if (!ok) return;
+    try {
+      await adminPost('/api/admin/students/invite', { studentId: s.id, unlock: true });
+      setStudents((prev: StudentAccess[]) => prev.map((x: StudentAccess) => (x.id === s.id ? { ...x, linkLocked: false } : x)));
+      showToast(lang === 'KH' ? `បានដោះសោតំណរបស់ ${s.name}` : `Unlocked ${s.name}'s link`);
+    } catch (err: any) {
+      alert(err?.message || 'Could not unlock the link.');
+    }
+  }
+
   // Parent Tracking Functions
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   function getParentLink(token: string) {
@@ -1505,12 +1561,8 @@ export default function AdminStudentsPage() {
                                 </span>
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    const fullUrl = `${window.location.origin}/s/${s.studentToken}`;
-                                    navigator.clipboard.writeText(fullUrl);
-                                    showToast(lang === 'KH' ? `បានចម្លងតំណសិស្ស ${s.name}!` : `Copied student link for ${s.name}!`);
-                                  }}
-                                  title={lang === 'KH' ? 'ចម្លងតំណសិស្ស' : 'Copy Student Link'}
+                                  onClick={() => handleCopyStudentInvite(s)}
+                                  title={lang === 'KH' ? 'ចម្លងតំណប្រើម្តង (ថ្មីរាល់ពេលចុច)' : 'Copy one-time student link (new each click)'}
                                   style={{
                                     border: 'none',
                                     background: 'none',
@@ -1524,15 +1576,32 @@ export default function AdminStudentsPage() {
                                 >
                                   <Copy size={13} />
                                 </button>
-                                <a
-                                  href={`/s/${s.studentToken}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenStudentInvite(s)}
                                   title={lang === 'KH' ? 'បើកមើលមជ្ឈមណ្ឌលសិស្ស' : 'Open Student Portal'}
-                                  style={{ color: 'var(--theme-muted)', display: 'inline-flex', alignItems: 'center' }}
+                                  style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', color: 'var(--theme-muted)', display: 'inline-flex', alignItems: 'center' }}
                                 >
                                   <ExternalLink size={12} />
-                                </a>
+                                </button>
+                                {s.linkLocked && (
+                                  <>
+                                    <span
+                                      title={lang === 'KH' ? 'តំណនេះចាក់សោលើឧបករណ៍ដែលបានបើកដំបូង' : 'Link is locked to the device that opened it first'}
+                                      style={{ fontSize: '0.72rem', color: 'var(--theme-muted)' }}
+                                    >
+                                      🔒
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUnlockStudentLink(s)}
+                                      title={lang === 'KH' ? 'ដោះសោតំណ' : 'Unlock link'}
+                                      style={{ border: 'none', background: 'none', padding: '0 2px', cursor: 'pointer', color: 'var(--theme-muted)', fontSize: '0.72rem', textDecoration: 'underline' }}
+                                    >
+                                      {lang === 'KH' ? 'ដោះសោ' : 'unlock'}
+                                    </button>
+                                  </>
+                                )}
                               </div>
                             )}
                             {s.lastActivityAt && (

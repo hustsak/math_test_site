@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import admin from 'firebase-admin';
 import { adminDb } from '@/lib/firebaseAdmin';
 import { checkRateLimit, getClientIp } from '@/lib/rateLimit';
+import { studentLinkAllowed } from '@/lib/studentLinkAccess';
 import {
   normalizeStudentName,
   normalizeClassName,
@@ -76,9 +77,19 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         .get();
 
       if (!tokenSnap.empty) {
-        targetDoc = tokenSnap.docs[0];
-        studentId = targetDoc.id;
-        approvedStudentName = targetDoc.data().name || studentName;
+        // A locked student's token only identifies them in the browser that opened their invite;
+        // otherwise it is ignored and the normal approved-name check below applies.
+        const tokenOk = await studentLinkAllowed({
+          student: tokenSnap.docs[0].data(),
+          studentId: tokenSnap.docs[0].id,
+          studentToken,
+          cookieHeader: req.headers.get('cookie'),
+        });
+        if (tokenOk) {
+          targetDoc = tokenSnap.docs[0];
+          studentId = targetDoc.id;
+          approvedStudentName = targetDoc.data().name || studentName;
+        }
       }
     }
 
