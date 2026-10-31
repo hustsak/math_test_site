@@ -80,11 +80,34 @@
 
 * { box-sizing: border-box; }
 
+/*
+ * One font everywhere: Khmer OS Siemreap when it is installed on the device, otherwise its
+ * web twin "Siemreap" (Google Fonts). Regular weight only: nothing is bold.
+ * Math (KaTeX) is left alone so formulas keep their own fonts and symbols.
+ */
+/*
+ * Smaller text everywhere. Almost every size on the site is in rem, so this one number
+ * resizes it all (browsers default to 16px). Raise it to make text bigger, lower it for smaller.
+ */
+html {
+  font-size: 14px;
+  -webkit-text-size-adjust: 100%;
+}
+
+:root {
+  --font-main: 'Khmer OS Siemreap', 'Siemreap', 'Khmer OS', 'Noto Sans Khmer', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+body *:not(.katex):not(.katex *) {
+  font-family: var(--font-main) !important;
+  font-weight: 400 !important;
+}
+
 body {
   margin: 0;
   background: var(--theme-page-bg, var(--bg));
   color: var(--theme-navy, var(--ink));
-  font-family: 'Inter', 'Kantumruy Pro', 'Noto Sans Khmer', 'Siemreap', system-ui, -apple-system, sans-serif;
+  font-family: var(--font-main);
   line-height: 1.55;
   transition: background-color 0.2s ease, color 0.2s ease;
 }
