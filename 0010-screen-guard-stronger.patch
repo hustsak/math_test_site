@@ -1,0 +1,101 @@
+From cfe8e3a366029863806f3b3a65cb11f5433083dc Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 30 Oct 2026 01:31:37 +0000
+Subject: [PATCH] Screen guard: hide the page instantly, add focus and
+ touch-gesture detection
+
+- hide(): the page itself (.wrap/main) is made invisible in the same
+  frame as the shield, so nothing remains under it
+- backup focus check every 250 ms: catches snipping tools/overlays that
+  do not fire a blur event (only a focused -> unfocused change counts,
+  so in-app browsers that always report no focus never get stuck)
+- phone gestures: 3-finger touch and very large (palm) touches show the
+  shield, which covers Samsung palm-swipe and 3-finger screenshots
+---
+ src/app/globals.css            |  5 +++++
+ src/components/ScreenGuard.tsx | 31 ++++++++++++++++++++++++++++++-
+ 2 files changed, 35 insertions(+), 1 deletion(-)
+
+diff --git a/src/app/globals.css b/src/app/globals.css
+index 4734b11..597789a 100644
+--- a/src/app/globals.css
++++ b/src/app/globals.css
+@@ -513,6 +513,11 @@ body.screen-guard textarea {
+   from { opacity: 0; }
+   to { opacity: 1; }
+ }
++/* While the shield is up, the page underneath is not drawn at all (nothing to see through it) */
++body.screen-guard.sg-hidden .wrap,
++body.screen-guard.sg-hidden main {
++  visibility: hidden !important;
++}
+ @media print {
+   body.screen-guard * { display: none !important; }
+   body.screen-guard::after {
+diff --git a/src/components/ScreenGuard.tsx b/src/components/ScreenGuard.tsx
+index 4505b2a..d8daae1 100644
+--- a/src/components/ScreenGuard.tsx
++++ b/src/components/ScreenGuard.tsx
+@@ -52,6 +52,8 @@ export default function ScreenGuard({ studentName }: { studentName: string }) {
+ 
+     const hide = () => {
+       if (paused) return;
++      // Hide the page itself right now, in the same frame, so nothing is left under the shield
++      document.body.classList.add('sg-hidden');
+       setHidden((was) => {
+         if (!was) setWarnings((w) => w + 1);
+         return true;
+@@ -114,6 +116,27 @@ export default function ScreenGuard({ studentName }: { studentName: string }) {
+ 
+     const onBeforePrint = () => hide();
+ 
++    // Backup for browsers that do not fire "blur" reliably (snipping tools, overlays):
++    // notice focus being LOST. Only a change from focused to not-focused counts, so
++    // in-app browsers that always report "no focus" never get stuck behind the shield.
++    let hadFocus = document.hasFocus();
++    const focusTimer = window.setInterval(() => {
++      const nowFocused = document.hasFocus();
++      if (hadFocus && !nowFocused) hide();
++      hadFocus = nowFocused;
++    }, 250);
++
++    // Phone gestures that take a screenshot: 3-finger swipe/tap and the Samsung palm swipe
++    // (a very large touch). A heuristic: the shield simply asks to tap to continue.
++    const onTouchStart = (e: TouchEvent) => {
++      if (e.touches.length >= 3) return hide();
++      for (let i = 0; i < e.touches.length; i++) {
++        const t = e.touches[i];
++        if ((t.radiusX || 0) > 40 || (t.radiusY || 0) > 40) return hide();
++      }
++    };
++    window.addEventListener('touchstart', onTouchStart, { capture: true, passive: true });
++
+     window.addEventListener('keydown', onKeyDown, true);
+     window.addEventListener('keyup', onKeyUp, true);
+     window.addEventListener('blur', onBlur);
+@@ -126,7 +149,10 @@ export default function ScreenGuard({ studentName }: { studentName: string }) {
+     document.addEventListener('dragstart', blockAlways);
+ 
+     return () => {
++      window.clearInterval(focusTimer);
++      window.removeEventListener('touchstart', onTouchStart, true);
+       document.body.classList.remove('screen-guard');
++      document.body.classList.remove('sg-hidden');
+       window.removeEventListener('keydown', onKeyDown, true);
+       window.removeEventListener('keyup', onKeyUp, true);
+       window.removeEventListener('blur', onBlur);
+@@ -154,7 +180,10 @@ export default function ScreenGuard({ studentName }: { studentName: string }) {
+           className="sg-shield"
+           role="alertdialog"
+           aria-modal="true"
+-          onClick={() => setHidden(false)}
++          onClick={() => {
++            document.body.classList.remove('sg-hidden');
++            setHidden(false);
++          }}
+         >
+           <div className="sg-shield-box">
+             <div style={{ fontSize: '2.4rem' }}>🔒</div>
+-- 
+2.43.0
+
