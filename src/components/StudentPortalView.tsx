@@ -115,7 +115,6 @@ export default function StudentPortalView({
   return (
     <div className="wrap sp-root" style={{ maxWidth: 560, padding: '16px 14px 60px' }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Siemreap&display=swap');
         .sp-root, .sp-root * {
           font-family: 'Khmer OS Siemreap', 'Siemreap', sans-serif !important;
           font-weight: 400 !important;

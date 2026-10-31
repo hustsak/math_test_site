@@ -22,13 +22,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <head>
-        <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
-        <link rel="dns-prefetch" href="https://fonts.gstatic.com" />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        {/* Khmer OS Siemreap is served from this site (cached for good), no request to Google */}
         <link
-          href="https://fonts.googleapis.com/css2?family=Siemreap&display=swap"
-          rel="stylesheet"
+          rel="preload"
+          href="/fonts/siemreap-400.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
         />
         <script
           dangerouslySetInnerHTML={{
